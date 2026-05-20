@@ -1274,13 +1274,17 @@ function pomoUpdateDisplay() {
 }
 function pomoTick() {
   if (!pomo.running) return;
-  pomo.timeLeft--;
+  var now = Date.now();
+  var elapsed = (now - pomo.lastTick) / 1000;
+  pomo.lastTick = now;
+  // 基于实时时钟，防止后台标签页计时变慢
+  var secs = Math.max(1, Math.round(elapsed));
+  pomo.timeLeft -= secs;
+  if (pomo.status === 'focus') { pomo.studySeconds += secs; segmentAccSeconds += secs; }
   pomoUpdateDisplay();
-  if (pomo.status === 'focus') { pomo.studySeconds++; segmentAccSeconds++; }
   if (pomo.timeLeft <= 0) { pomoComplete(); return; }
-  // Save state every 10 ticks
-  pomoSaveCounter++; if (pomoSaveCounter >= 10) { pomoSaveCounter = 0; savePomoState(); }
-  pomo.timer = setTimeout(pomoTick, 1000);
+  pomoSaveCounter += secs; if (pomoSaveCounter >= 10) { pomoSaveCounter = 0; savePomoState(); }
+  pomo.timer = setTimeout(pomoTick, 250);
 }
 function pomoComplete() {
   clearTimeout(pomo.timer);
@@ -1303,7 +1307,7 @@ function pomoComplete() {
   pomo.timeLeft = pomoGetDuration();
   pomo.total = pomo.timeLeft;
   pomoUpdateDisplay();
-  if (pomo.running) pomo.timer = setTimeout(pomoTick, 1000);
+  if (pomo.running) { pomo.lastTick = Date.now(); pomo.timer = setTimeout(pomoTick, 250); }
   // 播放提示音
   playBellSound();
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -1319,9 +1323,10 @@ function pomoStart() {
   preloadBellSound();
   if (pomo.timeLeft <= 0) { pomo.timeLeft = pomoGetDuration(); pomo.total = pomo.timeLeft; }
   pomo.running = true;
+  pomo.lastTick = Date.now();
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
-  pomo.timer = setTimeout(pomoTick, 1000);
+  pomo.timer = setTimeout(pomoTick, 250);
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
     segmentStartTime = Date.now();
