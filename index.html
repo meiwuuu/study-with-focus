@@ -1275,15 +1275,17 @@ function pomoUpdateDisplay() {
 function pomoTick() {
   if (!pomo.running) return;
   var now = Date.now();
-  var elapsed = (now - pomo.lastTick) / 1000;
-  pomo.lastTick = now;
-  // 基于实时时钟，防止后台标签页计时变慢
-  var secs = Math.max(1, Math.round(elapsed));
-  pomo.timeLeft -= secs;
-  if (pomo.status === 'focus') { pomo.studySeconds += secs; segmentAccSeconds += secs; }
-  pomoUpdateDisplay();
-  if (pomo.timeLeft <= 0) { pomoComplete(); return; }
-  pomoSaveCounter += secs; if (pomoSaveCounter >= 10) { pomoSaveCounter = 0; savePomoState(); }
+  var elapsedMs = now - pomo.lastTick;
+  // 只扣整秒，余数留到下次
+  var secs = Math.floor(elapsedMs / 1000);
+  if (secs > 0) {
+    pomo.lastTick += secs * 1000;
+    pomo.timeLeft -= secs;
+    if (pomo.status === 'focus') { pomo.studySeconds += secs; segmentAccSeconds += secs; }
+    pomoUpdateDisplay();
+    if (pomo.timeLeft <= 0) { pomoComplete(); return; }
+    pomoSaveCounter += secs; if (pomoSaveCounter >= 10) { pomoSaveCounter = 0; savePomoState(); }
+  }
   pomo.timer = setTimeout(pomoTick, 250);
 }
 function pomoComplete() {
@@ -1324,6 +1326,7 @@ function pomoStart() {
   if (pomo.timeLeft <= 0) { pomo.timeLeft = pomoGetDuration(); pomo.total = pomo.timeLeft; }
   pomo.running = true;
   pomo.lastTick = Date.now();
+  focusModeActive = true; updateFocusBtn();
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
   pomo.timer = setTimeout(pomoTick, 250);
@@ -1343,6 +1346,7 @@ function pomoPause() {
   segmentStartTime = null;
   segmentAccSeconds = 0;
   pomo.running = false; clearTimeout(pomo.timer);
+  focusModeActive = false; updateFocusBtn();
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
   document.getElementById('pomo-pause').style.display = 'none';
