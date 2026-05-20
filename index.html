@@ -765,8 +765,14 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <!-- Top bar: date selector + refresh | finish button -->
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <select id="log-date-select" onchange="loadLearningLog()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:6px 12px;color:#fff;font-size:.82em;font-family:inherit;cursor:pointer;outline:none;">
-              </select>
+              <div class="cs-wrap" id="log-date-wrap" style="min-width:140px;">
+                <div class="cs-trigger" onclick="toggleDateDropdown(event)">
+                  <span class="cs-label" id="log-date-label">今天</span>
+                  <span class="cs-arrow">▾</span>
+                </div>
+                <div class="cs-dropdown" id="log-date-dropdown">
+                </div>
+              </div>
               <button class="btn btn-sm btn-accent" onclick="loadLearningLog()">刷新</button>
             </div>
             <button class="btn btn-accent" id="btn-finish-day" onclick="finishDayReview()"
@@ -1206,6 +1212,8 @@ function closeSubjectDropdown() {
 document.addEventListener('click', function(e) {
   var wrap = document.getElementById('pomo-subject-wrap');
   if (wrap && !wrap.contains(e.target)) closeSubjectDropdown();
+  var dw = document.getElementById('log-date-wrap');
+  if (dw && !dw.contains(e.target)) closeDateDropdown();
 });
 
 function updateSubjectBadge() {
@@ -1833,16 +1841,21 @@ async function finishDayReview() {
   }
 }
 
+var currentLogDate = '';
+var currentLogDateLabel = '';
+
 async function loadLearningLog() {
-  var sel = document.getElementById('log-date-select');
-  var date = sel.value;
-  // Build date options if empty
-  if (!sel.options.length || sel.options[0].value === '') {
+  var date = currentLogDate;
+  // Build date options if not initialized
+  var dd = document.getElementById('log-date-dropdown');
+  if (!dd || dd.children.length === 0) {
     initLogDateSelect();
   }
   if (!date) {
-    date = new Date().toISOString().slice(0,10);
-    sel.value = date;
+    var today = new Date();
+    date = today.toISOString().slice(0,10);
+    var label = (today.getMonth()+1) + '/' + today.getDate() + ' (今天)';
+    setLogDate(date, label);
   }
   var daily = await apiCall('/api/stats/daily?date=' + date);
   var review = await apiCall('/api/stats/review?date=' + date);
@@ -1852,19 +1865,58 @@ async function loadLearningLog() {
 }
 
 function initLogDateSelect() {
-  var sel = document.getElementById('log-date-select');
+  var dd = document.getElementById('log-date-dropdown');
+  if (!dd) return;
   var today = new Date();
   var html = '';
-  // Show last 14 days
   for (var i = 13; i >= 0; i--) {
     var d = new Date(today); d.setDate(d.getDate() - i);
     var ds = d.toISOString().slice(0,10);
     var label = (d.getMonth()+1) + '/' + d.getDate();
     if (i === 0) label += ' (今天)';
     else if (i === 1) label += ' (昨天)';
-    html += '<option value="' + ds + '"' + (i===0?' selected':'') + '>' + label + '</option>';
+    var sel = (i === 0) ? ' class="cs-option selected"' : ' class="cs-option"';
+    html += '<div data-value="' + ds + '" data-label="' + label.replace(/"/g, '&quot;') + '" onclick="setLogDate(\'' + ds + '\',\'' + label.replace(/'/g, "\\'") + '\',event)"' + sel + '>' + label + '</div>';
+    if (i === 0) {
+      currentLogDate = ds;
+      currentLogDateLabel = label;
+    }
   }
-  sel.innerHTML = html;
+  dd.innerHTML = html;
+  document.getElementById('log-date-label').textContent = currentLogDateLabel;
+}
+
+function setLogDate(dateStr, label, e) {
+  if (e) { e.stopPropagation(); closeDateDropdown(); }
+  currentLogDate = dateStr;
+  currentLogDateLabel = label;
+  document.getElementById('log-date-label').textContent = label;
+  // Update selected class on options
+  var opts = document.querySelectorAll('#log-date-dropdown .cs-option');
+  opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === dateStr); });
+  loadLearningLog();
+}
+
+function toggleDateDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('log-date-dropdown');
+  var tr = document.querySelector('#log-date-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closeDateDropdown(); }
+  else {
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closeDateDropdown() {
+  var dd = document.getElementById('log-date-dropdown');
+  var tr = document.querySelector('#log-date-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
 }
 
 function renderReview(review, date) {
