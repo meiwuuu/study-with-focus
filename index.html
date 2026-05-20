@@ -632,6 +632,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="pomo-ctrl-row">
             <button class="btn btn-accent btn-icon" id="pomo-play" onclick="pomoStart()">▶</button>
             <button class="btn btn-icon" id="pomo-pause" onclick="pomoPause()" style="display:none">⏸</button>
+            <button class="btn btn-icon" id="pomo-stop" onclick="pomoEnd()" style="display:none">⏹</button>
             <button class="btn btn-red btn-icon" onclick="pomoReset()">↺</button>
           </div>
           <div class="pomo-dots" id="pomo-dots">
@@ -1329,6 +1330,7 @@ function pomoStart() {
   focusModeActive = true; updateFocusBtn();
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
+  document.getElementById('pomo-stop').style.display = 'inline-flex';
   pomo.timer = setTimeout(pomoTick, 250);
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
@@ -1350,6 +1352,38 @@ function pomoPause() {
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
   document.getElementById('pomo-pause').style.display = 'none';
+  document.getElementById('pomo-stop').style.display = 'none';
+  autoDisableBlocking();
+  updateStatusBar();
+}
+function pomoEnd() {
+  // 结算当前番茄钟：非专注阶段直接重置
+  if (pomo.status !== 'focus' || !pomo.running) { pomoReset(); return; }
+  var totalSec = segmentAccSeconds;
+  if (totalSec >= 300) {
+    // >=5分钟才记录，秒数部分四舍五入到整分
+    var min = Math.floor(totalSec / 60);
+    var sec = totalSec % 60;
+    var roundedMin = sec >= 30 ? min + 1 : min;
+    segmentAccSeconds = roundedMin * 60;
+    recordCurrentSegment();
+  }
+  // 重置状态（复用 pomoReset 逻辑，但跳过二次 pause）
+  segmentStartTime = null;
+  segmentAccSeconds = 0;
+  pomo.running = false; clearTimeout(pomo.timer);
+  focusModeActive = false; updateFocusBtn();
+  savePomoState();
+  pomo.timeLeft = (parseInt(document.getElementById('pomo-focus').value)||25)*60;
+  pomo.total = pomo.timeLeft;
+  pomo.completed = 0;
+  try { localStorage.setItem('focus_pomo_completed', 0); } catch(e) {}
+  pomoSetStatus('focus');
+  pomoUpdateDots();
+  pomoUpdateDisplay();
+  document.getElementById('pomo-play').style.display = 'inline-flex';
+  document.getElementById('pomo-pause').style.display = 'none';
+  document.getElementById('pomo-stop').style.display = 'none';
   autoDisableBlocking();
   updateStatusBar();
 }
