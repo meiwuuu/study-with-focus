@@ -1133,10 +1133,36 @@ var pomo = {
 var currentSubject = '';
 var segmentStartTime = null;  // Date.now() when current segment started
 var segmentAccSeconds = 0;    // accumulated focus seconds in current segment
+// ─── Timeline tracking ───
+var pomoTL = [];  // [{ts:"ISO", action:"start|pause|resume|complete|end|subject_change", ...extra}]
+var pomoTLSessionId = '';  // unique ID for current session, changes on each start
+
+function tlEvent(action, extra) {
+  extra = extra || {};
+  extra.ts = new Date().toISOString();
+  extra.action = action;
+  pomoTL.push(extra);
+  // Keep max 200 events to prevent memory bloat
+  if (pomoTL.length > 200) pomoTL = pomoTL.slice(-200);
+  tlSave();
+}
+function tlSave() {
+  try { localStorage.setItem('focus_pomo_tl', JSON.stringify(pomoTL)); } catch(e) {}
+}
+function tlGetAndClear() {
+  var tl = pomoTL.slice();
+  pomoTL = [];
+  tlSave();
+  return tl;
+}
 
 function setSubject(subj, e) {
   // Close dropdown if open
   if (e) { e.stopPropagation(); closeSubjectDropdown(); }
+  // Timeline: subject change
+  if (currentSubject !== subj) {
+    tlEvent('subject_change', {from: currentSubject || '', to: subj || '', accSeconds: segmentAccSeconds});
+  }
   // If active focus segment >= 5 min, record before switching
   if (pomo.running && pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 300) {
     recordCurrentSegment();
@@ -1306,6 +1332,8 @@ function pomoComplete() {
     pomo.completed++;
     pomoUpdateDots();
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
+    // Timeline: pomodoro completed
+    tlEvent('complete', {subject: currentSubject || '', pomodoroNum: pomo.completed, totalSec: segmentAccSeconds});
     // Record segment before resetting
     if (segmentAccSeconds >= 300) {
       recordCurrentSegment();
@@ -1348,9 +1376,19 @@ function pomoStart() {
     segmentAccSeconds = 0;
     autoEnableBlocking();
   }
+  // Timeline: start or resume
+  if (pomoTL.length === 0 || pomoTL[pomoTL.length-1].action !== 'start') {
+    tlEvent('start', {subject: currentSubject || '', running: pomo.running});
+  } else if (pomoTL[pomoTL.length-1].action === 'pause') {
+    tlEvent('resume', {subject: currentSubject || ''});
+  }
   updateStatusBar();
 }
 function pomoPause() {
+  // Timeline: record pause
+  if (pomo.running && pomo.status === 'focus') {
+    tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds});
+  }
   // Record current segment if >= 5 min
   if (pomo.status === 'focus' && segmentAccSeconds >= 300) {
     recordCurrentSegment();
@@ -1369,6 +1407,8 @@ function pomoEnd() {
   // 结算当前番茄钟：非专注阶段直接重置
   if (pomo.status !== 'focus' || !pomo.running) { pomoReset(); return; }
   var totalSec = segmentAccSeconds;
+  // Timeline: manual end
+  tlEvent('end', {subject: currentSubject || '', totalSec: totalSec, wasRunning: pomo.running});
   if (totalSec >= 300) {
     // >=5分钟才记录，秒数部分四舍五入到整分
     var min = Math.floor(totalSec / 60);
@@ -1712,7 +1752,10 @@ async function recordSession(pomos) {
   var dur = pomos * (parseInt(document.getElementById('pomo-focus').value)||25) * 60;
   sessionTime += dur;
   if (dur > 0) {
-    var d = await apiCall('/api/stats/session', {method:'POST',body:JSON.stringify({duration:dur,pomodoros:pomos||0})});
+    var tl = tlGetAndClear();
+    var d = await apiCall('/api/stats/session', {method:'POST',body:JSON.stringify({
+      duration:dur, pomodoros:pomos||0, timeline: tl
+    })});
     if (d) { stats = d.stats; updateStatusBar(); updateStatsTab(); }
   }
   calRender();
@@ -1932,6 +1975,11 @@ calInit();todoLoad();
 loadPanelOpacity();
 initLogDateSelect();
 restorePomoState();
+// Restore timeline from localStorage
+try {
+  var savedTL = JSON.parse(localStorage.getItem('focus_pomo_tl') || '[]');
+  if (Array.isArray(savedTL)) pomoTL = savedTL;
+} catch(e) {}
 // 加载闹铃音量
 (function() {
   var vol = getAlarmVolume();

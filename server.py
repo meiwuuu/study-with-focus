@@ -285,15 +285,27 @@ class FocusHandler(BaseHTTPRequestHandler):
             rollover_if_new_day(stats)
             duration = body.get("duration", 0)
             pomodoros = body.get("pomodoros", 0)
+            timeline = body.get("timeline", [])
             stats["today_time"] += duration
             stats["today_pomodoros"] += pomodoros
             stats["total_time"] += duration
             stats["total_pomodoros"] += pomodoros
-            stats["sessions"].append({
+            session_entry = {
                 "date": time.strftime("%Y-%m-%d %H:%M"),
                 "duration": duration,
                 "pomodoros": pomodoros,
-            })
+            }
+            if timeline:
+                session_entry["timeline"] = timeline
+                # Also merge into today's daily_log timeline
+                today = time.strftime("%Y-%m-%d")
+                stats.setdefault("daily_logs", {})
+                if today not in stats["daily_logs"]:
+                    stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
+                if "timeline" not in stats["daily_logs"][today]:
+                    stats["daily_logs"][today]["timeline"] = []
+                stats["daily_logs"][today]["timeline"].extend(timeline)
+            stats["sessions"].append(session_entry)
             save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "stats": stats})
 
