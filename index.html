@@ -762,14 +762,22 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
         <!-- ═══ Learning Log tab ═══ -->
         <div class="panel-tab" id="ptab-log">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-            <select id="log-date-select" onchange="loadLearningLog()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:6px 12px;color:#fff;font-size:.82em;font-family:inherit;cursor:pointer;outline:none;">
-            </select>
-            <div style="display:flex;gap:6px;">
+          <!-- Top bar: date selector + refresh | finish button -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <select id="log-date-select" onchange="loadLearningLog()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:6px 12px;color:#fff;font-size:.82em;font-family:inherit;cursor:pointer;outline:none;">
+              </select>
               <button class="btn btn-sm btn-accent" onclick="loadLearningLog()">刷新</button>
-              <button class="btn btn-sm btn-accent" onclick="triggerDailyReview()">📝 生成今日评价</button>
             </div>
+            <button class="btn btn-accent" id="btn-finish-day" onclick="finishDayReview()"
+              style="white-space:nowrap;font-size:.82em;padding:8px 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;font-weight:600;border-radius:var(--radius-sm);cursor:pointer;transition:all .2s;box-shadow:0 2px 8px rgba(99,102,241,.25);"
+              onmouseover="this.style.boxShadow='0 4px 16px rgba(99,102,241,.4)';this.style.transform='translateY(-1px)'"
+              onmouseout="this.style.boxShadow='0 2px 8px rgba(99,102,241,.25)';this.style.transform='none'"
+              >🧠 完结今日学习 → AI总结</button>
           </div>
+          <!-- AI Review card (shown when review exists) -->
+          <div id="log-review"></div>
+          <!-- Learning data content -->
           <div id="log-content">
             <div class="card" style="text-align:center;padding:32px;color:rgba(255,255,255,.35);">
               <div style="font-size:2em;margin-bottom:8px;">📋</div>
@@ -1730,16 +1738,55 @@ function fmtDuration(s) {
   return h > 0 ? h + 'h ' + m + 'min' : m + 'min';
 }
 
-async function triggerDailyReview() {
-  var date = new Date().toISOString().slice(0,10);
+async function finishDayReview() {
+  var btn = document.getElementById('btn-finish-day');
+  var today = new Date().toISOString().slice(0,10);
+
+  // Submit evaluate request
   var res = await apiCall('/api/stats/evaluate', {
     method: 'POST',
-    body: JSON.stringify({ date: date })
+    body: JSON.stringify({ date: today })
   });
+
   if (res && res.ok) {
-    showToast('评价请求已提交，1-2 分钟后刷新即可看到 AI 评价');
+    btn.textContent = '⏳ 评价生成中…';
+    btn.style.opacity = '0.7';
+    btn.style.pointerEvents = 'none';
+    showToast('已提交评价请求，AI 正在分析今天的学习数据…');
+
+    // Poll for review completion (up to 120 seconds)
+    var attempts = 0;
+    var maxAttempts = 24;  // 24 * 5s = 120s
+    var poller = setInterval(async function() {
+      attempts++;
+      try {
+        var reviewRes = await fetch(API_BASE + '/api/stats/review?date=' + today);
+        var review = await reviewRes.json();
+        if (review && review.text) {
+          clearInterval(poller);
+          btn.textContent = '✅ 已完成 · 刷新查看';
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+          showToast('AI总结已完成！');
+          loadLearningLog();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(poller);
+          btn.textContent = '🧠 完结今日学习 → AI总结';
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+          showToast('评价生成超时，请稍后刷新页面查看', true);
+        }
+      } catch(e) {
+        if (attempts >= maxAttempts) {
+          clearInterval(poller);
+          btn.textContent = '🧠 完结今日学习 → AI总结';
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+        }
+      }
+    }, 5000);
   } else {
-    showToast('提交失败，请确认后端已启动', true);
+    showToast('提交失败，请确认后端已启动 (python server.py)', true);
   }
 }
 
@@ -1755,6 +1802,9 @@ async function loadLearningLog() {
     sel.value = date;
   }
   var daily = await apiCall('/api/stats/daily?date=' + date);
+  var review = await apiCall('/api/stats/review?date=' + date);
+  if (!review || !review.text) review = null;
+  renderReview(review, date);
   renderLearningLog(daily, date);
 }
 
@@ -1772,6 +1822,32 @@ function initLogDateSelect() {
     html += '<option value="' + ds + '"' + (i===0?' selected':'') + '>' + label + '</option>';
   }
   sel.innerHTML = html;
+}
+
+function renderReview(review, date) {
+  var container = document.getElementById('log-review');
+  if (!review) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  container.innerHTML =
+    '<div class="card" style="margin-bottom:12px;border-left:3px solid #6366f1;background:rgba(99,102,241,.06);">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
+    '<span style="font-size:1.1em;">🧠</span>' +
+    '<span style="font-weight:700;font-size:.88em;color:#a5b4fc;">考研教练点评 · ' + date + '</span>' +
+    '<span style="flex:1;"></span>' +
+    '<span style="font-size:.7em;color:rgba(255,255,255,.35);">' + (review.generatedAt||'') + '</span>' +
+    '</div>' +
+    '<div style="font-size:.85em;line-height:1.8;color:rgba(255,255,255,.85);white-space:pre-wrap;">' +
+    escHtmlReview(review.text||'') + '</div>' +
+    '</div>';
+}
+
+function escHtmlReview(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function renderLearningLog(daily, date) {
