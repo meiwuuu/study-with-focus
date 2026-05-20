@@ -632,7 +632,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="pomo-ctrl-row">
             <button class="btn btn-accent btn-icon" id="pomo-play" onclick="pomoStart()">▶</button>
             <button class="btn btn-icon" id="pomo-pause" onclick="pomoPause()" style="display:none">⏸</button>
-            <button class="btn btn-icon" id="pomo-stop" onclick="pomoEnd()" style="display:none">⏹</button>
+            <button class="btn btn-icon" id="pomo-stop" onclick="pomoEnd()">⏹</button>
             <button class="btn btn-red btn-icon" onclick="pomoReset()">↺</button>
           </div>
           <div class="pomo-dots" id="pomo-dots">
@@ -1330,7 +1330,6 @@ function pomoStart() {
   focusModeActive = true; updateFocusBtn();
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
-  document.getElementById('pomo-stop').style.display = 'inline-flex';
   pomo.timer = setTimeout(pomoTick, 250);
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
@@ -1352,7 +1351,6 @@ function pomoPause() {
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
   document.getElementById('pomo-pause').style.display = 'none';
-  document.getElementById('pomo-stop').style.display = 'none';
   autoDisableBlocking();
   updateStatusBar();
 }
@@ -1383,7 +1381,6 @@ function pomoEnd() {
   pomoUpdateDisplay();
   document.getElementById('pomo-play').style.display = 'inline-flex';
   document.getElementById('pomo-pause').style.display = 'none';
-  document.getElementById('pomo-stop').style.display = 'none';
   autoDisableBlocking();
   updateStatusBar();
 }
