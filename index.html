@@ -864,7 +864,12 @@ async function apiCall(path, opts) {
   } catch (e) { return null; }
 }
 
-// ─── UI helpers ───
+// ─── Local date helper (avoids toISOString UTC offset bug in +8 timezone)
+function fmtLocalDate(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
   else document.exitFullscreen();
@@ -1791,7 +1796,7 @@ function fmtDuration(s) {
 
 async function finishDayReview() {
   var btn = document.getElementById('btn-finish-day');
-  var today = new Date().toISOString().slice(0,10);
+  var today = fmtLocalDate(new Date());
 
   // Submit evaluate request
   var res = await apiCall('/api/stats/evaluate', {
@@ -1853,7 +1858,7 @@ async function loadLearningLog() {
   }
   if (!date) {
     var today = new Date();
-    date = today.toISOString().slice(0,10);
+    date = fmtLocalDate(today);
     var label = (today.getMonth()+1) + '/' + today.getDate() + ' (今天)';
     setLogDate(date, label);
   }
@@ -1871,7 +1876,7 @@ function initLogDateSelect() {
   var html = '';
   for (var i = 13; i >= 0; i--) {
     var d = new Date(today); d.setDate(d.getDate() - i);
-    var ds = d.toISOString().slice(0,10);
+    var ds = fmtLocalDate(d);
     var label = (d.getMonth()+1) + '/' + d.getDate();
     if (i === 0) label += ' (今天)';
     else if (i === 1) label += ' (昨天)';
