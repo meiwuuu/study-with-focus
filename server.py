@@ -337,6 +337,25 @@ class FocusHandler(BaseHTTPRequestHandler):
             save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "daily": daily})
 
+        elif path == "/api/stats/review":
+            stats = load_json(STATS_FILE, get_default_stats())
+            date = body.get("date", time.strftime("%Y-%m-%d"))
+            text = body.get("text", "")
+            if "reviews" not in stats:
+                stats["reviews"] = {}
+            stats["reviews"][date] = {
+                "text": text,
+                "generatedAt": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_json(STATS_FILE, stats)
+            self._send_json({"ok": True, "date": date})
+
+        elif path == "/api/stats/evaluate":
+            date = body.get("date", time.strftime("%Y-%m-%d"))
+            req_file = DATA_DIR / "evaluate_request.json"
+            save_json(req_file, {"date": date, "requestedAt": time.strftime("%Y-%m-%d %H:%M:%S")})
+            self._send_json({"ok": True, "date": date, "message": "已提交评价请求，稍后刷新查看"})
+
         else:
             self._send_json({"error": "not found"}, 404)
 

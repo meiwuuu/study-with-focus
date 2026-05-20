@@ -765,7 +765,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
             <select id="log-date-select" onchange="loadLearningLog()" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:6px 12px;color:#fff;font-size:.82em;font-family:inherit;cursor:pointer;outline:none;">
             </select>
-            <button class="btn btn-sm btn-accent" onclick="loadLearningLog()">刷新</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-sm btn-accent" onclick="loadLearningLog()">刷新</button>
+              <button class="btn btn-sm btn-accent" onclick="triggerDailyReview()">📝 生成今日评价</button>
+            </div>
           </div>
           <div id="log-content">
             <div class="card" style="text-align:center;padding:32px;color:rgba(255,255,255,.35);">
@@ -1725,6 +1728,19 @@ var SUBJECT_COLORS = {math:'#60a5fa', cs:'#a78bfa', eng:'#fb923c', pol:'#f87171'
 function fmtDuration(s) {
   var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
   return h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+}
+
+async function triggerDailyReview() {
+  var date = new Date().toISOString().slice(0,10);
+  var res = await apiCall('/api/stats/evaluate', {
+    method: 'POST',
+    body: JSON.stringify({ date: date })
+  });
+  if (res && res.ok) {
+    showToast('评价请求已提交，1-2 分钟后刷新即可看到 AI 评价');
+  } else {
+    showToast('提交失败，请确认后端已启动', true);
+  }
 }
 
 async function loadLearningLog() {
