@@ -10,6 +10,9 @@ if %errorlevel% neq 0 (
 
 cd /d "E:\code\hermes\focus"
 
+:: Kill old backend if running
+taskkill /f /im pythonw.exe >nul 2>&1
+
 :: Start backend
 echo ================================
 echo   Study With Focus
