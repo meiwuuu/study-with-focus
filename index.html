@@ -1675,11 +1675,7 @@ async function blockToggle(){
   if (on) {
     var res = await apiCall('/api/block/start', {method:'POST',body:JSON.stringify({sites:blockSites})});
     if (!res || !res.ok) {
-      await autoStartServer();
-      res = await apiCall('/api/block/start', {method:'POST',body:JSON.stringify({sites:blockSites})});
-      if (!res || !res.ok) {
-        alert('无法启用屏蔽。请右键以管理员身份运行：\nE:\\code\\hermes\\focus\\run_server.bat');
-      }
+      alert('无法启用屏蔽。请右键以管理员身份运行：\nE:\\code\\hermes\\focus\\run_server.bat');
     }
   } else {
     await apiCall('/api/block/stop', {method:'POST'});
@@ -1687,21 +1683,9 @@ async function blockToggle(){
   await blockRefresh();
 }
 
-async function autoStartServer() {
-  // 仅轮询等待server启动（不触发文件，避免Chrome安全弹窗）
-  for (var i = 0; i < 20; i++) {
-    await new Promise(function(r){ setTimeout(r, 500); });
-    var d = await apiCall('/api/status');
-    if (d) return;
-  }
-}
 // ─── 番茄钟自动控制屏蔽 ───
 async function autoEnableBlocking() {
   var data = await apiCall('/api/status');
-  if (!data || data.admin_error) {
-    await autoStartServer();
-    data = await apiCall('/api/status');
-  }
   if (data && !data.admin_error && !data.blocking_active) {
     await apiCall('/api/block/start', {method:'POST',body:JSON.stringify({sites:blockSites})});
   }
