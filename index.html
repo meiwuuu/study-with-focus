@@ -1691,13 +1691,7 @@ async function blockToggle(){
 }
 
 async function autoStartServer() {
-  // 用隐藏a标签触发下载/执行，不弹窗
-  var a = document.createElement('a');
-  a.href = 'file:///E:/code/hermes/focus/run_server.bat';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // 仅轮询等待server启动（不触发文件，避免Chrome安全弹窗）
   for (var i = 0; i < 20; i++) {
     await new Promise(function(r){ setTimeout(r, 500); });
     var d = await apiCall('/api/status');
