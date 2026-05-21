@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -13,6 +14,13 @@ HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
 BLOCK_MARKER_START = "# === FOCUS BLOCK START ==="
 BLOCK_MARKER_END = "# === FOCUS BLOCK END ==="
 REDIRECT_IP = "127.0.0.1"
+
+def effective_date_str():
+    """凌晨4点前算前一天"""
+    now = datetime.now()
+    if now.hour < 4:
+        now = now - timedelta(days=1)
+    return now.strftime("%Y-%m-%d")
 DATA_DIR = Path(__file__).parent
 STATS_FILE = DATA_DIR / "stats.json"
 CONFIG_FILE = DATA_DIR / "config.json"
@@ -154,7 +162,7 @@ def clear_blocking():
 
 def get_default_stats():
     return {
-        "today": time.strftime("%Y-%m-%d"),
+        "today": effective_date_str(),
         "today_time": 0,      
         "today_pomodoros": 0,
         "total_time": 0,
@@ -164,7 +172,7 @@ def get_default_stats():
     }
 
 def rollover_if_new_day(stats):
-    today = time.strftime("%Y-%m-%d")
+    today = effective_date_str()
     if stats.get("today") != today:
         stats["today"] = today
         stats["today_time"] = 0
@@ -298,7 +306,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             if timeline:
                 session_entry["timeline"] = timeline
                 # Also merge into today's daily_log timeline
-                today = time.strftime("%Y-%m-%d")
+                today = effective_date_str()
                 stats.setdefault("daily_logs", {})
                 if today not in stats["daily_logs"]:
                     stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
@@ -312,7 +320,7 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/stats/segment":
             stats = load_json(STATS_FILE, get_default_stats())
             rollover_if_new_day(stats)
-            today = time.strftime("%Y-%m-%d")
+            today = effective_date_str()
             subject = body.get("subject", "")
             start_time = body.get("start_time", time.strftime("%H:%M"))
             end_time = body.get("end_time", time.strftime("%H:%M"))

@@ -1619,12 +1619,16 @@ function calDeletePlan(id) {
   calSave();calRenderDetail();
 }
 function calAddStudyTime(s) {
-  var today=calFmt(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  var d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  var today = calFmt(d.getFullYear(), d.getMonth(), d.getDate());
   if(!cal.dailyLog[today])cal.dailyLog[today]={studyTime:0,pomodoros:0};
   cal.dailyLog[today].studyTime+=s;calSave();
 }
 function calAddPomodoro() {
-  var today=calFmt(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  var d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  var today = calFmt(d.getFullYear(), d.getMonth(), d.getDate());
   if(!cal.dailyLog[today])cal.dailyLog[today]={studyTime:0,pomodoros:0};
   cal.dailyLog[today].pomodoros++;calSave();
 }
