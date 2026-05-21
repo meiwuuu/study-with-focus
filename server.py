@@ -336,10 +336,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             })
             daily["total_time"] += duration
             daily["pomodoros"] += pomodoros
-            stats["today_time"] += duration
-            stats["today_pomodoros"] += pomodoros
-            stats["total_time"] += duration
-            stats["total_pomodoros"] += pomodoros
+            # 不累加 stats today/total：session API 已经计入
             stats["sessions"].append({
                 "date": time.strftime("%Y-%m-%d %H:%M"),
                 "duration": duration,

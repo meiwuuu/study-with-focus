@@ -1252,8 +1252,7 @@ function recordCurrentSegment() {
       pomodoros: 0
     })
   });
-  calAddStudyTime(dur);
-  sessionTime += dur;
+  // 不调 calAddStudyTime/sessionTime：时间已由 recordSession 计入
   segmentStartTime = Date.now();
   segmentAccSeconds = 0;
 }
