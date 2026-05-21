@@ -635,13 +635,13 @@
       ]
     },
     {
-      "date": "2026-05-22 00:01",
+      "date": "2026-05-21 00:01",
       "duration": 1323,
       "pomodoros": 0,
       "subject": "math"
     },
     {
-      "date": "2026-05-22 00:01",
+      "date": "2026-05-21 00:01",
       "duration": 1500,
       "pomodoros": 1,
       "timeline": [
@@ -673,13 +673,13 @@
       ]
     },
     {
-      "date": "2026-05-22 00:35",
+      "date": "2026-05-21 00:35",
       "duration": 370,
       "pomodoros": 0,
       "subject": "math"
     },
     {
-      "date": "2026-05-22 00:35",
+      "date": "2026-05-21 00:35",
       "duration": 1500,
       "pomodoros": 1,
       "timeline": [
@@ -771,20 +771,21 @@
           "end": "23:01",
           "duration": 1500,
           "subject": ""
-        }
-      ],
-      "total_time": 10500,
-      "pomodoros": 7
-    },
-    "2026-05-21": {
-      "date": "2026-05-21",
-      "segments": [
+        },
         {
           "start": "00:29",
           "end": "00:35",
           "duration": 370,
           "subject": "math"
-        },
+        }
+      ],
+      "total_time": 10870,
+      "pomodoros": 7,
+      "timeline": []
+    },
+    "2026-05-21": {
+      "date": "2026-05-21",
+      "segments": [
         {
           "start": "09:37",
           "end": "10:02",
@@ -828,7 +829,7 @@
           "subject": "math"
         }
       ],
-      "total_time": 10691,
+      "total_time": 10321,
       "pomodoros": 3,
       "timeline": [
         {
