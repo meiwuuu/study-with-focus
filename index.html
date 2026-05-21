@@ -1412,6 +1412,23 @@ function pomoPause() {
   updateStatusBar();
 }
 function pomoEnd() {
+  // 休息阶段提前结束：保留蓝点，回到专注模式
+  if (pomo.status === 'break' || pomo.status === 'long-break') {
+    pomo.running = false; clearTimeout(pomo.timer);
+    focusModeActive = false; updateFocusBtn();
+    savePomoState();
+    pomo.timeLeft = (parseInt(document.getElementById('pomo-focus').value)||25)*60;
+    pomo.total = pomo.timeLeft;
+    // 不重置 pomo.completed，蓝点保持
+    pomoSetStatus('focus');
+    pomoUpdateDots();
+    pomoUpdateDisplay();
+    document.getElementById('pomo-play').style.display = 'inline-flex';
+    document.getElementById('pomo-pause').style.display = 'none';
+    autoDisableBlocking();
+    updateStatusBar();
+    return;
+  }
   // 结算当前番茄钟：非专注阶段直接重置
   if (pomo.status !== 'focus' || !pomo.running) { pomoReset(); return; }
   var totalSec = segmentAccSeconds;
