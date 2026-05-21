@@ -838,6 +838,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   </div>
 </div>
 
+<!-- Hidden iframe for launching server without popup -->
+<iframe id="server-launcher" style="display:none;width:0;height:0;border:none;position:absolute;top:-9999px;left:-9999px;"></iframe>
+
 <!-- ═══════════ Status bar ═══════════ -->
 <div class="status-bar" id="status-bar">
   <span class="sb-dot off" id="sb-dot"></span><span id="sb-status">就绪</span>
@@ -1688,9 +1691,8 @@ async function blockToggle(){
 }
 
 async function autoStartServer() {
-  var batPath = 'file:///E:/code/hermes/focus/run_server.bat';
-  var w = window.open(batPath, '_blank');
-  if (w) setTimeout(function(){ w.close(); }, 500);
+  var iframe = document.getElementById('server-launcher');
+  iframe.src = 'file:///E:/code/hermes/focus/run_server.bat';
   for (var i = 0; i < 20; i++) {
     await new Promise(function(r){ setTimeout(r, 500); });
     var d = await apiCall('/api/status');
