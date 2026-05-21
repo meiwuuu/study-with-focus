@@ -771,15 +771,9 @@
           "end": "23:01",
           "duration": 1500,
           "subject": ""
-        },
-        {
-          "start": "00:29",
-          "end": "00:35",
-          "duration": 370,
-          "subject": "math"
         }
       ],
-      "total_time": 10870,
+      "total_time": 10500,
       "pomodoros": 7,
       "timeline": []
     },
@@ -827,9 +821,15 @@
           "end": "00:01",
           "duration": 1323,
           "subject": "math"
+        },
+        {
+          "start": "00:29",
+          "end": "00:35",
+          "duration": 370,
+          "subject": "math"
         }
       ],
-      "total_time": 10321,
+      "total_time": 10691,
       "pomodoros": 3,
       "timeline": [
         {
