@@ -1384,8 +1384,9 @@ function pomoStart() {
   pomo.timer = setTimeout(pomoTick, 250);
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
-    segmentStartTime = Date.now();
-    segmentAccSeconds = 0;
+    // 仅在首次启动时设置起始时间；暂停后恢复保持 segmentStartTime 不变
+    if (!segmentStartTime) segmentStartTime = Date.now();
+    // segmentAccSeconds 不重置——暂停后恢复继承之前累积的时间
     autoEnableBlocking();
   }
   // Timeline: start or resume
@@ -1401,12 +1402,7 @@ function pomoPause() {
   if (pomo.running && pomo.status === 'focus') {
     tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds});
   }
-  // Record current segment if >= 5 min
-  if (pomo.status === 'focus' && segmentAccSeconds >= 300) {
-    recordCurrentSegment();
-  }
-  segmentStartTime = null;
-  segmentAccSeconds = 0;
+  // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
   focusModeActive = false; updateFocusBtn();
   savePomoState();
