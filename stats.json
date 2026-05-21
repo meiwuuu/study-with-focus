@@ -1,8 +1,8 @@
 {
   "today": "2026-05-21",
-  "today_time": 1500,
-  "today_pomodoros": 1,
-  "total_time": 25500,
+  "today_time": 20665,
+  "today_pomodoros": 8,
+  "total_time": 34165,
   "total_pomodoros": 17,
   "sessions": [
     {
@@ -830,7 +830,7 @@
         }
       ],
       "total_time": 10691,
-      "pomodoros": 3,
+      "pomodoros": 8,
       "timeline": [
         {
           "subject": "math",
