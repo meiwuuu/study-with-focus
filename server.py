@@ -355,9 +355,13 @@ class FocusHandler(BaseHTTPRequestHandler):
             text = body.get("text", "")
             if "reviews" not in stats:
                 stats["reviews"] = {}
+            old = stats["reviews"].get(date, {})
             stats["reviews"][date] = {
                 "text": text,
-                "generatedAt": time.strftime("%Y-%m-%d %H:%M:%S")
+                "generatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "score": body.get("score", old.get("score")),
+                "grade": body.get("grade", old.get("grade")),
+                "source": body.get("source", old.get("source", "")),
             }
             save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "date": date})
