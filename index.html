@@ -1969,6 +1969,14 @@ function renderLearningLog(daily, date) {
   }
 
   var segs = daily.segments;
+  // 按有效时间排序：凌晨时间(<04:00)小时+24
+  segs.sort(function(a, b) {
+    var ah = parseInt(a.start.split(':')[0]), am = parseInt(a.start.split(':')[1]);
+    var bh = parseInt(b.start.split(':')[0]), bm = parseInt(b.start.split(':')[1]);
+    if (ah < 4) ah += 24;
+    if (bh < 4) bh += 24;
+    return (ah * 60 + am) - (bh * 60 + bm);
+  });
   var totalTime = daily.total_time || 0;
   var totalPomos = daily.pomodoros || 0;
 
