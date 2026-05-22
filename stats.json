@@ -1,8 +1,8 @@
 {
   "today": "2026-05-22",
-  "today_time": 15000,
+  "today_time": 15720,
   "today_pomodoros": 10,
-  "total_time": 40500,
+  "total_time": 41220,
   "total_pomodoros": 27,
   "sessions": [
     {
@@ -1227,6 +1227,12 @@
           "action": "complete"
         }
       ]
+    },
+    {
+      "date": "2026-05-23 01:06",
+      "duration": 720,
+      "pomodoros": 0,
+      "subject": "eng"
     }
   ],
   "reviews": {
@@ -1547,9 +1553,15 @@
           "end": "00:54",
           "duration": 849,
           "subject": "eng"
+        },
+        {
+          "start": "00:54",
+          "end": "01:06",
+          "duration": 720,
+          "subject": "eng"
         }
       ],
-      "total_time": 14924,
+      "total_time": 15644,
       "pomodoros": 0,
       "timeline": [
         {
