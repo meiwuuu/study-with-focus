@@ -1174,20 +1174,19 @@ function setSubject(subj, e) {
   if (currentSubject !== subj) {
     tlEvent('subject_change', {from: currentSubject || '', to: subj || '', accSeconds: segmentAccSeconds});
   }
-  // If active focus segment >= 5 min, record before switching
-  if (pomo.running && pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 300) {
+  // Record current segment before switching (even if paused)
+  if (pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 300) {
     recordCurrentSegment();
   }
+  // Always reset segment timer on subject change
+  segmentAccSeconds = 0;
+  segmentStartTime = pomo.running ? Date.now() : null;
   currentSubject = subj;
   // Update custom dropdown display
   var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
   document.getElementById('pomo-subject-label').textContent = names[subj] || '不区分';
   var opts = document.querySelectorAll('#pomo-subject-dropdown .cs-option');
   opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === subj); });
-  if (pomo.running && pomo.status === 'focus') {
-    segmentStartTime = Date.now();
-    segmentAccSeconds = 0;
-  }
   updateSubjectBadge();
 }
 
