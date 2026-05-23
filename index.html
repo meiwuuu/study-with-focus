@@ -113,8 +113,11 @@ body {
   border-radius: 12px;
   padding: 14px 18px;
   width: 300px;
-  max-height: 380px;
-  overflow-y: auto;
+  max-height: 80vh;
+  min-width: 220px;
+  min-height: 120px;
+  resize: both;
+  overflow: auto;
   box-shadow: 0 12px 32px rgba(0,0,0,0.35);
   cursor: grab;
   user-select: none;
@@ -138,6 +141,7 @@ body {
 /* 极简锁定状态：边框微亮 + 右上角小锁 */
 .pomo-current-todo.pinned {
   border-color: rgba(255, 255, 255, 0.25);
+  resize: none;
 }
 .pomo-current-todo.pinned::before {
   content: "🔒";
@@ -2276,10 +2280,15 @@ function renderLearningLog(daily, date) {
 
     todoEl.addEventListener('mousedown', function(e) {
         if (isPinned || e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
+
+        // 右下角缩放手柄区域：交给浏览器原生 resize，不触发拖拽
+        var rect = todoEl.getBoundingClientRect();
+        var isOnResizeHandle = (e.clientX > rect.right - 18) && (e.clientY > rect.bottom - 18);
+        if (isOnResizeHandle) return;
+
         isDragging = true;
         hasDragged = false;
         todoEl.style.cursor = 'grabbing';
-        var rect = todoEl.getBoundingClientRect();
         todoEl.style.left = rect.left + 'px';
         todoEl.style.top = rect.top + 'px';
         todoEl.style.right = 'auto';
