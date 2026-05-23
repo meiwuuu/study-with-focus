@@ -66,13 +66,13 @@ body {
 }
 
 /* ═══════════ Floating pomodoro clock (top center) ═══════════ */
+/* 时间浮窗：固定在顶部中央，不可拖动 */
 .pomo-float {
   position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
   z-index: 100;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   transition: opacity 0.3s ease;
-  cursor: grab;
-  user-select: none;
+  cursor: pointer;
 }
 .pomo-float.hidden { opacity: 0; pointer-events: none; }
 .pomo-clock {
@@ -99,28 +99,38 @@ body {
 .pomo-status-badge.break { color: var(--break); }
 .pomo-status-badge.long-break { color: var(--long-break); }
 
+/* 任务浮窗：独立悬浮，可拖拽，右键固定 */
 .pomo-current-todo {
-  font-family: var(--font); font-size: 0.88em;
-  opacity: 0; transform: translateY(-6px);
-  transition: all 0.3s ease;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.15);
+  position: fixed;
+  top: 100px;
+  right: 24px;
+  z-index: 101;
+  font-family: var(--font); font-size: 0.9em;
+  opacity: 0; pointer-events: none;
+  background: rgba(20, 20, 20, 0.65);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
-  padding: 12px 18px;
-  width: 320px;
-  max-height: 400px;
+  padding: 14px 18px;
+  width: 300px;
+  max-height: 380px;
   overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+  cursor: grab;
+  user-select: none;
+  transition: opacity 0.3s ease, background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
+.pomo-current-todo.show { opacity: 1; pointer-events: auto; }
 .pomo-current-todo::-webkit-scrollbar { width: 4px; }
-.pomo-current-todo::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 2px; }
-
-.pomo-current-todo.show { opacity: 1; transform: translateY(0); }
+.pomo-current-todo::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 .pomo-float-task { 
+  display: flex;
+  align-items: center;
   font-size: 0.95em; 
   padding: 6px 0;
   white-space: normal;
   word-break: break-all;
+  line-height: 1.4;
 }
 .pomo-float-task .td-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .pomo-float-task .td-check { width: 14px; height: 14px; cursor: pointer; accent-color: var(--break); margin-right: 6px; vertical-align: middle; }
@@ -611,11 +621,12 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   <div class="pomo-clock" id="pomo-clock" onclick="openPanel('pomodoro')">
     <span class="pomo-time-display" id="pomo-float-time">25:00</span>
     <span class="pomo-status-badge focus" id="pomo-float-status">专注</span>
-    <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
   </div>
-  <div class="pomo-current-todo" id="pomo-float-todo">
-    <div id="pomo-float-todo-list"></div>
-  </div>
+  <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
+</div>
+
+<div class="pomo-current-todo" id="pomo-float-todo">
+  <div id="pomo-float-todo-list"></div>
 </div>
 
 <!-- ═══════════ Settings panel ═══════════ -->
@@ -2238,24 +2249,25 @@ function renderLearningLog(daily, date) {
   container.innerHTML = html;
 }
 
-// ═══════════ 浮窗拖动与右键固定逻辑 ═══════════
-(function initFloatingWindowDrag() {
-    var floatEl = document.getElementById('pomo-float');
-    if (!floatEl) return;
+// ═══════════ 任务浮窗独立拖动与右键固定逻辑 ═══════════
+(function initTodoWindowDrag() {
+    var todoEl = document.getElementById('pomo-float-todo');
+    if (!todoEl) return;
+
     var isDragging = false;
     var hasDragged = false;
     var isPinned = false;
     var startX, startY, initialLeft, initialTop;
 
-    floatEl.addEventListener('mousedown', function(e) {
+    todoEl.addEventListener('mousedown', function(e) {
         if (isPinned || e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
         isDragging = true;
         hasDragged = false;
-        floatEl.style.cursor = 'grabbing';
-        var rect = floatEl.getBoundingClientRect();
-        floatEl.style.transform = 'none';
-        floatEl.style.left = rect.left + 'px';
-        floatEl.style.top = rect.top + 'px';
+        todoEl.style.cursor = 'grabbing';
+        var rect = todoEl.getBoundingClientRect();
+        todoEl.style.left = rect.left + 'px';
+        todoEl.style.top = rect.top + 'px';
+        todoEl.style.right = 'auto';
         startX = e.clientX;
         startY = e.clientY;
         initialLeft = rect.left;
@@ -2267,18 +2279,18 @@ function renderLearningLog(daily, date) {
         hasDragged = true;
         var dx = e.clientX - startX;
         var dy = e.clientY - startY;
-        floatEl.style.left = (initialLeft + dx) + 'px';
-        floatEl.style.top = (initialTop + dy) + 'px';
+        todoEl.style.left = (initialLeft + dx) + 'px';
+        todoEl.style.top = (initialTop + dy) + 'px';
     });
 
     document.addEventListener('mouseup', function(e) {
         if (isDragging) {
             isDragging = false;
-            floatEl.style.cursor = isPinned ? 'default' : 'grab';
+            todoEl.style.cursor = isPinned ? 'default' : 'grab';
         }
     });
 
-    floatEl.addEventListener('click', function(e) {
+    todoEl.addEventListener('click', function(e) {
         if (hasDragged) {
             e.stopPropagation();
             e.preventDefault();
@@ -2286,30 +2298,17 @@ function renderLearningLog(daily, date) {
         }
     }, true);
 
-    floatEl.addEventListener('contextmenu', function(e) {
+    todoEl.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         isPinned = !isPinned;
         if (isPinned) {
-            floatEl.style.boxShadow = '0 0 0 2px var(--yellow), 0 8px 24px rgba(0,0,0,0.6)';
-            floatEl.style.borderRadius = '14px';
-            floatEl.style.cursor = 'default';
-            var badge = document.getElementById('pomo-float-subject');
-            badge.textContent = '📍 浮窗已固定';
-            badge.className = 'pomo-subject-badge';
-            badge.style.background = 'rgba(255,193,7,0.2)';
-            badge.style.color = 'var(--yellow)';
-            badge.style.display = 'inline';
-            setTimeout(function() { if (currentSubject) updateSubjectBadge(); else badge.style.display = 'none'; }, 1200);
+            todoEl.style.boxShadow = '0 0 0 2px var(--yellow), 0 12px 32px rgba(0,0,0,0.5)';
+            todoEl.style.borderColor = 'var(--yellow)';
+            todoEl.style.cursor = 'default';
         } else {
-            floatEl.style.boxShadow = '';
-            floatEl.style.borderRadius = '';
-            floatEl.style.cursor = 'grab';
-            var badge = document.getElementById('pomo-float-subject');
-            badge.textContent = '🔓 解除固定';
-            badge.style.background = 'rgba(255,255,255,0.15)';
-            badge.style.color = '#fff';
-            badge.style.display = 'inline';
-            setTimeout(function() { if (currentSubject) updateSubjectBadge(); else badge.style.display = 'none'; }, 1000);
+            todoEl.style.boxShadow = '';
+            todoEl.style.borderColor = '';
+            todoEl.style.cursor = 'grab';
         }
     });
 })();
