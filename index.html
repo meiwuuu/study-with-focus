@@ -441,8 +441,13 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .todo-item.completed { opacity:.45; }
 .todo-item.completed .todo-text { text-decoration:line-through; }
 .todo-item.pinned { background:var(--yellow-bg); border-color:rgba(255,193,7,.20); }
+.todo-item.daily { border-color:rgba(59,130,246,.25); }
 .todo-check { width:17px;height:17px;cursor:pointer;accent-color:var(--break);flex-shrink:0; }
 .todo-text { flex:1;font-size:.85em; }
+.todo-daily-badge { font-size:.65em;background:rgba(59,130,246,.15);color:#60a5fa;padding:1px 6px;border-radius:8px;margin-left:4px; }
+.todo-daily-btn { background:none;border:1px solid transparent;color:rgba(255,255,255,.20);cursor:pointer;font-size:.8em;padding:2px 6px;border-radius:6px;transition:all .2s; }
+.todo-daily-btn:hover { background:rgba(59,130,246,.15);color:#60a5fa; }
+.todo-daily-btn.active { background:rgba(59,130,246,.20);color:#60a5fa;border-color:rgba(59,130,246,.30); }
 .todo-pin {
   width:28px;height:28px;border-radius:50%;background:rgba(255,193,7,.10);
   border:1px solid rgba(255,193,7,.20);color:rgba(255,193,7,.55);
@@ -1709,13 +1714,19 @@ function syncCalFromServer() {
 
 // ═══════════ TODOS ═══════════
 var todos=[],showTodo=true,showMultiTodo=false;
-function todoLoad(){try{var s=localStorage.getItem('focus_todos');if(s)todos=JSON.parse(s);}catch(e){todos=[];}try{showTodo=localStorage.getItem('focus_todo_show')!=='false';}catch(e){showTodo=true;}try{showMultiTodo=localStorage.getItem('focus_todo_multi')==='true';}catch(e){showMultiTodo=false;}document.getElementById('todo-show').checked=showTodo;var mc=document.getElementById('todo-show-multi');if(mc)mc.checked=showMultiTodo;todoRender();todoUpdateFloat();}
+function todoLoad(){try{var s=localStorage.getItem('focus_todos');if(s)todos=JSON.parse(s);}catch(e){todos=[];}try{showTodo=localStorage.getItem('focus_todo_show')!=='false';}catch(e){showTodo=true;}try{showMultiTodo=localStorage.getItem('focus_todo_multi')==='true';}catch(e){showMultiTodo=false;}
+  // Reset daily todos on new day
+  var today=fmtLocalDate(new Date());
+  var lastDate=localStorage.getItem('focus_todo_last_date')||'';
+  if(lastDate!==today){for(var i=0;i<todos.length;i++){if(todos[i].daily&&todos[i].completed){todos[i].completed=false;}}localStorage.setItem('focus_todo_last_date',today);todoSave();}
+  document.getElementById('todo-show').checked=showTodo;var mc=document.getElementById('todo-show-multi');if(mc)mc.checked=showMultiTodo;todoRender();todoUpdateFloat();}
 function todoSaveMulti(){showMultiTodo=document.getElementById('todo-show-multi').checked;localStorage.setItem('focus_todo_multi',showMultiTodo.toString());todoUpdateFloat();}
 function todoSave(){localStorage.setItem('focus_todos',JSON.stringify(todos));todoUpdateFloat();}
 function todoSaveShow(){showTodo=document.getElementById('todo-show').checked;localStorage.setItem('focus_todo_show',showTodo.toString());todoUpdateFloat();}
-function todoAdd(){var t=document.getElementById('todo-input').value.trim();if(!t)return;todos.unshift({id:Date.now(),text:t,completed:false,pinned:false});document.getElementById('todo-input').value='';todoSave();todoRender();}
+function todoAdd(){var t=document.getElementById('todo-input').value.trim();if(!t)return;todos.unshift({id:Date.now(),text:t,completed:false,pinned:false,daily:false});document.getElementById('todo-input').value='';todoSave();todoRender();}
 function todoToggle(id){var t=todos.find(function(x){return x.id===id;});if(t){t.completed=!t.completed;}todoSave();todoRender();}
 function todoPin(id){todos.forEach(function(x){x.pinned=x.id===id?!x.pinned:false;});todoSave();todoRender();}
+function todoDaily(id){var t=todos.find(function(x){return x.id===id;});if(t){t.daily=!t.daily;}todoSave();todoRender();}
 function todoDelete(id){todos=todos.filter(function(x){return x.id!==id;});todoSave();todoRender();}
 function todoRender(){
   var l=document.getElementById('todo-list'),e=document.getElementById('todo-empty');
@@ -1723,9 +1734,10 @@ function todoRender(){
   e.style.display='none';var h='';
   for(var i=0;i<todos.length;i++){
     var t=todos[i];
-    h+='<div class="todo-item'+(t.completed?' completed':'')+(t.pinned?' pinned':'')+'">';
+    h+='<div class="todo-item'+(t.completed?' completed':'')+(t.pinned?' pinned':'')+(t.daily?' daily':'')+'">';
     h+='<input type="checkbox" class="todo-check"'+(t.completed?' checked':'')+' onchange="todoToggle('+t.id+')">';
-    h+='<span class="todo-text">'+escHtml(t.text)+'</span>';
+    h+='<span class="todo-text">'+escHtml(t.text)+(t.daily?' <span class="todo-daily-badge">每日</span>':'')+'</span>';
+    h+='<button class="todo-daily-btn'+(t.daily?' active':'')+'" onclick="todoDaily('+t.id+')" title="每日刷新">🔄</button>';
     h+='<button class="todo-pin'+(t.pinned?' pinned':'')+'" onclick="todoPin('+t.id+')">📌</button>';
     h+='<button class="todo-del" onclick="todoDelete('+t.id+')">&times;</button></div>';
   }
