@@ -1,7 +1,7 @@
 {
   "today": "2026-05-23",
-  "today_time": 3000,
-  "today_pomodoros": 2,
+  "today_time": 1500,
+  "today_pomodoros": 1,
   "total_time": 42720,
   "total_pomodoros": 28,
   "sessions": [
@@ -1116,170 +1116,6 @@
       ]
     },
     {
-      "date": "2026-05-23 00:14",
-      "duration": 1424,
-      "pomodoros": 0,
-      "subject": "math"
-    },
-    {
-      "date": "2026-05-23 00:14",
-      "duration": 1500,
-      "pomodoros": 1,
-      "timeline": [
-        {
-          "subject": "math",
-          "accSeconds": 76,
-          "ts": "2026-05-22T15:05:48.199Z",
-          "action": "pause"
-        },
-        {
-          "subject": "math",
-          "running": true,
-          "ts": "2026-05-22T15:28:40.980Z",
-          "action": "start"
-        },
-        {
-          "subject": "math",
-          "accSeconds": 394,
-          "ts": "2026-05-22T15:35:15.815Z",
-          "action": "pause"
-        },
-        {
-          "subject": "math",
-          "running": true,
-          "ts": "2026-05-22T15:54:10.940Z",
-          "action": "start"
-        },
-        {
-          "subject": "math",
-          "accSeconds": 394,
-          "ts": "2026-05-22T15:54:11.436Z",
-          "action": "pause"
-        },
-        {
-          "subject": "math",
-          "running": true,
-          "ts": "2026-05-22T15:54:12.331Z",
-          "action": "start"
-        },
-        {
-          "subject": "math",
-          "accSeconds": 1343,
-          "ts": "2026-05-22T16:10:01.405Z",
-          "action": "pause"
-        },
-        {
-          "subject": "math",
-          "running": true,
-          "ts": "2026-05-22T16:13:26.302Z",
-          "action": "start"
-        },
-        {
-          "subject": "math",
-          "pomodoroNum": 8,
-          "totalSec": 1424,
-          "ts": "2026-05-22T16:14:47.506Z",
-          "action": "complete"
-        }
-      ]
-    },
-    {
-      "date": "2026-05-23 00:54",
-      "duration": 1500,
-      "pomodoros": 0,
-      "subject": "eng"
-    },
-    {
-      "date": "2026-05-23 00:54",
-      "duration": 1500,
-      "pomodoros": 1,
-      "timeline": [
-        {
-          "subject": "math",
-          "running": true,
-          "ts": "2026-05-22T16:15:24.504Z",
-          "action": "start"
-        },
-        {
-          "subject": "math",
-          "accSeconds": 651,
-          "ts": "2026-05-22T16:26:16.127Z",
-          "action": "pause"
-        },
-        {
-          "from": "math",
-          "to": "eng",
-          "accSeconds": 651,
-          "ts": "2026-05-22T16:40:14.777Z",
-          "action": "subject_change"
-        },
-        {
-          "subject": "eng",
-          "running": true,
-          "ts": "2026-05-22T16:40:15.655Z",
-          "action": "start"
-        },
-        {
-          "subject": "eng",
-          "pomodoroNum": 9,
-          "totalSec": 1500,
-          "ts": "2026-05-22T16:54:24.906Z",
-          "action": "complete"
-        }
-      ]
-    },
-    {
-      "date": "2026-05-23 01:06",
-      "duration": 720,
-      "pomodoros": 0,
-      "subject": "eng"
-    },
-    {
-      "date": "2026-05-23 10:36",
-      "duration": 493,
-      "pomodoros": 0,
-      "subject": "eng"
-    },
-    {
-      "date": "2026-05-23 10:36",
-      "duration": 1500,
-      "pomodoros": 1,
-      "timeline": [
-        {
-          "subject": "eng",
-          "running": true,
-          "ts": "2026-05-22T16:56:30.372Z",
-          "action": "start"
-        },
-        {
-          "subject": "eng",
-          "accSeconds": 718,
-          "ts": "2026-05-22T17:08:29.215Z",
-          "action": "pause"
-        },
-        {
-          "from": "",
-          "to": "eng",
-          "accSeconds": 0,
-          "ts": "2026-05-23T02:10:45.714Z",
-          "action": "subject_change"
-        },
-        {
-          "subject": "eng",
-          "running": true,
-          "ts": "2026-05-23T02:10:46.410Z",
-          "action": "start"
-        },
-        {
-          "subject": "eng",
-          "pomodoroNum": 1,
-          "totalSec": 493,
-          "ts": "2026-05-23T02:36:27.371Z",
-          "action": "complete"
-        }
-      ]
-    },
-    {
       "date": "2026-05-23 10:53",
       "duration": 1500,
       "pomodoros": 1,
@@ -2007,14 +1843,7 @@
       ]
     },
     "2026-05-23": {
-      "date": "2026-05-23",
       "segments": [
-        {
-          "start": "10:28",
-          "end": "10:36",
-          "duration": 493,
-          "subject": "eng"
-        },
         {
           "start": "10:28",
           "end": "10:53",
@@ -2022,42 +1851,8 @@
           "subject": "eng"
         }
       ],
-      "total_time": 1993,
-      "pomodoros": 0,
-      "timeline": [
-        {
-          "subject": "eng",
-          "running": true,
-          "ts": "2026-05-22T16:56:30.372Z",
-          "action": "start"
-        },
-        {
-          "subject": "eng",
-          "accSeconds": 718,
-          "ts": "2026-05-22T17:08:29.215Z",
-          "action": "pause"
-        },
-        {
-          "from": "",
-          "to": "eng",
-          "accSeconds": 0,
-          "ts": "2026-05-23T02:10:45.714Z",
-          "action": "subject_change"
-        },
-        {
-          "subject": "eng",
-          "running": true,
-          "ts": "2026-05-23T02:10:46.410Z",
-          "action": "start"
-        },
-        {
-          "subject": "eng",
-          "pomodoroNum": 1,
-          "totalSec": 493,
-          "ts": "2026-05-23T02:36:27.371Z",
-          "action": "complete"
-        }
-      ]
+      "total_time": 1500,
+      "pomodoros": 0
     }
   }
 }
