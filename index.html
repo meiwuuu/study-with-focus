@@ -1814,7 +1814,7 @@ async function finishDayReview() {
     var poller = setInterval(async function() {
       attempts++;
       try {
-        var reviewRes = await fetch(API_BASE + '/api/stats/review?date=' + today);
+        var reviewRes = await fetch(API + '/api/stats/review?date=' + today);
         var review = await reviewRes.json();
         if (review && review.text) {
           clearInterval(poller);
