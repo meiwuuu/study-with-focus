@@ -70,9 +70,11 @@ body {
   position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
   z-index: 100;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.3s ease;
+  cursor: grab;
+  user-select: none;
 }
-.pomo-float.hidden { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(-10px); }
+.pomo-float.hidden { opacity: 0; pointer-events: none; }
 .pomo-clock {
   cursor: pointer;
   background: rgba(0,0,0,0.45);
@@ -98,18 +100,28 @@ body {
 .pomo-status-badge.long-break { color: var(--long-break); }
 
 .pomo-current-todo {
-  font-family: var(--font); font-size: 0.82em;
+  font-family: var(--font); font-size: 0.88em;
   opacity: 0; transform: translateY(-6px);
   transition: all 0.3s ease;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.55);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 8px;
-  padding: 6px 16px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  padding: 12px 18px;
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
 }
-.pomo-current-todo.show { opacity: 0.85; transform: translateY(0); }
-.pomo-current-todo .td-label { opacity: 0.55; margin-right: 6px; }
-.pomo-float-task { font-size: 0.88em; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pomo-current-todo::-webkit-scrollbar { width: 4px; }
+.pomo-current-todo::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 2px; }
+
+.pomo-current-todo.show { opacity: 1; transform: translateY(0); }
+.pomo-float-task { 
+  font-size: 0.95em; 
+  padding: 6px 0;
+  white-space: normal;
+  word-break: break-all;
+}
 .pomo-float-task .td-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .pomo-float-task .td-check { width: 14px; height: 14px; cursor: pointer; accent-color: var(--break); margin-right: 6px; vertical-align: middle; }
 
@@ -595,9 +607,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <button class="top-btn" id="btn-fullscreen" onclick="toggleFullscreen()" style="right:20px;">⛶</button>
 
 <!-- ═══════════ Floating pomodoro ═══════════ -->
-<div class="pomo-float" id="pomo-float" onclick="openPanel('pomodoro')"
-     onmouseenter="onUIEnter()" onmouseleave="onUILeave()">
-  <div class="pomo-clock" id="pomo-clock">
+<div class="pomo-float" id="pomo-float" onmouseenter="onUIEnter()" onmouseleave="onUILeave()">
+  <div class="pomo-clock" id="pomo-clock" onclick="openPanel('pomodoro')">
     <span class="pomo-time-display" id="pomo-float-time">25:00</span>
     <span class="pomo-status-badge focus" id="pomo-float-status">专注</span>
     <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
@@ -1743,6 +1754,20 @@ function todoRender(){
   }
   l.innerHTML=h;
 }
+// 在浮窗中直接勾选日历计划
+function calTogglePlanFromFloat(date, id) {
+    var pl = cal.plans[date];
+    if (!pl) return;
+    for (var i = 0; i < pl.length; i++) {
+        if (pl[i].id === id) {
+            pl[i].done = !pl[i].done;
+            break;
+        }
+    }
+    calSave();
+    if (calSelected === date) calRenderDetail();
+}
+
 function todoUpdateFloat() {
   var el = document.getElementById('pomo-float-todo');
   var lst = document.getElementById('pomo-float-todo-list');
@@ -1750,17 +1775,14 @@ function todoUpdateFloat() {
   if (!showTodo) { el.classList.remove('show'); return; }
 
   if (showMultiTodo) {
-    // Multi mode: show all uncompleted todos + today's uncompleted plans
     var items = [];
-    // Permanent todos (uncompleted)
     for (var i = 0; i < todos.length; i++) {
       if (!todos[i].completed) items.push({text: todos[i].text, source: 'todo', id: todos[i].id, pinned: todos[i].pinned});
     }
-    // Today's uncompleted calendar plans
     if (calSelected && cal.plans[calSelected]) {
       var plans = cal.plans[calSelected].filter(function(p){ return !p.done; });
       for (var j = 0; j < plans.length; j++) {
-        items.push({text: plans[j].text, source: 'plan', color: plans[j].color});
+        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: calSelected});
       }
     }
     if (!items.length) { el.classList.remove('show'); return; }
@@ -1772,6 +1794,8 @@ function todoUpdateFloat() {
       h += '<div class="pomo-float-task">';
       if (it.source === 'todo') {
         h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();todoToggle('+it.id+')">';
+      } else if (it.source === 'plan') {
+        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();calTogglePlanFromFloat(\''+it.date+'\', \''+it.id+'\')">';
       }
       h += '<span class="td-dot" style="background:'+dot+'"></span>';
       h += escHtml(it.text);
@@ -1780,14 +1804,24 @@ function todoUpdateFloat() {
     lst.innerHTML = h;
     el.classList.add('show');
   } else {
-    // Single mode: pinned todo > last uncompleted todo > today's plan
     var pinned = todos.find(function(t){return !t.completed && t.pinned;});
     var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
+    var isPlan = false;
+    var activeDate = null;
     if (!active && calSelected && cal.plans[calSelected]) {
       active = cal.plans[calSelected].filter(function(p){return !p.done;}).pop();
+      if (active) { isPlan = true; activeDate = calSelected; }
     }
+    
     if (active) {
-      lst.innerHTML = '<div class="pomo-float-task"><span class="td-label">当前:</span>'+escHtml(active.text)+'</div>';
+      var h = '<div class="pomo-float-task">';
+      if (isPlan) {
+        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();calTogglePlanFromFloat(\''+activeDate+'\', \''+active.id+'\')">';
+      } else if (active.id) {
+        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();todoToggle('+active.id+')">';
+      }
+      h += '<span class="td-label">当前:</span>'+escHtml(active.text)+'</div>';
+      lst.innerHTML = h;
       el.classList.add('show');
     } else {
       el.classList.remove('show');
@@ -2203,6 +2237,82 @@ function renderLearningLog(daily, date) {
 
   container.innerHTML = html;
 }
+
+// ═══════════ 浮窗拖动与右键固定逻辑 ═══════════
+(function initFloatingWindowDrag() {
+    var floatEl = document.getElementById('pomo-float');
+    if (!floatEl) return;
+    var isDragging = false;
+    var hasDragged = false;
+    var isPinned = false;
+    var startX, startY, initialLeft, initialTop;
+
+    floatEl.addEventListener('mousedown', function(e) {
+        if (isPinned || e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
+        isDragging = true;
+        hasDragged = false;
+        floatEl.style.cursor = 'grabbing';
+        var rect = floatEl.getBoundingClientRect();
+        floatEl.style.transform = 'none';
+        floatEl.style.left = rect.left + 'px';
+        floatEl.style.top = rect.top + 'px';
+        startX = e.clientX;
+        startY = e.clientY;
+        initialLeft = rect.left;
+        initialTop = rect.top;
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        hasDragged = true;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        floatEl.style.left = (initialLeft + dx) + 'px';
+        floatEl.style.top = (initialTop + dy) + 'px';
+    });
+
+    document.addEventListener('mouseup', function(e) {
+        if (isDragging) {
+            isDragging = false;
+            floatEl.style.cursor = isPinned ? 'default' : 'grab';
+        }
+    });
+
+    floatEl.addEventListener('click', function(e) {
+        if (hasDragged) {
+            e.stopPropagation();
+            e.preventDefault();
+            hasDragged = false;
+        }
+    }, true);
+
+    floatEl.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        isPinned = !isPinned;
+        if (isPinned) {
+            floatEl.style.boxShadow = '0 0 0 2px var(--yellow), 0 8px 24px rgba(0,0,0,0.6)';
+            floatEl.style.borderRadius = '14px';
+            floatEl.style.cursor = 'default';
+            var badge = document.getElementById('pomo-float-subject');
+            badge.textContent = '📍 浮窗已固定';
+            badge.className = 'pomo-subject-badge';
+            badge.style.background = 'rgba(255,193,7,0.2)';
+            badge.style.color = 'var(--yellow)';
+            badge.style.display = 'inline';
+            setTimeout(function() { if (currentSubject) updateSubjectBadge(); else badge.style.display = 'none'; }, 1200);
+        } else {
+            floatEl.style.boxShadow = '';
+            floatEl.style.borderRadius = '';
+            floatEl.style.cursor = 'grab';
+            var badge = document.getElementById('pomo-float-subject');
+            badge.textContent = '🔓 解除固定';
+            badge.style.background = 'rgba(255,255,255,0.15)';
+            badge.style.color = '#fff';
+            badge.style.display = 'inline';
+            setTimeout(function() { if (currentSubject) updateSubjectBadge(); else badge.style.display = 'none'; }, 1000);
+        }
+    });
+})();
 
 // ═══════════ INIT ═══════════
 calInit();
