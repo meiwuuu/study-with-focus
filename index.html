@@ -1443,7 +1443,8 @@ function pomoComplete() {
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
     // Timeline: pomodoro completed
     tlEvent('complete', {subject: currentSubject || '', pomodoroNum: pomo.completed, totalSec: segmentAccSeconds});
-    // Record segment before resetting
+    // 完整番茄钟=满时长（pomo.total），不受页面崩溃/segmentAccSeconds丢失影响
+    segmentAccSeconds = pomo.total;
     recordCurrentSegment();
     recordSession(1);
   }
