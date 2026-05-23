@@ -242,10 +242,8 @@ class FocusHandler(BaseHTTPRequestHandler):
                 "pomodoros": 0,
             })
             daily["date"] = date
-            # Pomodoros: use top-level today value if querying current day, else count from segments
-            if date == stats.get("today"):
-                daily["pomodoros"] = stats.get("today_pomodoros", 0)
-            else:
+            # Daily_log pomodoros is updated by session saves; fallback to segments for old data
+            if daily.get("pomodoros", 0) == 0:
                 segs = daily.get("segments", [])
                 date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
                 if date_pomos > 0:
@@ -321,6 +319,15 @@ class FocusHandler(BaseHTTPRequestHandler):
                 if "timeline" not in stats["daily_logs"][today]:
                     stats["daily_logs"][today]["timeline"] = []
                 stats["daily_logs"][today]["timeline"].extend(timeline)
+                # Update daily_log pomodoros and total_time
+                if pomodoros > 0:
+                    stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
+            # Always update daily_log total_time
+            today2 = effective_date_str()
+            stats.setdefault("daily_logs", {})
+            if today2 not in stats["daily_logs"]:
+                stats["daily_logs"][today2] = {"date": today2, "segments": [], "total_time": 0, "pomodoros": 0}
+            stats["daily_logs"][today2]["total_time"] = stats["daily_logs"][today2].get("total_time", 0) + duration
             stats["sessions"].append(session_entry)
             save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "stats": stats})
