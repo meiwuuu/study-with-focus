@@ -190,12 +190,36 @@ def get_default_stats():
         "daily_logs": {},     # { "2026-05-20": { segments: [...], total_time: N } }
     }
 
+def prune_old_data(stats, keep_days=30):
+    """
+    清理超过指定天数的详细记录，防止 JSON 文件无限膨胀。
+    保留历史日期的总时长和番茄数，仅删除体积巨大的 sessions/timeline/segments。
+    """
+    now = datetime.now()
+    cutoff_date = now - timedelta(days=keep_days)
+    cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+    # 1. 过滤掉过期的 sessions 完整记录
+    if "sessions" in stats:
+        stats["sessions"] = [
+            s for s in stats["sessions"]
+            if s.get("date", "")[:10] >= cutoff_str
+        ]
+
+    # 2. 清理 daily_logs 中的过期 timeline 和 segments（保留 total_time/pomodoros）
+    if "daily_logs" in stats:
+        for d_date in list(stats["daily_logs"].keys()):
+            if d_date < cutoff_str:
+                stats["daily_logs"][d_date].pop("segments", None)
+                stats["daily_logs"][d_date].pop("timeline", None)
+
 def rollover_if_new_day(stats):
     today = effective_date_str()
     if stats.get("today") != today:
         stats["today"] = today
         stats["today_time"] = 0
         stats["today_pomodoros"] = 0
+        prune_old_data(stats, keep_days=30)
 
 # --- HTTP server ---
 
