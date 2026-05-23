@@ -1545,7 +1545,7 @@ function calLoad() { try { var s=localStorage.getItem('focus_calendar'); if(s) c
 function calSave() { localStorage.setItem('focus_calendar', JSON.stringify(cal)); todoUpdateFloat(); }
 function calFmt(y,m,d) { return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
 function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?h+'h'+m+'m':m+'m'; }
-function calHeat(s) { if(s<=0)return 0; if(s<1800)return 1; if(s<3600)return 2; if(s<7200)return 3; return 4; }
+function calHeat(s) { if(s<=0)return 0; if(s<3600)return 1; if(s<10800)return 2; if(s<21600)return 3; return 4; }
 
 function calRender() {
   document.getElementById('cal-month-title').textContent = calYear+'年'+(calMonth+1)+'月';
