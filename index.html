@@ -412,6 +412,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .cal-plan-item:hover { background:rgba(255,255,255,.05); }
 .cal-plan-item.done { opacity:.4; }
 .cal-plan-item.done .cal-plan-text { text-decoration:line-through; }
+.cal-plan-item.perm { border-color:rgba(255,193,7,.15); }
 .cal-plan-check { width:16px;height:16px;cursor:pointer;accent-color:var(--break);flex-shrink:0; }
 .cal-plan-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
 .cal-plan-text { flex:1;font-size:.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
@@ -1527,6 +1528,7 @@ var PLAN_COLORS = [
 ];
 
 function calInit() {
+  todoLoad();
   var n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth();
   calLoad(); calRender();
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
@@ -1587,9 +1589,22 @@ function calRenderDetail() {
   if(l.pomodoros>0)sh+='<span class="cal-detail-stat">'+l.pomodoros+'个番茄</span>';
   document.getElementById('cal-detail-stats').innerHTML=sh;
   var pl=cal.plans[calSelected]||[];
-  if(!pl.length) { document.getElementById('cal-plan-list').innerHTML=''; document.getElementById('cal-plan-empty').style.display='block'; return; }
+  var permTodos = (typeof todos !== 'undefined' ? todos : []).filter(function(t){ return !t.completed; });
+  if(!pl.length && !permTodos.length) { document.getElementById('cal-plan-list').innerHTML=''; document.getElementById('cal-plan-empty').style.display='block'; document.getElementById('cal-plan-empty').textContent = '添加今天的学习计划，或在下方的永久待办中添加'; return; }
   document.getElementById('cal-plan-empty').style.display='none';
   var h='';
+
+  // Permanent todos first (from todo list)
+  for (var i=0;i<permTodos.length;i++) {
+    var t=permTodos[i];
+    h+='<div class="cal-plan-item perm">';
+    h+='<input type="checkbox" class="cal-plan-check" onchange="todoToggle('+t.id+');calRenderDetail();">';
+    h+='<span class="cal-plan-dot" style="background:var(--yellow)"></span>';
+    h+='<span class="cal-plan-text">📌 '+escHtml(t.text)+'</span>';
+    h+='<span style="font-size:.65em;color:rgba(255,255,255,.25);flex-shrink:0;">永久</span></div>';
+  }
+
+  // Date-specific plans
   for (var i=0;i<pl.length;i++) {
     var pp=pl[i],pc=PLAN_COLORS.find(function(c){return c.v===pp.color;});
     h+='<div class="cal-plan-item'+(pp.done?' done':'')+'">';
@@ -2075,7 +2090,7 @@ function renderLearningLog(daily, date) {
 }
 
 // ═══════════ INIT ═══════════
-calInit();todoLoad();
+calInit();
 loadPanelOpacity();
 initLogDateSelect();
 restorePomoState();

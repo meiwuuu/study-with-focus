@@ -1,9 +1,9 @@
 {
-  "today": "2026-05-22",
-  "today_time": 15720,
-  "today_pomodoros": 10,
-  "total_time": 41220,
-  "total_pomodoros": 27,
+  "today": "2026-05-23",
+  "today_time": 1500,
+  "today_pomodoros": 1,
+  "total_time": 42720,
+  "total_pomodoros": 28,
   "sessions": [
     {
       "date": "2026-05-19 22:23",
@@ -1233,6 +1233,51 @@
       "duration": 720,
       "pomodoros": 0,
       "subject": "eng"
+    },
+    {
+      "date": "2026-05-23 10:36",
+      "duration": 493,
+      "pomodoros": 0,
+      "subject": "eng"
+    },
+    {
+      "date": "2026-05-23 10:36",
+      "duration": 1500,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-22T16:56:30.372Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 718,
+          "ts": "2026-05-22T17:08:29.215Z",
+          "action": "pause"
+        },
+        {
+          "from": "",
+          "to": "eng",
+          "accSeconds": 0,
+          "ts": "2026-05-23T02:10:45.714Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-23T02:10:46.410Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 1,
+          "totalSec": 493,
+          "ts": "2026-05-23T02:36:27.371Z",
+          "action": "complete"
+        }
+      ]
     }
   ],
   "reviews": {
@@ -1951,6 +1996,53 @@
           "pomodoroNum": 9,
           "totalSec": 1500,
           "ts": "2026-05-22T16:54:24.906Z",
+          "action": "complete"
+        }
+      ]
+    },
+    "2026-05-23": {
+      "date": "2026-05-23",
+      "segments": [
+        {
+          "start": "10:28",
+          "end": "10:36",
+          "duration": 493,
+          "subject": "eng"
+        }
+      ],
+      "total_time": 493,
+      "pomodoros": 0,
+      "timeline": [
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-22T16:56:30.372Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 718,
+          "ts": "2026-05-22T17:08:29.215Z",
+          "action": "pause"
+        },
+        {
+          "from": "",
+          "to": "eng",
+          "accSeconds": 0,
+          "ts": "2026-05-23T02:10:45.714Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-23T02:10:46.410Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 1,
+          "totalSec": 493,
+          "ts": "2026-05-23T02:36:27.371Z",
           "action": "complete"
         }
       ]
