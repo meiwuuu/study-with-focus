@@ -1802,14 +1802,15 @@ async function finishDayReview() {
   });
 
   if (res && res.ok) {
-    btn.textContent = '⏳ 评价生成中…';
+    btn.textContent = '⏳ 已提交，等待AI…';
     btn.style.opacity = '0.7';
     btn.style.pointerEvents = 'none';
     showToast('已提交评价请求，AI 正在分析今天的学习数据…');
 
-    // Poll for review completion (up to 120 seconds)
+    // Poll for review completion (up to 180 seconds)
     var attempts = 0;
-    var maxAttempts = 24;  // 24 * 5s = 120s
+    var maxAttempts = 36;  // 36 * 5s = 180s
+    var startTime = Date.now();
     var poller = setInterval(async function() {
       attempts++;
       try {
@@ -1828,6 +1829,16 @@ async function finishDayReview() {
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
           showToast('评价生成超时，请稍后刷新页面查看', true);
+        } else {
+          // Progress feedback every 30 seconds
+          var elapsed = Math.floor((Date.now() - startTime) / 1000);
+          if (elapsed <= 60) {
+            btn.textContent = '⏳ 已提交，等待AI… (' + elapsed + 's)';
+          } else if (elapsed <= 120) {
+            btn.textContent = '🤖 AI分析中… (' + elapsed + 's)';
+          } else {
+            btn.textContent = '🤖 仍在处理… (' + elapsed + 's)';
+          }
         }
       } catch(e) {
         if (attempts >= maxAttempts) {
