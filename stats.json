@@ -1,7 +1,7 @@
 {
   "today": "2026-05-23",
-  "today_time": 8520,
-  "today_pomodoros": 5,
+  "today_time": 9000,
+  "today_pomodoros": 6,
   "total_time": 48720,
   "total_pomodoros": 32,
   "sessions": [
@@ -1335,9 +1335,9 @@
       ]
     },
     {
-      "date": "2026-05-23 20:30",
-      "duration": 1020,
-      "pomodoros": 0,
+      "date": "2026-05-23 20:25",
+      "duration": 1500,
+      "pomodoros": 1,
       "subject": "math"
     }
   ],
@@ -2094,13 +2094,13 @@
           "subject": "math"
         },
         {
-          "start": "20:13",
-          "end": "20:30",
-          "duration": 1020,
+          "start": "20:00",
+          "end": "20:25",
+          "duration": 1500,
           "subject": "math"
         }
       ],
-      "total_time": 8519,
+      "total_time": 8999,
       "pomodoros": 5,
       "timeline": [
         {
