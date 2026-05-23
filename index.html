@@ -1793,7 +1793,7 @@ function fmtDuration(s) {
 
 async function finishDayReview() {
   var btn = document.getElementById('btn-finish-day');
-  var today = fmtLocalDate(new Date());
+  var today = currentLogDate || fmtLocalDate(new Date());
 
   // Submit evaluate request
   var res = await apiCall('/api/stats/evaluate', {
