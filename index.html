@@ -1368,6 +1368,12 @@ function pomoComplete() {
   var next = pomo.status === 'focus' ? (pomo.completed % 4 === 0 ? 'long-break' : 'break') : 'focus';
   pomoSetStatus(next);
   updateFocusBtn();
+  // Init segment tracking when auto-switching to focus
+  if (pomo.status === 'focus' && !segmentStartTime) {
+    segmentStartTime = Date.now();
+    segWallStart = Date.now();
+    segmentAccSeconds = 0;
+  }
   // 自动屏蔽：专注阶段开，休息阶段关
   if (pomo.status === 'focus') autoEnableBlocking();
   else autoDisableBlocking();
