@@ -28,10 +28,13 @@ STATS_FILE = DATA_DIR / "stats.json"
 CONFIG_FILE = DATA_DIR / "config.json"
 PORT = 8765
 
+ARCHIVE_FILE = DATA_DIR / "stats_archive.json"
+
 # --- Thread safety ---
 stats_lock = threading.Lock()
 config_lock = threading.Lock()
 hosts_lock = threading.Lock()
+archive_lock = threading.Lock()
 
 # --- helpers ---
 
@@ -190,28 +193,53 @@ def get_default_stats():
         "daily_logs": {},     # { "2026-05-20": { segments: [...], total_time: N } }
     }
 
-def prune_old_data(stats, keep_days=30):
+def archive_old_data(stats, keep_days=30):
     """
-    清理超过指定天数的详细记录，防止 JSON 文件无限膨胀。
-    保留历史日期的总时长和番茄数，仅删除体积巨大的 sessions/timeline/segments。
+    冷热数据分离：将超过指定天数的 sessions 和 daily_logs 详细数据
+    迁移到 stats_archive.json 中，保持主 JSON 轻量。
     """
     now = datetime.now()
     cutoff_date = now - timedelta(days=keep_days)
     cutoff_str = cutoff_date.strftime("%Y-%m-%d")
 
-    # 1. 过滤掉过期的 sessions 完整记录
-    if "sessions" in stats:
-        stats["sessions"] = [
-            s for s in stats["sessions"]
-            if s.get("date", "")[:10] >= cutoff_str
-        ]
+    archive_needed = False
+    archived_sessions = []
+    archived_daily = {}
 
-    # 2. 清理 daily_logs 中的过期 timeline 和 segments（保留 total_time/pomodoros）
+    # 1. 筛选需要归档的 sessions
+    if "sessions" in stats:
+        hot_sessions = []
+        for s in stats["sessions"]:
+            if s.get("date", "")[:10] < cutoff_str:
+                archived_sessions.append(s)
+                archive_needed = True
+            else:
+                hot_sessions.append(s)
+        stats["sessions"] = hot_sessions
+
+    # 2. 筛选需要归档的 daily_logs 详细数组
     if "daily_logs" in stats:
-        for d_date in list(stats["daily_logs"].keys()):
+        for d_date, d_data in list(stats["daily_logs"].items()):
             if d_date < cutoff_str:
-                stats["daily_logs"][d_date].pop("segments", None)
-                stats["daily_logs"][d_date].pop("timeline", None)
+                if "segments" in d_data or "timeline" in d_data:
+                    archived_daily[d_date] = {
+                        "segments": d_data.pop("segments", []),
+                        "timeline": d_data.pop("timeline", [])
+                    }
+                    archive_needed = True
+
+    # 3. 追加到归档文件
+    if archive_needed:
+        with archive_lock:
+            arc = load_json(ARCHIVE_FILE, {"sessions": [], "daily_logs": {}})
+            arc["sessions"].extend(archived_sessions)
+            for d_date, d_content in archived_daily.items():
+                if d_date not in arc["daily_logs"]:
+                    arc["daily_logs"][d_date] = d_content
+                else:
+                    arc["daily_logs"][d_date].setdefault("segments", []).extend(d_content["segments"])
+                    arc["daily_logs"][d_date].setdefault("timeline", []).extend(d_content["timeline"])
+            save_json(ARCHIVE_FILE, arc)
 
 def rollover_if_new_day(stats):
     today = effective_date_str()
@@ -219,7 +247,7 @@ def rollover_if_new_day(stats):
         stats["today"] = today
         stats["today_time"] = 0
         stats["today_pomodoros"] = 0
-        prune_old_data(stats, keep_days=30)
+        archive_old_data(stats, keep_days=30)
 
 # --- HTTP server ---
 
