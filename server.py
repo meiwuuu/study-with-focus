@@ -242,11 +242,14 @@ class FocusHandler(BaseHTTPRequestHandler):
                 "pomodoros": 0,
             })
             daily["date"] = date
-            # Aggregate pomodoros from sessions for this date
-            sessions = stats.get("sessions", [])
-            date_pomos = sum(s.get("pomodoros", 0) for s in sessions if s.get("date", "").startswith(date))
-            if date_pomos > 0:
-                daily["pomodoros"] = date_pomos
+            # Pomodoros: use top-level today value if querying current day, else count from segments
+            if date == stats.get("today"):
+                daily["pomodoros"] = stats.get("today_pomodoros", 0)
+            else:
+                segs = daily.get("segments", [])
+                date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
+                if date_pomos > 0:
+                    daily["pomodoros"] = date_pomos
             self._send_json(daily)
 
         elif path == "/api/stats/review":
