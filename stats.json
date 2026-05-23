@@ -1,9 +1,9 @@
 {
   "today": "2026-05-23",
-  "today_time": 13500,
-  "today_pomodoros": 9,
-  "total_time": 53220,
-  "total_pomodoros": 35,
+  "today_time": 15000,
+  "today_pomodoros": 10,
+  "total_time": 54720,
+  "total_pomodoros": 36,
   "sessions": [
     {
       "date": "2026-05-19 22:23",
@@ -1502,6 +1502,26 @@
           "action": "complete"
         }
       ]
+    },
+    {
+      "date": "2026-05-23 00:52",
+      "duration": 1500,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-23T16:17:25.273Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "pomodoroNum": 4,
+          "totalSec": 550,
+          "ts": "2026-05-23T16:52:23.224Z",
+          "action": "complete"
+        }
+      ]
     }
   ],
   "reviews": {
@@ -2287,10 +2307,16 @@
           "pomodoros": 0,
           "start": "23:42",
           "end": "00:14"
+        },
+        {
+          "start": "00:43",
+          "end": "00:52",
+          "duration": 1500,
+          "subject": "math"
         }
       ],
-      "total_time": 13499,
-      "pomodoros": 9,
+      "total_time": 14999,
+      "pomodoros": 10,
       "timeline": [
         {
           "subject": "eng",
@@ -2581,6 +2607,19 @@
           "pomodoroNum": 3,
           "totalSec": 538,
           "ts": "2026-05-23T16:14:54.577Z",
+          "action": "complete"
+        },
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-23T16:17:25.273Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "pomodoroNum": 4,
+          "totalSec": 550,
+          "ts": "2026-05-23T16:52:23.224Z",
           "action": "complete"
         }
       ]

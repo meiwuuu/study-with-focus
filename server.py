@@ -402,7 +402,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
                 if pomodoros > 0:
                     stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
-                stats["daily_logs"][today]["total_time"] = stats["daily_logs"][today].get("total_time", 0) + duration
+                # total_time 由 segments 累加，session 不再重复计入（避免 double-count）
                 session_entry = {
                     "date": effective_date_str() + " " + datetime.now().strftime("%H:%M"),
                     "duration": duration,
