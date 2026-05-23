@@ -1,7 +1,7 @@
 {
   "today": "2026-05-23",
-  "today_time": 1500,
-  "today_pomodoros": 1,
+  "today_time": 3000,
+  "today_pomodoros": 2,
   "total_time": 42720,
   "total_pomodoros": 28,
   "sessions": [
@@ -1278,6 +1278,12 @@
           "action": "complete"
         }
       ]
+    },
+    {
+      "date": "2026-05-23 10:53",
+      "duration": 1500,
+      "pomodoros": 1,
+      "subject": "math"
     }
   ],
   "reviews": {
@@ -2008,9 +2014,15 @@
           "end": "10:36",
           "duration": 493,
           "subject": "eng"
+        },
+        {
+          "start": "10:28",
+          "end": "10:53",
+          "duration": 1500,
+          "subject": "math"
         }
       ],
-      "total_time": 493,
+      "total_time": 1993,
       "pomodoros": 0,
       "timeline": [
         {
