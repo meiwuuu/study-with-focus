@@ -1283,7 +1283,7 @@
       "date": "2026-05-23 10:53",
       "duration": 1500,
       "pomodoros": 1,
-      "subject": "math"
+      "subject": "eng"
     }
   ],
   "reviews": {
@@ -2019,7 +2019,7 @@
           "start": "10:28",
           "end": "10:53",
           "duration": 1500,
-          "subject": "math"
+          "subject": "eng"
         }
       ],
       "total_time": 1993,

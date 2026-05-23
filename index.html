@@ -1534,7 +1534,7 @@ function calInit() {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 }
 function calLoad() { try { var s=localStorage.getItem('focus_calendar'); if(s) cal=JSON.parse(s); } catch(e){} }
-function calSave() { localStorage.setItem('focus_calendar', JSON.stringify(cal)); }
+function calSave() { localStorage.setItem('focus_calendar', JSON.stringify(cal)); todoUpdateFloat(); }
 function calFmt(y,m,d) { return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
 function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?h+'h'+m+'m':m+'m'; }
 function calHeat(s) { if(s<=0)return 0; if(s<1800)return 1; if(s<3600)return 2; if(s<7200)return 3; return 4; }
@@ -1676,6 +1676,10 @@ function todoUpdateFloat() {
   if (!showTodo) { el.classList.remove('show'); return; }
   var pinned = todos.find(function(t){return !t.completed && t.pinned;});
   var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
+  // Also consider today's uncompleted calendar plans
+  if (!active && calSelected && cal.plans[calSelected]) {
+    active = cal.plans[calSelected].filter(function(p){return !p.done;}).pop();
+  }
   if (active) { txt.textContent = active.text; el.classList.add('show'); }
   else { el.classList.remove('show'); }
 }
