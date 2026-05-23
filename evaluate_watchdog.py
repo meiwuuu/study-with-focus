@@ -120,14 +120,23 @@ try:
         if s.get("date", "").startswith(req_date) and "timeline" in s:
             date_timeline.extend(s["timeline"])
 
-    # Count stats
+    # Count stats — use top-level fields (already accurate) + segment details
     date_sessions = [s for s in sessions if s.get("date", "").startswith(req_date)]
     segments = date_log.get("segments", [])
 
-    total_seconds = sum(s.get("duration", 0) for s in date_sessions)
-    total_seconds += date_log.get("total_time", 0)
-    total_pomodoros = sum(s.get("pomodoros", 0) for s in date_sessions)
-    total_pomodoros += date_log.get("pomodoros", 0)
+    # Top-level values are the single source of truth for totals
+    total_seconds = stats.get("today_time", 0)
+    total_pomodoros = stats.get("today_pomodoros", 0)
+    segment_count = len(segments)
+
+    # Per-subject breakdown from segments (NOT sessions, to avoid double-counting)
+    subject_breakdown = {}
+    for seg in segments:
+        subj = seg.get("subject", "other")
+        if subj not in subject_breakdown:
+            subject_breakdown[subj] = {"segments": 0, "seconds": 0}
+        subject_breakdown[subj]["segments"] += 1
+        subject_breakdown[subj]["seconds"] += seg.get("duration", 0)
 
     # Determine weekday and schedule info
     weekday = get_weekday_name(req_date)
@@ -153,7 +162,9 @@ try:
             "date": req_date,
             "total_seconds": total_seconds,
             "total_minutes": round(total_seconds / 60),
-            "total_pomodoros": total_pomodoros,
+            "total_pomodoros": total_pomodoros,       # completed 25-min blocks (from top-level)
+            "segment_count": segment_count,            # total learning blocks including short ones
+            "subject_breakdown": subject_breakdown,    # per-subject: {math:{segments:N,seconds:S}, ...}
             "session_count": len(date_sessions),
             "segments": segments,
             "timeline": date_timeline,

@@ -127,7 +127,17 @@
 ## 数据来源说明
 
 评价基于以下数据：
+- total_pomodoros: 完成的番茄数（25分钟完整块，来自前端汇总，是权威值）
+- segment_count: 总学习段数（包含不足25分钟的短段）
+- total_seconds / total_minutes: 总学习时长
+- subject_breakdown: 按科目的段数和秒数（{math: {segments: N, seconds: S}, eng: {...}, ...}）
 - timeline: 精细操作日志（start/pause/resume/complete/end/subject_change）
-- sessions: 番茄钟完成记录
-- segments: 科目分段数据
+- segments: 科目分段数据（含start/end/duration/subject）
 - 当前日期: 用于判断星期几、是否有课
+
+⚠️ 数据读取铁律（违反=失信）：
+1. 番茄数以 total_pomodoros 为准，不是 segment_count
+2. 科目分配以 subject_breakdown 为准，不要数字 segments
+3. 如果 segment_count > total_pomodoros，说明有短段（<25分钟），在评价中注明"X段学习中Y个完成番茄"
+4. 禁止猜测——没有标注科目的段不能假定科目
+5. 时间戳是 UTC 格式，需转换为北京时间(+8h)理解作息
