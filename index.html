@@ -1481,6 +1481,7 @@ function pomoStart() {
   if (pomo.timeLeft <= 0) { pomo.timeLeft = pomoGetDuration(); pomo.total = pomo.timeLeft; }
   pomo.running = true;
   pomo.lastTick = Date.now();
+  savePomoState();
   focusModeActive = true; updateFocusBtn();
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
@@ -1595,7 +1596,7 @@ function restorePomoState() {
   try {
     var s = JSON.parse(localStorage.getItem('focus_pomo_state'));
     if (!s) return;
-    if (Date.now() - s.savedAt > 30 * 60 * 1000) {
+    if (Date.now() - s.savedAt > 120 * 60 * 1000) {
       localStorage.removeItem('focus_pomo_state');
       return;
     }
