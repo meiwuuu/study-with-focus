@@ -1802,9 +1802,21 @@ async function finishDayReview() {
   });
 
   if (res && res.ok) {
+    // Remove any leftover progress indicator
+    var oldP = document.getElementById('eval-progress');
+    if (oldP) oldP.remove();
+
     btn.textContent = '⏳ 已提交，等待AI…';
     btn.style.opacity = '0.7';
     btn.style.pointerEvents = 'none';
+
+    // Inject a visible progress indicator below the button
+    var progressEl = document.createElement('div');
+    progressEl.id = 'eval-progress';
+    progressEl.style.cssText = 'text-align:center;font-size:.82em;color:rgba(255,255,255,.6);margin-top:8px;transition:all .3s;';
+    progressEl.textContent = '已提交评价请求…';
+    btn.parentNode.insertBefore(progressEl, btn.nextSibling);
+
     showToast('已提交评价请求，AI 正在分析今天的学习数据…');
 
     // Poll for review completion (up to 180 seconds)
@@ -1821,6 +1833,7 @@ async function finishDayReview() {
           btn.textContent = '✅ 已完成 · 刷新查看';
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
+          if (progressEl) { progressEl.textContent = '✅ 评价已生成！刷新查看'; progressEl.style.color = '#34d399'; }
           showToast('AI总结已完成！');
           loadLearningLog();
         } else if (attempts >= maxAttempts) {
@@ -1828,24 +1841,31 @@ async function finishDayReview() {
           btn.textContent = '🧠 完结今日学习 → AI总结';
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
+          if (progressEl) { progressEl.textContent = '⏱ 超时，请稍后刷新页面查看'; progressEl.style.color = '#f87171'; }
           showToast('评价生成超时，请稍后刷新页面查看', true);
         } else {
-          // Progress feedback every 30 seconds
           var elapsed = Math.floor((Date.now() - startTime) / 1000);
+          var msg = '';
           if (elapsed <= 60) {
-            btn.textContent = '⏳ 已提交，等待AI… (' + elapsed + 's)';
+            msg = '⏳ 已提交 (' + elapsed + 's) — 等待 cron 调度…';
+            btn.textContent = '⏳ 已提交 (' + elapsed + 's)';
           } else if (elapsed <= 120) {
-            btn.textContent = '🤖 AI分析中… (' + elapsed + 's)';
+            msg = '🤖 AI 分析中 (' + elapsed + 's) — deepseek 生成中…';
+            btn.textContent = '🤖 AI分析中 (' + elapsed + 's)';
           } else {
-            btn.textContent = '🤖 仍在处理… (' + elapsed + 's)';
+            msg = '🤖 仍在处理 (' + elapsed + 's) — 请耐心等待…';
+            btn.textContent = '🤖 仍在处理 (' + elapsed + 's)';
           }
+          if (progressEl) progressEl.textContent = msg;
         }
       } catch(e) {
+        if (progressEl) { progressEl.textContent = '⚠️ 网络错误 (' + (attempts*5) + 's) — 重试中…'; progressEl.style.color = '#fbbf24'; }
         if (attempts >= maxAttempts) {
           clearInterval(poller);
           btn.textContent = '🧠 完结今日学习 → AI总结';
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
+          if (progressEl) { progressEl.textContent = '⏱ 网络超时，请稍后刷新'; progressEl.style.color = '#f87171'; }
         }
       }
     }, 5000);
