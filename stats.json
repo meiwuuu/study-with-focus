@@ -2276,17 +2276,17 @@
         },
         {
           "subject": "eng",
-          "start_time": "23:14",
-          "end_time": "23:42",
           "duration": 962,
-          "pomodoros": 0
+          "pomodoros": 0,
+          "start": "23:14",
+          "end": "23:42"
         },
         {
           "subject": "math",
-          "start_time": "23:42",
-          "end_time": "00:14",
           "duration": 538,
-          "pomodoros": 0
+          "pomodoros": 0,
+          "start": "23:42",
+          "end": "00:14"
         }
       ],
       "total_time": 13499,

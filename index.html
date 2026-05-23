@@ -369,7 +369,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: var(--radius-sm);
-  overflow:hidden; z-index:250;
+  overflow-x:hidden; overflow-y:auto; max-height:280px; z-index:250;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
 .cs-dropdown.show { display:block; animation:csFadeIn .15s ease; }
@@ -2127,7 +2127,7 @@ function initLogDateSelect() {
   if (!dd) return;
   var today = new Date();
   var html = '';
-  for (var i = 13; i >= 0; i--) {
+  for (var i = 0; i <= 13; i++) {
     var d = new Date(today); d.setDate(d.getDate() - i);
     var ds = fmtLocalDate(d);
     var label = (d.getMonth()+1) + '/' + d.getDate();
