@@ -1330,11 +1330,10 @@ function updateSubjectBadge() {
 }
 
 function recordCurrentSegment() {
-  if (!segmentStartTime || !segWallStart) return;
+  if (!segmentStartTime || segmentAccSeconds < 60) return;
   var end = new Date();
   var start = new Date(segmentStartTime);
-  var dur = Math.max(0, Math.floor((Date.now() - segWallStart) / 1000));
-  if (dur < 60) return;  // skip fragments under 1 minute
+  var dur = segmentAccSeconds;
   var sh = String(start.getHours()).padStart(2,'0');
   var sm = String(start.getMinutes()).padStart(2,'0');
   var eh = String(end.getHours()).padStart(2,'0');
@@ -1488,9 +1487,8 @@ function pomoStart() {
   pomo.timer = setTimeout(pomoTick, 250);
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
-    // 仅在首次启动时设置 segmentStartTime；segWallStart 每次 resume 都更新
-    if (!segmentStartTime) { segmentStartTime = Date.now(); }
-    segWallStart = Date.now();
+    // 仅在首次启动时设置起始时间；暂停后恢复保持 segmentStartTime 不变
+    if (!segmentStartTime) { segmentStartTime = Date.now(); segWallStart = Date.now(); }
     // segmentAccSeconds 不重置——暂停后恢复继承之前累积的时间
     autoEnableBlocking();
   }
