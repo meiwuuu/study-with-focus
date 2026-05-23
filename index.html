@@ -1278,6 +1278,7 @@ function setSubject(subj, e) {
   segmentStartTime = pomo.running ? Date.now() : null;
   segWallStart = pomo.running ? Date.now() : null;
   currentSubject = subj;
+  try { localStorage.setItem('focus_subject', subj); } catch(e) {}
   // Update custom dropdown display
   var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
   document.getElementById('pomo-subject-label').textContent = names[subj] || '不区分';
@@ -2295,37 +2296,27 @@ function renderLearningLog(daily, date) {
   container.innerHTML = html;
 }
 
-// ═══════════ 任务浮窗：拖拽 + JS缩放 + 右键固定 + hover显隐 ═══════════
+// ═══════════ 任务浮窗：拖拽 + JS缩放 + 右键固定 ═══════════
 (function initTodoWindow() {
     var todoEl = document.getElementById('pomo-float-todo');
     if (!todoEl) return;
-    var floatEl = document.getElementById('pomo-float');
 
     var isDragging = false, isResizing = false;
     var hasDragged = false;
     var isPinned = false;
     var startX, startY, initialLeft, initialTop, initialWidth, initialHeight;
 
-    // Hover: show/hide (only when not pinned)
-    if (floatEl) {
-        floatEl.addEventListener('mouseenter', function() {
-            if (!isPinned) todoEl.classList.add('show');
-        });
-        floatEl.addEventListener('mouseleave', function() {
-            if (!isPinned) setTimeout(function() {
-                if (!todoEl.matches(':hover')) todoEl.classList.remove('show');
-            }, 200);
-        });
-        todoEl.addEventListener('mouseenter', function() {
-            if (!isPinned) todoEl.classList.add('show');
-        });
-        todoEl.addEventListener('mouseleave', function() {
-            if (!isPinned) setTimeout(function() {
-                if (!floatEl.matches(':hover') && !todoEl.matches(':hover'))
-                    todoEl.classList.remove('show');
-            }, 200);
-        });
-    }
+    // Sync with time float visibility
+    var origShowUI = window.showUI;
+    window.showUI = function() {
+        if (origShowUI) origShowUI();
+        if (!isPinned) todoEl.classList.add('show');
+    };
+    var origHideUI = window.hideUI;
+    window.hideUI = function() {
+        if (origHideUI) origHideUI();
+        if (!isPinned) todoEl.classList.remove('show');
+    };
 
     todoEl.addEventListener('mousedown', function(e) {
         if (e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
@@ -2409,6 +2400,8 @@ calInit();
 loadPanelOpacity();
 initLogDateSelect();
 restorePomoState();
+// Restore subject
+try { var s=localStorage.getItem('focus_subject'); if(s) setSubject(s); } catch(e) {}
 // Auto-load today's calendar plans on page init
 setTimeout(function(){ if(typeof calGoToday==='function')calGoToday(); }, 100);
 // Restore timeline from localStorage
