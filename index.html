@@ -1007,7 +1007,8 @@ function toggleFocusMode() {
 function updateFocusBtn() {
   var btn = document.getElementById('btn-focus-mode');
   if (!btn) return;
-  btn.textContent = focusModeActive ? '暂停专注' : '开始专注';
+  var isFocus = pomo.status === 'focus' && focusModeActive;
+  btn.textContent = isFocus ? '暂停专注' : '开始专注';
   if (focusModeActive) {
     var accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#60a5fa';
     btn.style.background = 'rgba(96,165,250,0.15)';
@@ -1363,6 +1364,7 @@ function pomoComplete() {
   savePomoState();
   var next = pomo.status === 'focus' ? (pomo.completed % 4 === 0 ? 'long-break' : 'break') : 'focus';
   pomoSetStatus(next);
+  updateFocusBtn();
   // 自动屏蔽：专注阶段开，休息阶段关
   if (pomo.status === 'focus') autoEnableBlocking();
   else autoDisableBlocking();
