@@ -40,16 +40,26 @@ archive_lock = threading.Lock()
 
 def load_json(path, default):
     if path.exists():
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            pass
     return default
 
 def save_json(path, data):
     """原子写入：先写 .tmp 再 os.replace"""
     tmp = path.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
 
 def read_hosts():
     try:
@@ -87,7 +97,7 @@ def write_hosts_lines(lines):
             # 确保文件以一个标准换行符结尾
             if lines and not lines[-1].endswith("\n"):
                 f.write("\n")
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
+        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10)
         return True
     except PermissionError:
         return False
@@ -96,7 +106,7 @@ def get_blocked_sites():
     """从 hosts 文件中提取当前处于屏蔽状态的域名。"""
     lines = read_hosts_lines()
     if lines is None:
-        return None
+        return []
     sites = []
     in_block = False
     for line in lines:
@@ -260,13 +270,14 @@ class FocusHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
     def _read_body(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length:
-                return json.loads(self.rfile.read(length))
+                raw = self.rfile.read(length)
+                return json.loads(raw.decode("utf-8"))
         except Exception:
             pass
         return {}
@@ -289,17 +300,14 @@ class FocusHandler(BaseHTTPRequestHandler):
             active = is_blocking_active()
             self._send_json({
                 "blocking_active": active,
-                "blocked_sites": sites if sites else [],
+                "blocked_sites": sites,
                 "stats": stats,
                 "admin_error": active is None,
             })
 
         elif path == "/api/block/sites":
             sites = get_blocked_sites()
-            if sites is None:
-                self._send_json({"error": "需要管理员权限"}, 403)
-            else:
-                self._send_json({"sites": sites})
+            self._send_json({"sites": sites})
 
         elif path == "/api/stats":
             with stats_lock:
