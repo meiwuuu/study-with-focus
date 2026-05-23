@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
 BLOCK_MARKER_START = "# === FOCUS BLOCK START ==="
@@ -30,6 +30,8 @@ PORT = 8765
 
 # --- Thread safety ---
 stats_lock = threading.Lock()
+config_lock = threading.Lock()
+hosts_lock = threading.Lock()
 
 # --- helpers ---
 
@@ -67,7 +69,16 @@ def write_hosts_lines(lines):
         # 清理文件末尾可能由于历史原因堆积的连续空行
         while lines and lines[-1].strip() == "":
             lines.pop()
-            
+        
+        # 写入前先备份（仅保留一份 .bak）
+        bak = Path(HOSTS_PATH).with_suffix(".bak")
+        if Path(HOSTS_PATH).exists():
+            try:
+                import shutil
+                shutil.copy2(HOSTS_PATH, bak)
+            except Exception:
+                pass
+
         with open(HOSTS_PATH, "w", encoding="utf-8", newline=None) as f:
             f.writelines(lines)
             # 确保文件以一个标准换行符结尾
@@ -283,30 +294,34 @@ class FocusHandler(BaseHTTPRequestHandler):
         body = self._read_body()
 
         if path == "/api/block/start":
-            config = load_json(CONFIG_FILE, {"sites": ["bilibili.com", "weibo.com", "zhihu.com", "tieba.baidu.com"]})
-            sites = body.get("sites") or config.get("sites", [])
-            ok, msg = apply_blocking(sites)
-            if ok:
-                config["sites"] = sites
-                config["active"] = True
-                save_json(CONFIG_FILE, config)
+            with hosts_lock, config_lock:
+                config = load_json(CONFIG_FILE, {"sites": ["bilibili.com", "weibo.com", "zhihu.com", "tieba.baidu.com"]})
+                sites = body.get("sites") or config.get("sites", [])
+                ok, msg = apply_blocking(sites)
+                if ok:
+                    config["sites"] = sites
+                    config["active"] = True
+                    save_json(CONFIG_FILE, config)
             self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
 
         elif path == "/api/block/stop":
-            ok, msg = clear_blocking()
-            if ok:
-                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                config["active"] = False
-                save_json(CONFIG_FILE, config)
+            with hosts_lock, config_lock:
+                ok, msg = clear_blocking()
+                if ok:
+                    config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+                    config["active"] = False
+                    save_json(CONFIG_FILE, config)
             self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
 
         elif path == "/api/block/sites":
-            sites = body.get("sites", [])
-            config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-            config["sites"] = sites
-            save_json(CONFIG_FILE, config)
-            if config.get("active"):
-                apply_blocking(sites)
+            with config_lock:
+                sites = body.get("sites", [])
+                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+                config["sites"] = sites
+                save_json(CONFIG_FILE, config)
+                if config.get("active"):
+                    with hosts_lock:
+                        apply_blocking(sites)
             self._send_json({"ok": True, "sites": sites})
 
         elif path == "/api/stats/session":
@@ -327,6 +342,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
                 if pomodoros > 0:
                     stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
+                stats["daily_logs"][today]["total_time"] = stats["daily_logs"][today].get("total_time", 0) + duration
                 session_entry = {
                     "date": effective_date_str() + " " + datetime.now().strftime("%H:%M"),
                     "duration": duration,
@@ -403,13 +419,14 @@ class FocusHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = urlparse(self.path).path
         if path.startswith("/api/block/sites/"):
-            domain = path.split("/api/block/sites/")[1]
-            config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-            if domain in config.get("sites", []):
-                config["sites"].remove(domain)
-                save_json(CONFIG_FILE, config)
-                if config.get("active"):
-                    apply_blocking(config["sites"])
+            domain = unquote(path.split("/api/block/sites/")[1])
+            with config_lock:
+                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+                if domain in config.get("sites", []):
+                    config["sites"].remove(domain)
+                    save_json(CONFIG_FILE, config)
+                    if config.get("active"):
+                        apply_blocking(config["sites"])
             self._send_json({"ok": True, "sites": config.get("sites", [])})
         else:
             self._send_json({"error": "not found"}, 404)
