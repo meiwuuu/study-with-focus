@@ -135,6 +135,21 @@ body {
 .pomo-float-task .td-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .pomo-float-task .td-check { width: 14px; height: 14px; cursor: pointer; accent-color: var(--break); margin-right: 6px; vertical-align: middle; }
 
+/* 极简锁定状态：边框微亮 + 右上角小锁 */
+.pomo-current-todo.pinned {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.pomo-current-todo.pinned::before {
+  content: "🔒";
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 0.75em;
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
 /* ═══════════ Settings panel (overlay) ═══════════ */
 .settings-overlay {
   position: fixed; inset: 0; z-index: 200;
@@ -2302,13 +2317,13 @@ function renderLearningLog(daily, date) {
         e.preventDefault();
         isPinned = !isPinned;
         if (isPinned) {
-            todoEl.style.boxShadow = '0 0 0 2px var(--yellow), 0 12px 32px rgba(0,0,0,0.5)';
-            todoEl.style.borderColor = 'var(--yellow)';
+            todoEl.classList.add('pinned');
             todoEl.style.cursor = 'default';
+            todoEl.setAttribute('title', '已锁定位置（右键重新解锁）');
         } else {
-            todoEl.style.boxShadow = '';
-            todoEl.style.borderColor = '';
+            todoEl.classList.remove('pinned');
             todoEl.style.cursor = 'grab';
+            todoEl.removeAttribute('title');
         }
     });
 })();
