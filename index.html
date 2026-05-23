@@ -109,6 +109,9 @@ body {
 }
 .pomo-current-todo.show { opacity: 0.85; transform: translateY(0); }
 .pomo-current-todo .td-label { opacity: 0.55; margin-right: 6px; }
+.pomo-float-task { font-size: 0.88em; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pomo-float-task .td-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.pomo-float-task .td-check { width: 14px; height: 14px; cursor: pointer; accent-color: var(--break); margin-right: 6px; vertical-align: middle; }
 
 /* ═══════════ Settings panel (overlay) ═══════════ */
 .settings-overlay {
@@ -595,7 +598,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
     <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
   </div>
   <div class="pomo-current-todo" id="pomo-float-todo">
-    <span class="td-label">当前:</span><span id="pomo-float-todo-text"></span>
+    <div id="pomo-float-todo-list"></div>
   </div>
 </div>
 
@@ -719,6 +722,13 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <span class="toggle-slider"></span>
             </label>
             <span>在番茄钟上显示当前任务</span>
+          </div>
+          <div class="todo-show-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="todo-show-multi" onchange="todoSaveMulti()">
+              <span class="toggle-slider"></span>
+            </label>
+            <span>显示全部待办和学习计划</span>
           </div>
           <div id="todo-list"></div>
           <div class="todo-empty" id="todo-empty">暂无待办事项</div>
@@ -1698,8 +1708,9 @@ function syncCalFromServer() {
 }
 
 // ═══════════ TODOS ═══════════
-var todos=[],showTodo=true;
-function todoLoad(){try{var s=localStorage.getItem('focus_todos');if(s)todos=JSON.parse(s);}catch(e){todos=[];}try{showTodo=localStorage.getItem('focus_todo_show')!=='false';}catch(e){showTodo=true;}document.getElementById('todo-show').checked=showTodo;todoRender();todoUpdateFloat();}
+var todos=[],showTodo=true,showMultiTodo=false;
+function todoLoad(){try{var s=localStorage.getItem('focus_todos');if(s)todos=JSON.parse(s);}catch(e){todos=[];}try{showTodo=localStorage.getItem('focus_todo_show')!=='false';}catch(e){showTodo=true;}try{showMultiTodo=localStorage.getItem('focus_todo_multi')==='true';}catch(e){showMultiTodo=false;}document.getElementById('todo-show').checked=showTodo;var mc=document.getElementById('todo-show-multi');if(mc)mc.checked=showMultiTodo;todoRender();todoUpdateFloat();}
+function todoSaveMulti(){showMultiTodo=document.getElementById('todo-show-multi').checked;localStorage.setItem('focus_todo_multi',showMultiTodo.toString());todoUpdateFloat();}
 function todoSave(){localStorage.setItem('focus_todos',JSON.stringify(todos));todoUpdateFloat();}
 function todoSaveShow(){showTodo=document.getElementById('todo-show').checked;localStorage.setItem('focus_todo_show',showTodo.toString());todoUpdateFloat();}
 function todoAdd(){var t=document.getElementById('todo-input').value.trim();if(!t)return;todos.unshift({id:Date.now(),text:t,completed:false,pinned:false});document.getElementById('todo-input').value='';todoSave();todoRender();}
@@ -1722,16 +1733,54 @@ function todoRender(){
 }
 function todoUpdateFloat() {
   var el = document.getElementById('pomo-float-todo');
-  var txt = document.getElementById('pomo-float-todo-text');
+  var lst = document.getElementById('pomo-float-todo-list');
+  if (!el || !lst) return;
   if (!showTodo) { el.classList.remove('show'); return; }
-  var pinned = todos.find(function(t){return !t.completed && t.pinned;});
-  var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
-  // Also consider today's uncompleted calendar plans
-  if (!active && calSelected && cal.plans[calSelected]) {
-    active = cal.plans[calSelected].filter(function(p){return !p.done;}).pop();
+
+  if (showMultiTodo) {
+    // Multi mode: show all uncompleted todos + today's uncompleted plans
+    var items = [];
+    // Permanent todos (uncompleted)
+    for (var i = 0; i < todos.length; i++) {
+      if (!todos[i].completed) items.push({text: todos[i].text, source: 'todo', id: todos[i].id, pinned: todos[i].pinned});
+    }
+    // Today's uncompleted calendar plans
+    if (calSelected && cal.plans[calSelected]) {
+      var plans = cal.plans[calSelected].filter(function(p){ return !p.done; });
+      for (var j = 0; j < plans.length; j++) {
+        items.push({text: plans[j].text, source: 'plan', color: plans[j].color});
+      }
+    }
+    if (!items.length) { el.classList.remove('show'); return; }
+
+    var h = '';
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var dot = it.source === 'todo' ? 'var(--yellow)' : (PLAN_COLORS.find(function(c){return c.v===it.color;})||{c:'rgba(255,255,255,.35)'}).c;
+      h += '<div class="pomo-float-task">';
+      if (it.source === 'todo') {
+        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();todoToggle('+it.id+')">';
+      }
+      h += '<span class="td-dot" style="background:'+dot+'"></span>';
+      h += escHtml(it.text);
+      h += '</div>';
+    }
+    lst.innerHTML = h;
+    el.classList.add('show');
+  } else {
+    // Single mode: pinned todo > last uncompleted todo > today's plan
+    var pinned = todos.find(function(t){return !t.completed && t.pinned;});
+    var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
+    if (!active && calSelected && cal.plans[calSelected]) {
+      active = cal.plans[calSelected].filter(function(p){return !p.done;}).pop();
+    }
+    if (active) {
+      lst.innerHTML = '<div class="pomo-float-task"><span class="td-label">当前:</span>'+escHtml(active.text)+'</div>';
+      el.classList.add('show');
+    } else {
+      el.classList.remove('show');
+    }
   }
-  if (active) { txt.textContent = active.text; el.classList.add('show'); }
-  else { el.classList.remove('show'); }
 }
 
 // ═══════════ BLOCK ═══════════
