@@ -983,6 +983,14 @@ function toggleFocusMode() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(function(){});
     }
+    // If currently in break, skip break and start focus immediately
+    if (pomo.status === 'break' || pomo.status === 'long-break') {
+      pomo.status = 'focus';
+      pomo.timeLeft = pomoGetDuration();
+      pomo.total = pomo.timeLeft;
+      segmentStartTime = null;
+      segmentAccSeconds = 0;
+    }
     if (!pomo.running) pomoStart();
     focusModeActive = true;
   } else {
