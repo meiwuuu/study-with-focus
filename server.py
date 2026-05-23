@@ -4,10 +4,11 @@ import json
 import os
 import sys
 import time
+import threading
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
@@ -21,10 +22,14 @@ def effective_date_str():
     if now.hour < 4:
         now = now - timedelta(days=1)
     return now.strftime("%Y-%m-%d")
+
 DATA_DIR = Path(__file__).parent
 STATS_FILE = DATA_DIR / "stats.json"
 CONFIG_FILE = DATA_DIR / "config.json"
 PORT = 8765
+
+# --- Thread safety ---
+stats_lock = threading.Lock()
 
 # --- helpers ---
 
@@ -35,8 +40,11 @@ def load_json(path, default):
     return default
 
 def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
+    """原子写入：先写 .tmp 再 os.replace"""
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
 
 def read_hosts():
     try:
@@ -46,7 +54,7 @@ def read_hosts():
         return None
 
 def read_hosts_lines():
-    """读取 hosts 为行列表，并在代码内部统一将所有换行符转换为 \n。"""
+    """读取 hosts 为行列表，并在代码内部统一将所有换行符转换为 \\n。"""
     try:
         with open(HOSTS_PATH, "r", encoding="utf-8", newline=None) as f:
             return f.readlines()
@@ -54,7 +62,7 @@ def read_hosts_lines():
         return None
 
 def write_hosts_lines(lines):
-    """将行列表写回文件，并在 Windows 下自动将 \n 统一转换为 \r\n。"""
+    """将行列表写回文件，并在 Windows 下自动将 \\n 统一转换为 \\r\\n。"""
     try:
         # 清理文件末尾可能由于历史原因堆积的连续空行
         while lines and lines[-1].strip() == "":
@@ -97,7 +105,7 @@ def is_blocking_active():
     return BLOCK_MARKER_START in hosts
 
 def apply_blocking(sites):
-    """应用屏蔽：精准替换旧区块，采用纯 \n 拼接，交给 Python 托管转换。"""
+    """应用屏蔽：精准替换旧区块，采用纯 \\n 拼接，交给 Python 托管转换。"""
     lines = read_hosts_lines()
     if lines is None:
         return False, "Permission denied: run as Administrator"
@@ -119,7 +127,7 @@ def apply_blocking(sites):
     while new_lines and new_lines[-1].strip() == "":
         new_lines.pop()
 
-    # 3. 紧凑追加新区块（原本最后一行已自带 \n，因此先追加一个空行 \n 即可保持一个空行间距）
+    # 3. 紧凑追加新区块（原本最后一行已自带 \\n，因此先追加一个空行 \\n 即可保持一个空行间距）
     new_lines.append("\n") 
     new_lines.append(BLOCK_MARKER_START + "\n")
     for site in sites:
@@ -192,9 +200,12 @@ class FocusHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
     def _read_body(self):
-        length = int(self.headers.get("Content-Length", 0))
-        if length:
-            return json.loads(self.rfile.read(length))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length:
+                return json.loads(self.rfile.read(length))
+        except Exception:
+            pass
         return {}
 
     def do_OPTIONS(self):
@@ -208,8 +219,9 @@ class FocusHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/api/status":
-            stats = load_json(STATS_FILE, get_default_stats())
-            rollover_if_new_day(stats)
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                rollover_if_new_day(stats)
             sites = get_blocked_sites()
             active = is_blocking_active()
             self._send_json({
@@ -227,20 +239,22 @@ class FocusHandler(BaseHTTPRequestHandler):
                 self._send_json({"sites": sites})
 
         elif path == "/api/stats":
-            stats = load_json(STATS_FILE, get_default_stats())
-            rollover_if_new_day(stats)
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                rollover_if_new_day(stats)
             self._send_json(stats)
 
         elif path == "/api/stats/daily":
             qs = parse_qs(urlparse(self.path).query)
-            date = qs.get("date", [time.strftime("%Y-%m-%d")])[0]
-            stats = load_json(STATS_FILE, get_default_stats())
-            daily = stats.get("daily_logs", {}).get(date, {
-                "date": date,
-                "segments": [],
-                "total_time": 0,
-                "pomodoros": 0,
-            })
+            date = qs.get("date", [effective_date_str()])[0]
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                daily = stats.get("daily_logs", {}).get(date, {
+                    "date": date,
+                    "segments": [],
+                    "total_time": 0,
+                    "pomodoros": 0,
+                })
             daily["date"] = date
             # Daily_log pomodoros is updated by session saves; fallback to segments for old data
             if daily.get("pomodoros", 0) == 0:
@@ -253,7 +267,8 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/stats/review":
             qs = parse_qs(urlparse(self.path).query)
             date = qs.get("date", [""])[0]
-            stats = load_json(STATS_FILE, get_default_stats())
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
             review = stats.get("reviews", {}).get(date)
             if review:
                 self._send_json(review)
@@ -295,99 +310,91 @@ class FocusHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "sites": sites})
 
         elif path == "/api/stats/session":
-            stats = load_json(STATS_FILE, get_default_stats())
-            rollover_if_new_day(stats)
-            duration = body.get("duration", 0)
-            pomodoros = body.get("pomodoros", 0)
-            timeline = body.get("timeline", [])
-            stats["today_time"] += duration
-            stats["today_pomodoros"] += pomodoros
-            stats["total_time"] += duration
-            stats["total_pomodoros"] += pomodoros
-            # Also update daily_log pomodoros
-            today3 = effective_date_str()
-            stats.setdefault("daily_logs", {})
-            if today3 not in stats["daily_logs"]:
-                stats["daily_logs"][today3] = {"date": today3, "segments": [], "total_time": 0, "pomodoros": 0}
-            if pomodoros > 0:
-                stats["daily_logs"][today3]["pomodoros"] = stats["daily_logs"][today3].get("pomodoros", 0) + pomodoros
-            session_entry = {
-                "date": time.strftime("%Y-%m-%d %H:%M"),
-                "duration": duration,
-                "pomodoros": pomodoros,
-            }
-            if timeline:
-                session_entry["timeline"] = timeline
-                # Also merge into today's daily_log timeline
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                rollover_if_new_day(stats)
+                duration = body.get("duration", 0)
+                pomodoros = body.get("pomodoros", 0)
+                timeline = body.get("timeline", [])
+                stats["today_time"] += duration
+                stats["today_pomodoros"] += pomodoros
+                stats["total_time"] += duration
+                stats["total_pomodoros"] += pomodoros
+                # Also update daily_log pomodoros
                 today = effective_date_str()
                 stats.setdefault("daily_logs", {})
                 if today not in stats["daily_logs"]:
                     stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
-                if "timeline" not in stats["daily_logs"][today]:
-                    stats["daily_logs"][today]["timeline"] = []
-                stats["daily_logs"][today]["timeline"].extend(timeline)
-            stats["sessions"].append(session_entry)
-            save_json(STATS_FILE, stats)
+                if pomodoros > 0:
+                    stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
+                session_entry = {
+                    "date": effective_date_str() + " " + datetime.now().strftime("%H:%M"),
+                    "duration": duration,
+                    "pomodoros": pomodoros,
+                }
+                if timeline:
+                    session_entry["timeline"] = timeline
+                    # Merge into daily_log timeline
+                    dl = stats["daily_logs"].setdefault(today, {"date": today, "segments": [], "total_time": 0, "pomodoros": 0})
+                    dl.setdefault("timeline", []).extend(timeline)
+                stats["sessions"].append(session_entry)
+                save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "stats": stats})
 
         elif path == "/api/stats/segment":
-            stats = load_json(STATS_FILE, get_default_stats())
-            rollover_if_new_day(stats)
-            today = effective_date_str()
-            subject = body.get("subject", "")
-            start_time = body.get("start_time", time.strftime("%H:%M"))
-            end_time = body.get("end_time", time.strftime("%H:%M"))
-            duration = body.get("duration", 0)
-            pomodoros = body.get("pomodoros", 0)
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                rollover_if_new_day(stats)
+                today = effective_date_str()
+                subject = body.get("subject", "")
+                start_time = body.get("start_time", datetime.now().strftime("%H:%M"))
+                end_time = body.get("end_time", datetime.now().strftime("%H:%M"))
+                duration = body.get("duration", 0)
+                pomodoros = body.get("pomodoros", 0)
 
-            if today not in stats["daily_logs"]:
-                stats["daily_logs"][today] = {
-                    "date": today,
-                    "segments": [],
-                    "total_time": 0,
-                    "pomodoros": 0,
-                }
+                if today not in stats["daily_logs"]:
+                    stats["daily_logs"][today] = {
+                        "date": today,
+                        "segments": [],
+                        "total_time": 0,
+                        "pomodoros": 0,
+                    }
 
-            daily = stats["daily_logs"][today]
-            daily["segments"].append({
-                "start": start_time,
-                "end": end_time,
-                "duration": duration,
-                "subject": subject,
-            })
-            daily["total_time"] += duration
-            daily["pomodoros"] += pomodoros
-            # 不累加 stats today/total：session API 已经计入
-            stats["sessions"].append({
-                "date": time.strftime("%Y-%m-%d %H:%M"),
-                "duration": duration,
-                "pomodoros": pomodoros,
-                "subject": subject,
-            })
-            save_json(STATS_FILE, stats)
+                daily = stats["daily_logs"][today]
+                daily["segments"].append({
+                    "start": start_time,
+                    "end": end_time,
+                    "duration": duration,
+                    "subject": subject,
+                })
+                daily["total_time"] += duration
+                daily["pomodoros"] += pomodoros
+                # segment 只属于 daily_logs，不写入 sessions（session 是完整番茄）
+                save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "daily": daily})
 
         elif path == "/api/stats/review":
-            stats = load_json(STATS_FILE, get_default_stats())
-            date = body.get("date", time.strftime("%Y-%m-%d"))
-            text = body.get("text", "")
-            if "reviews" not in stats:
-                stats["reviews"] = {}
-            old = stats["reviews"].get(date, {})
-            stats["reviews"][date] = {
-                "text": text,
-                "generatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "score": body.get("score", old.get("score")),
-                "grade": body.get("grade", old.get("grade")),
-                "source": body.get("source", old.get("source", "")),
-            }
-            save_json(STATS_FILE, stats)
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+                date = body.get("date", effective_date_str())
+                text = body.get("text", "")
+                if "reviews" not in stats:
+                    stats["reviews"] = {}
+                old = stats["reviews"].get(date, {})
+                stats["reviews"][date] = {
+                    "text": text,
+                    "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "score": body.get("score", old.get("score")),
+                    "grade": body.get("grade", old.get("grade")),
+                    "source": body.get("source", old.get("source", "")),
+                }
+                save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "date": date})
 
         elif path == "/api/stats/evaluate":
-            date = body.get("date", time.strftime("%Y-%m-%d"))
+            date = body.get("date", effective_date_str())
             req_file = DATA_DIR / "evaluate_request.json"
-            save_json(req_file, {"date": date, "requestedAt": time.strftime("%Y-%m-%d %H:%M:%S")})
+            save_json(req_file, {"date": date, "requestedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
             self._send_json({"ok": True, "date": date, "message": "已提交评价请求，稍后刷新查看"})
 
         else:
@@ -419,7 +426,7 @@ def main():
     else:
         print("Hosts file: OK (blocking available)", flush=True)
 
-    server = HTTPServer(("127.0.0.1", PORT), FocusHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
     print("Ready.", flush=True)
     try:
         server.serve_forever()
