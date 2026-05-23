@@ -118,7 +118,6 @@ body {
   max-height: 80vh;
   min-width: 220px;
   min-height: 120px;
-  resize: both;
   overflow: auto;
   box-shadow: 0 12px 32px rgba(0,0,0,0.35);
   cursor: grab;
@@ -140,30 +139,6 @@ body {
 .pomo-float-task .td-dot { width: 0.5em; height: 0.5em; border-radius: 50%; margin-right: 0.5em; margin-top: 0.5em; flex-shrink: 0; }
 .pomo-float-task .td-check { width: 1.25em; height: 1.25em; margin-right: 0.5em; margin-top: 0.1em; cursor: pointer; accent-color: var(--break); flex-shrink: 0; }
 .pomo-float-task .td-label { opacity: 0.55; margin-right: 0.5em; flex-shrink: 0; }
-}
-/* 彻底隐藏原生缩放手柄（包括scrollbar-corner） */
-.pomo-current-todo::-webkit-resizer {
-  display: none !important;
-  background: transparent !important;
-  border: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-.pomo-current-todo::-webkit-scrollbar-corner {
-  background: transparent !important;
-  display: none !important;
-}
-.pomo-current-todo::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-.pomo-current-todo::-webkit-scrollbar-track {
-  background: transparent;
-}
-.pomo-current-todo::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
-  border-radius: 2px;
-}
 
 /* 右下角极简倒角缩放提示线 */
 .pomo-current-todo::after {
@@ -182,10 +157,9 @@ body {
 }
 .pomo-current-todo:hover::after { opacity: 0.7; }
 
-/* 极简锁定状态：边框微亮 + 右上角主题色呼吸圆点 */
+/* 极简锁定状态 */
 .pomo-current-todo.pinned {
   border-color: rgba(255, 255, 255, 0.2);
-  resize: none;
 }
 .pomo-current-todo.pinned::after { display: none; }
 .pomo-current-todo.pinned::before {
@@ -2321,58 +2295,84 @@ function renderLearningLog(daily, date) {
   container.innerHTML = html;
 }
 
-// ═══════════ 任务浮窗独立拖动与右键固定逻辑 ═══════════
-(function initTodoWindowDrag() {
+// ═══════════ 任务浮窗：拖拽 + JS缩放 + 右键固定 + hover显隐 ═══════════
+(function initTodoWindow() {
     var todoEl = document.getElementById('pomo-float-todo');
     if (!todoEl) return;
+    var floatEl = document.getElementById('pomo-float');
 
-    var isDragging = false;
+    var isDragging = false, isResizing = false;
     var hasDragged = false;
     var isPinned = false;
-    var startX, startY, initialLeft, initialTop;
+    var startX, startY, initialLeft, initialTop, initialWidth, initialHeight;
+
+    // Hover: show/hide (only when not pinned)
+    if (floatEl) {
+        floatEl.addEventListener('mouseenter', function() {
+            if (!isPinned) todoEl.classList.add('show');
+        });
+        floatEl.addEventListener('mouseleave', function() {
+            if (!isPinned) setTimeout(function() {
+                if (!todoEl.matches(':hover')) todoEl.classList.remove('show');
+            }, 200);
+        });
+        todoEl.addEventListener('mouseenter', function() {
+            if (!isPinned) todoEl.classList.add('show');
+        });
+        todoEl.addEventListener('mouseleave', function() {
+            if (!isPinned) setTimeout(function() {
+                if (!floatEl.matches(':hover') && !todoEl.matches(':hover'))
+                    todoEl.classList.remove('show');
+            }, 200);
+        });
+    }
 
     todoEl.addEventListener('mousedown', function(e) {
-        if (isPinned || e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
-
-        // 右下角缩放手柄区域：交给浏览器原生 resize，不触发拖拽
+        if (e.button !== 0 || e.target.tagName.toLowerCase() === 'input') return;
         var rect = todoEl.getBoundingClientRect();
-        var isOnResizeHandle = (e.clientX > rect.right - 18) && (e.clientY > rect.bottom - 18);
-        if (isOnResizeHandle) return;
+        // Bottom-right 18px = resize handle
+        var onResize = (e.clientX > rect.right - 18) && (e.clientY > rect.bottom - 18);
 
-        isDragging = true;
-        hasDragged = false;
+        if (onResize && !isPinned) {
+            isResizing = true;
+            todoEl.style.cursor = 'nwse-resize';
+            startX = e.clientX; startY = e.clientY;
+            initialWidth = rect.width; initialHeight = rect.height;
+            e.preventDefault();
+            return;
+        }
+        if (isPinned) return;
+
+        isDragging = true; hasDragged = false;
         todoEl.style.cursor = 'grabbing';
         todoEl.style.left = rect.left + 'px';
         todoEl.style.top = rect.top + 'px';
         todoEl.style.right = 'auto';
-        startX = e.clientX;
-        startY = e.clientY;
-        initialLeft = rect.left;
-        initialTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        initialLeft = rect.left; initialTop = rect.top;
     });
 
     document.addEventListener('mousemove', function(e) {
+        if (isResizing) {
+            var dw = e.clientX - startX;
+            var dh = e.clientY - startY;
+            todoEl.style.width = Math.max(220, initialWidth + dw) + 'px';
+            todoEl.style.height = Math.max(120, initialHeight + dh) + 'px';
+            return;
+        }
         if (!isDragging) return;
         hasDragged = true;
-        var dx = e.clientX - startX;
-        var dy = e.clientY - startY;
-        todoEl.style.left = (initialLeft + dx) + 'px';
-        todoEl.style.top = (initialTop + dy) + 'px';
+        todoEl.style.left = (initialLeft + e.clientX - startX) + 'px';
+        todoEl.style.top = (initialTop + e.clientY - startY) + 'px';
     });
 
-    document.addEventListener('mouseup', function(e) {
-        if (isDragging) {
-            isDragging = false;
-            todoEl.style.cursor = isPinned ? 'default' : 'grab';
-        }
+    document.addEventListener('mouseup', function() {
+        if (isDragging) { isDragging = false; todoEl.style.cursor = isPinned ? 'default' : 'grab'; }
+        if (isResizing) { isResizing = false; todoEl.style.cursor = isPinned ? 'default' : 'grab'; }
     });
 
     todoEl.addEventListener('click', function(e) {
-        if (hasDragged) {
-            e.stopPropagation();
-            e.preventDefault();
-            hasDragged = false;
-        }
+        if (hasDragged) { e.stopPropagation(); e.preventDefault(); hasDragged = false; }
     }, true);
 
     todoEl.addEventListener('contextmenu', function(e) {
@@ -2380,8 +2380,9 @@ function renderLearningLog(daily, date) {
         isPinned = !isPinned;
         if (isPinned) {
             todoEl.classList.add('pinned');
+            todoEl.classList.add('show');
             todoEl.style.cursor = 'default';
-            todoEl.setAttribute('title', '已锁定位置（右键重新解锁）');
+            todoEl.setAttribute('title', '已锁定（右键解锁）');
         } else {
             todoEl.classList.remove('pinned');
             todoEl.style.cursor = 'grab';
