@@ -1583,6 +1583,10 @@ function calRenderDetail() {
   dt.style.display='block';
   var p=calSelected.split('-');
   document.getElementById('cal-detail-date').textContent=parseInt(p[1])+'月'+parseInt(p[2])+'日';
+
+  // Sync from server API for accurate pomodoros/time
+  syncCalFromServer();
+
   var l=cal.dailyLog[calSelected]||{studyTime:0,pomodoros:0};
   var sh='';
   if(l.studyTime>0)sh+='<span class="cal-detail-stat">'+calFmtTime(l.studyTime)+'</span>';
@@ -1645,6 +1649,25 @@ function calAddPomodoro() {
   var today = calFmt(d.getFullYear(), d.getMonth(), d.getDate());
   if(!cal.dailyLog[today])cal.dailyLog[today]={studyTime:0,pomodoros:0};
   cal.dailyLog[today].pomodoros++;calSave();
+}
+
+// Sync calendar data from server API (one-time correction for localStorage drift)
+var _calSyncDone = {};
+function syncCalFromServer() {
+  if (!calSelected || _calSyncDone[calSelected]) return;
+  _calSyncDone[calSelected] = true;
+  fetch(API + '/api/stats/daily?date=' + calSelected)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && (d.pomodoros > 0 || d.total_time > 0)) {
+        if (!cal.dailyLog[calSelected]) cal.dailyLog[calSelected] = {studyTime:0, pomodoros:0};
+        var entry = cal.dailyLog[calSelected];
+        if (d.pomodoros > entry.pomodoros) entry.pomodoros = d.pomodoros;
+        if (d.total_time > entry.studyTime) entry.studyTime = d.total_time;
+        calSave();
+        calRenderDetail();
+      }
+    }).catch(function(){});
 }
 
 // ═══════════ TODOS ═══════════
