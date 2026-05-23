@@ -141,14 +141,28 @@ body {
 .pomo-float-task .td-check { width: 1.25em; height: 1.25em; margin-right: 0.5em; margin-top: 0.1em; cursor: pointer; accent-color: var(--break); flex-shrink: 0; }
 .pomo-float-task .td-label { opacity: 0.55; margin-right: 0.5em; flex-shrink: 0; }
 }
-/* 彻底隐藏浏览器原生缩放手柄 */
+/* 彻底隐藏原生缩放手柄（包括scrollbar-corner） */
 .pomo-current-todo::-webkit-resizer {
   display: none !important;
   background: transparent !important;
+  border: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
-/* 隐藏滚动条交接处底色 */
 .pomo-current-todo::-webkit-scrollbar-corner {
   background: transparent !important;
+  display: none !important;
+}
+.pomo-current-todo::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.pomo-current-todo::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pomo-current-todo::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
 }
 
 /* 右下角极简倒角缩放提示线 */
