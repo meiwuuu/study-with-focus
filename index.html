@@ -1817,8 +1817,6 @@ async function finishDayReview() {
     progressEl.textContent = '已提交评价请求…';
     btn.parentNode.insertBefore(progressEl, btn.nextSibling);
 
-    showToast('已提交评价请求，AI 正在分析今天的学习数据…');
-
     // Poll for review completion (up to 180 seconds)
     var attempts = 0;
     var maxAttempts = 36;  // 36 * 5s = 180s
@@ -1834,7 +1832,6 @@ async function finishDayReview() {
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
           if (progressEl) { progressEl.textContent = '✅ 评价已生成！刷新查看'; progressEl.style.color = '#34d399'; }
-          showToast('AI总结已完成！');
           loadLearningLog();
         } else if (attempts >= maxAttempts) {
           clearInterval(poller);
@@ -1842,7 +1839,6 @@ async function finishDayReview() {
           btn.style.opacity = '1';
           btn.style.pointerEvents = 'auto';
           if (progressEl) { progressEl.textContent = '⏱ 超时，请稍后刷新页面查看'; progressEl.style.color = '#f87171'; }
-          showToast('评价生成超时，请稍后刷新页面查看', true);
         } else {
           var elapsed = Math.floor((Date.now() - startTime) / 1000);
           var msg = '';
@@ -1870,7 +1866,9 @@ async function finishDayReview() {
       }
     }, 5000);
   } else {
-    showToast('提交失败，请确认后端已启动 (python server.py)', true);
+    btn.textContent = '❌ 提交失败';
+    btn.style.color = '#f87171';
+    setTimeout(function(){ btn.textContent = '🧠 完结今日学习 → AI总结'; btn.style.color = ''; }, 3000);
   }
 }
 
