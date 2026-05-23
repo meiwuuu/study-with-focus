@@ -1239,6 +1239,7 @@ var currentSubject = '';
 var segmentStartTime = null;  // Date.now() when current segment started
 var segmentAccSeconds = 0;    // accumulated focus seconds in current segment
 var segWallStart = null;      // wall-clock start for accurate segment duration
+var segmentRecorded = false;  // true if recordCurrentSegment already called this pomodoro
 // ─── Timeline tracking ───
 var pomoTL = [];  // [{ts:"ISO", action:"start|pause|resume|complete|end|subject_change", ...extra}]
 var pomoTLSessionId = '';  // unique ID for current session, changes on each start
@@ -1352,6 +1353,7 @@ function recordCurrentSegment() {
   segmentStartTime = Date.now();
   segmentAccSeconds = 0;
   segWallStart = Date.now();
+  segmentRecorded = true;
 }
 // ─── 提示音（参照 StudyWithMiku）───
 var preloadedBell = null;
@@ -1443,9 +1445,10 @@ function pomoComplete() {
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
     // Timeline: pomodoro completed
     tlEvent('complete', {subject: currentSubject || '', pomodoroNum: pomo.completed, totalSec: segmentAccSeconds});
-    // 完整番茄钟=满时长（pomo.total），不受页面崩溃/segmentAccSeconds丢失影响
-    segmentAccSeconds = pomo.total;
+    // 完整番茄钟=满时长；但若中途切过科目，segmentAccSeconds是后半段真实值
+    if (!segmentRecorded) segmentAccSeconds = pomo.total;
     recordCurrentSegment();
+    segmentRecorded = false;
     recordSession(1);
   }
   savePomoState();
@@ -1489,7 +1492,7 @@ function pomoStart() {
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
     // 仅在首次启动时设置起始时间；暂停后恢复保持 segmentStartTime 不变
-    if (!segmentStartTime) { segmentStartTime = Date.now(); segWallStart = Date.now(); }
+    if (!segmentStartTime) { segmentStartTime = Date.now(); segWallStart = Date.now(); segmentRecorded = false; }
     // segmentAccSeconds 不重置——暂停后恢复继承之前累积的时间
     autoEnableBlocking();
   }
@@ -1575,6 +1578,7 @@ function pomoReset() {
   pomoUpdateDisplay();
   segmentStartTime = null;
   segmentAccSeconds = 0;
+  segmentRecorded = false;
   savePomoState();
 }
 function pomoUpdateDots() {
