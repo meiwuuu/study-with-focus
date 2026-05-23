@@ -304,6 +304,13 @@ class FocusHandler(BaseHTTPRequestHandler):
             stats["today_pomodoros"] += pomodoros
             stats["total_time"] += duration
             stats["total_pomodoros"] += pomodoros
+            # Also update daily_log pomodoros
+            today3 = effective_date_str()
+            stats.setdefault("daily_logs", {})
+            if today3 not in stats["daily_logs"]:
+                stats["daily_logs"][today3] = {"date": today3, "segments": [], "total_time": 0, "pomodoros": 0}
+            if pomodoros > 0:
+                stats["daily_logs"][today3]["pomodoros"] = stats["daily_logs"][today3].get("pomodoros", 0) + pomodoros
             session_entry = {
                 "date": time.strftime("%Y-%m-%d %H:%M"),
                 "duration": duration,
@@ -319,15 +326,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                 if "timeline" not in stats["daily_logs"][today]:
                     stats["daily_logs"][today]["timeline"] = []
                 stats["daily_logs"][today]["timeline"].extend(timeline)
-                # Update daily_log pomodoros and total_time
-                if pomodoros > 0:
-                    stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
-            # Always update daily_log total_time
-            today2 = effective_date_str()
-            stats.setdefault("daily_logs", {})
-            if today2 not in stats["daily_logs"]:
-                stats["daily_logs"][today2] = {"date": today2, "segments": [], "total_time": 0, "pomodoros": 0}
-            stats["daily_logs"][today2]["total_time"] = stats["daily_logs"][today2].get("total_time", 0) + duration
             stats["sessions"].append(session_entry)
             save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "stats": stats})
