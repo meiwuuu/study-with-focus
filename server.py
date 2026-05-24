@@ -26,9 +26,8 @@ def effective_date_str():
 DATA_DIR = Path(__file__).parent
 STATS_FILE = DATA_DIR / "stats.json"
 CONFIG_FILE = DATA_DIR / "config.json"
-PORT = 8765
-
 ARCHIVE_FILE = DATA_DIR / "stats_archive.json"
+PORT = 8765
 
 # --- Thread safety ---
 stats_lock = threading.Lock()
@@ -65,7 +64,7 @@ def read_hosts():
     try:
         with open(HOSTS_PATH, "r", encoding="utf-8", newline=None) as f:
             return f.read()
-    except (PermissionError, FileNotFoundError) as e:
+    except (PermissionError, FileNotFoundError):
         return None
 
 def read_hosts_lines():
@@ -77,33 +76,40 @@ def read_hosts_lines():
         return None
 
 def write_hosts_lines(lines):
-    """将行列表写回文件，并在 Windows 下自动将 \\n 统一转换为 \\r\\n。"""
+    """将行列表写回文件，自动保留最新5份带时间戳的备份。"""
     try:
-        # 清理文件末尾可能由于历史原因堆积的连续空行
-        while lines and lines[-1].strip() == "":
-            lines.pop()
-        
-        # 写入前先备份（仅保留一份 .bak）
-        bak = Path(HOSTS_PATH).with_suffix(".bak")
-        if Path(HOSTS_PATH).exists():
-            try:
-                import shutil
-                shutil.copy2(HOSTS_PATH, bak)
-            except Exception:
-                pass
+        # 写入前先进行轮转备份
+        try:
+            import shutil
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            hosts_dir = Path(HOSTS_PATH).parent
+            bak_path = hosts_dir / f"hosts.{timestamp}.bak"
+            
+            if Path(HOSTS_PATH).exists():
+                shutil.copy2(HOSTS_PATH, bak_path)
+
+            # 清理过老的备份（保留最近5个）
+            bak_files = sorted(hosts_dir.glob("hosts.*.bak"), key=os.path.getmtime)
+            while len(bak_files) > 5:
+                try:
+                    bak_files.pop(0).unlink()
+                except Exception:
+                    pass
+        except Exception:
+            pass # 备份失败不阻塞核心写入逻辑
 
         with open(HOSTS_PATH, "w", encoding="utf-8", newline=None) as f:
             f.writelines(lines)
-            # 确保文件以一个标准换行符结尾
+            # 确保文件最终以换行符结尾
             if lines and not lines[-1].endswith("\n"):
                 f.write("\n")
+                
         subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10)
         return True
     except PermissionError:
         return False
 
 def get_blocked_sites():
-    """从 hosts 文件中提取当前处于屏蔽状态的域名。"""
     lines = read_hosts_lines()
     if lines is None:
         return []
@@ -129,12 +135,10 @@ def is_blocking_active():
     return BLOCK_MARKER_START in hosts
 
 def apply_blocking(sites):
-    """应用屏蔽：精准替换旧区块，采用纯 \\n 拼接，交给 Python 托管转换。"""
     lines = read_hosts_lines()
     if lines is None:
         return False, "Permission denied: run as Administrator"
 
-    # 1. 移除可能已存在的旧区块
     new_lines = []
     skip = False
     for line in lines:
@@ -147,12 +151,12 @@ def apply_blocking(sites):
         if not skip:
             new_lines.append(line)
 
-    # 2. 清理原内容尾部多余的空行
-    while new_lines and new_lines[-1].strip() == "":
-        new_lines.pop()
+    # 智能插入：确保新区块前有适当的换行，但不破坏原有的尾部空行排版
+    if new_lines and not new_lines[-1].endswith("\n"):
+        new_lines[-1] += "\n"
+    if new_lines and new_lines[-1].strip() != "":
+        new_lines.append("\n")
 
-    # 3. 紧凑追加新区块（原本最后一行已自带 \\n，因此先追加一个空行 \\n 即可保持一个空行间距）
-    new_lines.append("\n") 
     new_lines.append(BLOCK_MARKER_START + "\n")
     for site in sites:
         new_lines.append(f"{REDIRECT_IP} {site}\n")
@@ -164,7 +168,6 @@ def apply_blocking(sites):
     return True, "ok"
 
 def clear_blocking():
-    """关闭屏蔽：干净地移除区块，并对文件尾部进行格式化修剪。"""
     lines = read_hosts_lines()
     if lines is None:
         return False, "Permission denied: run as Administrator"
@@ -180,10 +183,6 @@ def clear_blocking():
             continue
         if not skip:
             new_lines.append(line)
-
-    # 核心修正：关闭时同样清理尾部残留的空行，使文件恢复最初的紧凑状态
-    while new_lines and new_lines[-1].strip() == "":
-        new_lines.pop()
 
     result = write_hosts_lines(new_lines)
     if not result:
@@ -200,14 +199,10 @@ def get_default_stats():
         "total_time": 0,
         "total_pomodoros": 0,
         "sessions": [],
-        "daily_logs": {},     # { "2026-05-20": { segments: [...], total_time: N } }
+        "daily_logs": {},
     }
 
 def archive_old_data(stats, keep_days=30):
-    """
-    冷热数据分离：将超过指定天数的 sessions 和 daily_logs 详细数据
-    迁移到 stats_archive.json 中，保持主 JSON 轻量。
-    """
     now = datetime.now()
     cutoff_date = now - timedelta(days=keep_days)
     cutoff_str = cutoff_date.strftime("%Y-%m-%d")
@@ -216,7 +211,6 @@ def archive_old_data(stats, keep_days=30):
     archived_sessions = []
     archived_daily = {}
 
-    # 1. 筛选需要归档的 sessions
     if "sessions" in stats:
         hot_sessions = []
         for s in stats["sessions"]:
@@ -227,7 +221,6 @@ def archive_old_data(stats, keep_days=30):
                 hot_sessions.append(s)
         stats["sessions"] = hot_sessions
 
-    # 2. 筛选需要归档的 daily_logs 详细数组
     if "daily_logs" in stats:
         for d_date, d_data in list(stats["daily_logs"].items()):
             if d_date < cutoff_str:
@@ -238,7 +231,6 @@ def archive_old_data(stats, keep_days=30):
                     }
                     archive_needed = True
 
-    # 3. 追加到归档文件
     if archive_needed:
         with archive_lock:
             arc = load_json(ARCHIVE_FILE, {"sessions": [], "daily_logs": {}})
@@ -265,10 +257,22 @@ class FocusHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  
 
+    def _get_allowed_origin(self):
+        """严格限制 CORS 来源，防范恶意网页篡改"""
+        origin = self.headers.get("Origin")
+        allowed_origins = [
+            "null", # 直接双击本地 HTML 文件时 Origin 为 null
+            f"http://localhost:{PORT}",
+            f"http://127.0.0.1:{PORT}"
+        ]
+        if origin in allowed_origins or (origin and origin.startswith("http://localhost:")):
+            return origin
+        return "null"
+
     def _send_json(self, data, status=200):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", self._get_allowed_origin())
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
@@ -284,7 +288,7 @@ class FocusHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", self._get_allowed_origin())
         self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -327,7 +331,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                     "pomodoros": 0,
                 })
             daily["date"] = date
-            # Daily_log pomodoros is updated by session saves; fallback to segments for old data
             if daily.get("pomodoros", 0) == 0:
                 segs = daily.get("segments", [])
                 date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
@@ -395,14 +398,14 @@ class FocusHandler(BaseHTTPRequestHandler):
                 stats["today_pomodoros"] += pomodoros
                 stats["total_time"] += duration
                 stats["total_pomodoros"] += pomodoros
-                # Also update daily_log pomodoros
+                
                 today = effective_date_str()
                 stats.setdefault("daily_logs", {})
                 if today not in stats["daily_logs"]:
                     stats["daily_logs"][today] = {"date": today, "segments": [], "total_time": 0, "pomodoros": 0}
                 if pomodoros > 0:
                     stats["daily_logs"][today]["pomodoros"] = stats["daily_logs"][today].get("pomodoros", 0) + pomodoros
-                # total_time 由 segments 累加，session 不再重复计入（避免 double-count）
+                
                 session_entry = {
                     "date": effective_date_str() + " " + datetime.now().strftime("%H:%M"),
                     "duration": duration,
@@ -410,7 +413,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                 }
                 if timeline:
                     session_entry["timeline"] = timeline
-                    # Merge into daily_log timeline
                     dl = stats["daily_logs"].setdefault(today, {"date": today, "segments": [], "total_time": 0, "pomodoros": 0})
                     dl.setdefault("timeline", []).extend(timeline)
                 stats["sessions"].append(session_entry)
@@ -445,7 +447,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                 })
                 daily["total_time"] += duration
                 daily["pomodoros"] += pomodoros
-                # segment 只属于 daily_logs，不写入 sessions（session 是完整番茄）
                 save_json(STATS_FILE, stats)
             self._send_json({"ok": True, "daily": daily})
 
@@ -503,13 +504,22 @@ def main():
     else:
         print("Hosts file: OK (blocking available)", flush=True)
 
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
-    print("Ready.", flush=True)
     try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
+        print("Ready.", flush=True)
         server.serve_forever()
+    except OSError as e:
+        if e.errno in (98, 10048):  # EADDRINUSE
+            print(f"\n[错误] 端口 {PORT} 已被占用！")
+            print("请检查是否已在后台运行了该脚本，或者有代理软件占用了该端口。")
+            print("如需更改端口，请同步修改 server.py 和 index.html 中的 API 地址。")
+        else:
+            print(f"\n[错误] 启动服务器失败: {e}")
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\nShutting down.")
-        server.server_close()
+        if 'server' in locals():
+            server.server_close()
 
 
 if __name__ == "__main__":
