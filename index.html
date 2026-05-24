@@ -1537,7 +1537,7 @@ function pomoEnd() {
     return;
   }
   // 结算当前番茄钟：非专注阶段直接重置
-  if (pomo.status !== 'focus' || !pomo.running) { pomoReset(); return; }
+  if (pomo.status !== 'focus') { pomoReset(); return; }
   var totalSec = segmentAccSeconds;
   // Timeline: manual end
   tlEvent('end', {subject: currentSubject || '', totalSec: totalSec, wasRunning: pomo.running});
