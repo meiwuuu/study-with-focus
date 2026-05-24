@@ -2300,6 +2300,15 @@ function renderLearningLog(daily, date) {
 }
 
 // ═══════════ 任务浮窗：拖拽 + JS缩放 + 右键固定 ═══════════
+function hasIncompleteItems() {
+  // 检查是否有未完成的 todo
+  if (todos.some(function(t){ return !t.completed; })) return true;
+  // 检查日历是否有未完成的计划
+  if (calSelected && cal.plans[calSelected]) {
+    if (cal.plans[calSelected].some(function(p){ return !p.done; })) return true;
+  }
+  return false;
+}
 (function initTodoWindow() {
     var todoEl = document.getElementById('pomo-float-todo');
     if (!todoEl) return;
@@ -2313,7 +2322,7 @@ function renderLearningLog(daily, date) {
     var origShowUI = window.showUI;
     window.showUI = function() {
         if (origShowUI) origShowUI();
-        if (!isPinned) todoEl.classList.add('show');
+        if (!isPinned && showTodo && hasIncompleteItems()) todoEl.classList.add('show');
     };
     var origHideUI = window.hideUI;
     window.hideUI = function() {
