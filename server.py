@@ -472,7 +472,16 @@ class FocusHandler(BaseHTTPRequestHandler):
             date = body.get("date", effective_date_str())
             req_file = DATA_DIR / "evaluate_request.json"
             save_json(req_file, {"date": date, "requestedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
-            self._send_json({"ok": True, "date": date, "message": "已提交评价请求，稍后刷新查看"})
+            # 立即触发 cron 任务（异步，不等待）
+            try:
+                subprocess.Popen(
+                    ["wsl", "/home/m5/.local/bin/hermes", "cron", "run", "034d1496c8da"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception:
+                pass  # 触发失败不影响主流程，cron 每分钟也会自动跑
+            self._send_json({"ok": True, "date": date, "message": "已提交评价请求，AI 处理中…"})
 
         else:
             self._send_json({"error": "not found"}, 404)
