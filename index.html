@@ -1778,8 +1778,8 @@ function syncCalFromServer() {
       if (d && (d.pomodoros > 0 || d.total_time > 0)) {
         if (!cal.dailyLog[calSelected]) cal.dailyLog[calSelected] = {studyTime:0, pomodoros:0};
         var entry = cal.dailyLog[calSelected];
-        if (d.pomodoros > entry.pomodoros) entry.pomodoros = d.pomodoros;
-        if (d.total_time > entry.studyTime) entry.studyTime = d.total_time;
+        entry.pomodoros = d.pomodoros;
+        entry.studyTime = d.total_time;
         calSave();
         calRenderDetail();
       }
