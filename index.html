@@ -1663,11 +1663,8 @@ function calRender() {
   document.getElementById('cal-total-time').textContent = calFmtTime(tt);
   document.getElementById('cal-total-pomos').textContent = tp;
 
-  // Sync calendar totals from server (use max of localStorage vs server)
+  // Sync active days count from server (only if calendar has no data yet)
   fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
-    var st = s.total_time || 0, sp = s.total_pomodoros || 0;
-    if (st > tt) document.getElementById('cal-total-time').textContent = calFmtTime(st);
-    if (sp > tp) document.getElementById('cal-total-pomos').textContent = sp;
     if (s.total_time > 0 && ad === 0) document.getElementById('cal-active-days').textContent = '…';
   }).catch(function(){});
 
