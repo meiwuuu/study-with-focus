@@ -1743,7 +1743,7 @@ function calAddPlan() {
 function calTogglePlan(id) {
   var pl=cal.plans[calSelected]; if(!pl)return;
   for(var i=0;i<pl.length;i++)if(pl[i].id===id){pl[i].done=!pl[i].done;break;}
-  calSave();calRenderDetail();
+  calSave();calRenderDetail();todoUpdateFloat();
 }
 function calDeletePlan(id) {
   cal.plans[calSelected]=(cal.plans[calSelected]||[]).filter(function(p){return p.id!==id;});
@@ -1795,7 +1795,7 @@ function todoSaveMulti(){showMultiTodo=document.getElementById('todo-show-multi'
 function todoSave(){localStorage.setItem('focus_todos',JSON.stringify(todos));todoUpdateFloat();}
 function todoSaveShow(){showTodo=document.getElementById('todo-show').checked;localStorage.setItem('focus_todo_show',showTodo.toString());todoUpdateFloat();}
 function todoAdd(){var t=document.getElementById('todo-input').value.trim();if(!t)return;todos.unshift({id:Date.now(),text:t,completed:false,pinned:false,daily:false});document.getElementById('todo-input').value='';todoSave();todoRender();}
-function todoToggle(id){var t=todos.find(function(x){return x.id===id;});if(t){t.completed=!t.completed;}todoSave();todoRender();}
+function todoToggle(id){var t=todos.find(function(x){return x.id===id;});if(t){t.completed=!t.completed;}todoSave();todoRender();todoUpdateFloat();}
 function todoPin(id){todos.forEach(function(x){x.pinned=x.id===id?!x.pinned:false;});todoSave();todoRender();}
 function todoDaily(id){var t=todos.find(function(x){return x.id===id;});if(t){t.daily=!t.daily;}todoSave();todoRender();}
 function todoDelete(id){todos=todos.filter(function(x){return x.id!==id;});todoSave();todoRender();}
@@ -1826,6 +1826,7 @@ function calTogglePlanFromFloat(date, id) {
     }
     calSave();
     if (calSelected === date) calRenderDetail();
+    todoUpdateFloat();
 }
 
 function todoUpdateFloat() {
