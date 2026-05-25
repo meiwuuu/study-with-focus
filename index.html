@@ -1492,7 +1492,7 @@ function pomoStart() {
   // Init segment tracking for focus phase
   if (pomo.status === 'focus') {
     // 仅在首次启动时设置起始时间；暂停后恢复保持 segmentStartTime 不变
-    if (!segmentStartTime) { segmentStartTime = Date.now(); segWallStart = Date.now(); segmentRecorded = false; }
+    if (!segmentStartTime) { segmentStartTime = Date.now(); segWallStart = Date.now(); }
     // segmentAccSeconds 不重置——暂停后恢复继承之前累积的时间
     autoEnableBlocking();
   }
