@@ -5293,17 +5293,17 @@
         {
           "start": "10:16",
           "end": "10:40",
-          "duration": 407,
+          "duration": 420,
           "subject": "eng"
         },
         {
           "start": "11:11",
           "end": "11:38",
-          "duration": 1140,
+          "duration": 1080,
           "subject": "math"
         }
       ],
-      "total_time": 4547,
+      "total_time": 4500,
       "pomodoros": 3,
       "timeline": [
         {
