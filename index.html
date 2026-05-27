@@ -2407,6 +2407,20 @@ function hasIncompleteItems() {
     ro.observe(todoEl);
 })();
 
+// ═══════════ 空格键切换番茄钟（开始/暂停） ═══════════
+document.addEventListener('keydown', function(e) {
+  // 忽略输入框中的按键
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  // 设置面板打开时不响应
+  if (document.getElementById('settings-overlay').classList.contains('open')) return;
+  // 空格键
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (pomo.running) pomoPause();
+    else pomoStart();
+  }
+});
+
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();

@@ -1,9 +1,9 @@
 {
-  "today": "2026-05-26",
-  "today_time": 10200,
-  "today_pomodoros": 6,
-  "total_time": 86235,
-  "total_pomodoros": 56,
+  "today": "2026-05-27",
+  "today_time": 3000,
+  "today_pomodoros": 2,
+  "total_time": 89235,
+  "total_pomodoros": 58,
   "sessions": [
     {
       "date": "2026-05-19 22:23",
@@ -2609,6 +2609,132 @@
           "action": "complete"
         }
       ]
+    },
+    {
+      "date": "2026-05-27 09:40",
+      "duration": 1500,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "from": "",
+          "to": "math",
+          "accSeconds": 0,
+          "ts": "2026-05-27T00:00:45.047Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-27T00:41:42.281Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "accSeconds": 14,
+          "ts": "2026-05-27T00:41:57.216Z",
+          "action": "pause"
+        },
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-27T00:47:24.598Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "accSeconds": 15,
+          "ts": "2026-05-27T00:47:26.342Z",
+          "action": "pause"
+        },
+        {
+          "from": "math",
+          "to": "eng",
+          "accSeconds": 15,
+          "ts": "2026-05-27T00:49:58.775Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T00:50:00.035Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 264,
+          "ts": "2026-05-27T00:54:25.141Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:01:23.423Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 1416,
+          "ts": "2026-05-27T01:20:36.301Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:39:11.760Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 1,
+          "totalSec": 1485,
+          "ts": "2026-05-27T01:40:20.794Z",
+          "action": "complete"
+        }
+      ]
+    },
+    {
+      "date": "2026-05-27 10:16",
+      "duration": 1500,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:41:36.225Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 309,
+          "ts": "2026-05-27T01:46:45.747Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:49:38.395Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 953,
+          "ts": "2026-05-27T02:00:23.378Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T02:07:17.776Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 2,
+          "totalSec": 1500,
+          "ts": "2026-05-27T02:16:24.988Z",
+          "action": "complete"
+        }
+      ]
     }
   ],
   "reviews": {
@@ -4866,6 +4992,145 @@
           "pomodoroNum": 3,
           "totalSec": 1500,
           "ts": "2026-05-26T14:55:02.132Z",
+          "action": "complete"
+        }
+      ]
+    },
+    "2026-05-27": {
+      "date": "2026-05-27",
+      "segments": [
+        {
+          "start": "08:50",
+          "end": "09:40",
+          "duration": 1500,
+          "subject": "eng"
+        },
+        {
+          "start": "09:40",
+          "end": "10:16",
+          "duration": 1500,
+          "subject": "eng"
+        },
+        {
+          "start": "10:16",
+          "end": "10:40",
+          "duration": 407,
+          "subject": "eng"
+        }
+      ],
+      "total_time": 3407,
+      "pomodoros": 2,
+      "timeline": [
+        {
+          "from": "",
+          "to": "math",
+          "accSeconds": 0,
+          "ts": "2026-05-27T00:00:45.047Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-27T00:41:42.281Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "accSeconds": 14,
+          "ts": "2026-05-27T00:41:57.216Z",
+          "action": "pause"
+        },
+        {
+          "subject": "math",
+          "running": true,
+          "ts": "2026-05-27T00:47:24.598Z",
+          "action": "start"
+        },
+        {
+          "subject": "math",
+          "accSeconds": 15,
+          "ts": "2026-05-27T00:47:26.342Z",
+          "action": "pause"
+        },
+        {
+          "from": "math",
+          "to": "eng",
+          "accSeconds": 15,
+          "ts": "2026-05-27T00:49:58.775Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T00:50:00.035Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 264,
+          "ts": "2026-05-27T00:54:25.141Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:01:23.423Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 1416,
+          "ts": "2026-05-27T01:20:36.301Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:39:11.760Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 1,
+          "totalSec": 1485,
+          "ts": "2026-05-27T01:40:20.794Z",
+          "action": "complete"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:41:36.225Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 309,
+          "ts": "2026-05-27T01:46:45.747Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T01:49:38.395Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 953,
+          "ts": "2026-05-27T02:00:23.378Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-05-27T02:07:17.776Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 2,
+          "totalSec": 1500,
+          "ts": "2026-05-27T02:16:24.988Z",
           "action": "complete"
         }
       ]
