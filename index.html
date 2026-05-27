@@ -1275,7 +1275,7 @@ function setSubject(subj, e) {
     tlEvent('subject_change', {from: currentSubject || '', to: subj || '', accSeconds: segmentAccSeconds});
   }
   // Record current segment before switching (even if paused)
-  if (pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 60) {
+  if (pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 180) {
     recordCurrentSegment();
   }
   // Always reset segment timer on subject change
