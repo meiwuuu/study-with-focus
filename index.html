@@ -2040,8 +2040,11 @@ var SUBJECT_NAMES = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
 var SUBJECT_COLORS = {math:'#60a5fa', cs:'#a78bfa', eng:'#fb923c', pol:'#f87171'};
 
 function fmtDuration(s) {
-  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
-  return h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s % 60;
+  if (h > 0) {
+    return sec > 0 ? h + 'h ' + m + 'm ' + sec + 's' : h + 'h ' + m + 'min';
+  }
+  return sec > 0 ? m + '分' + String(sec).padStart(2,'0') + '秒' : m + 'min';
 }
 
 async function finishDayReview() {
