@@ -104,7 +104,8 @@ def write_hosts_lines(lines):
             if lines and not lines[-1].endswith("\n"):
                 f.write("\n")
                 
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10)
+        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
         return True
     except PermissionError:
         return False
@@ -478,6 +479,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     ["wsl", "/home/m5/.local/bin/hermes", "cron", "run", "034d1496c8da"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
                 )
             except Exception:
                 pass  # 触发失败不影响主流程，cron 每分钟也会自动跑
