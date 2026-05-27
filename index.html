@@ -1240,10 +1240,10 @@ var pomo = {
 };
 // ─── Subject & segment tracking ───
 var currentSubject = '';
-var segmentStartTime = null;  // Date.now() when current segment started
-var segmentAccSeconds = 0;    // accumulated focus seconds in current segment
-var segWallStart = null;      // wall-clock start for accurate segment duration
-var segmentRecorded = false;  // true if recordCurrentSegment already called this pomodoro
+var segmentStartTime = null;  
+var segmentAccSeconds = 0;    
+var segWallStart = null;      
+var pomoRecordedSeconds = 0;  // 核心修复：追踪当前番茄钟已安全记录的秒数
 // ─── Timeline tracking ───
 var pomoTL = [];  // [{ts:"ISO", action:"start|pause|resume|complete|end|subject_change", ...extra}]
 var pomoTLSessionId = '';  // unique ID for current session, changes on each start
@@ -1275,7 +1275,7 @@ function setSubject(subj, e) {
     tlEvent('subject_change', {from: currentSubject || '', to: subj || '', accSeconds: segmentAccSeconds});
   }
   // Record current segment before switching (even if paused)
-  if (pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 300) {
+  if (pomo.status === 'focus' && segmentStartTime && segmentAccSeconds >= 60) {
     recordCurrentSegment();
   }
   // Always reset segment timer on subject change
@@ -1334,11 +1334,20 @@ function updateSubjectBadge() {
   }
 }
 
-function recordCurrentSegment() {
-  if (!segmentStartTime || segmentAccSeconds < 60) return;
-  var end = new Date();
-  var start = new Date(segmentStartTime);
+function recordCurrentSegment(forceRecord) {
+  if (!forceRecord && (!segmentStartTime || segmentAccSeconds < 60)) return;
   var dur = segmentAccSeconds;
+  if (dur <= 0) return;
+
+  var end = new Date();
+  var start = new Date();
+  // 即使崩溃丢失了起始时间，也能根据持续时间精准反推
+  if (segmentStartTime) {
+      start = new Date(segmentStartTime);
+  } else {
+      start.setTime(end.getTime() - dur * 1000);
+  }
+
   var sh = String(start.getHours()).padStart(2,'0');
   var sm = String(start.getMinutes()).padStart(2,'0');
   var eh = String(end.getHours()).padStart(2,'0');
@@ -1353,11 +1362,16 @@ function recordCurrentSegment() {
       pomodoros: 0
     })
   });
-  // 不调 calAddStudyTime/sessionTime：时间已由 recordSession 计入
+  
+  // 安全入库后，累加到已记录时长中
+  if (pomo.status === 'focus') {
+      pomoRecordedSeconds += dur;
+      savePomoState();
+  }
+
   segmentStartTime = Date.now();
   segmentAccSeconds = 0;
   segWallStart = Date.now();
-  segmentRecorded = true;
 }
 // ─── 提示音（参照 StudyWithMiku）───
 var preloadedBell = null;
@@ -1449,10 +1463,17 @@ function pomoComplete() {
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
     // Timeline: pomodoro completed
     tlEvent('complete', {subject: currentSubject || '', pomodoroNum: pomo.completed, totalSec: segmentAccSeconds});
-    // 完整番茄钟=满时长；但若中途切过科目，segmentAccSeconds是后半段真实值
-    if (!segmentRecorded) segmentAccSeconds = pomo.total;
-    recordCurrentSegment();
-    segmentRecorded = false;
+    // 完美防漏逻辑：只补足这个番茄钟【剩下还没被记录】的时间
+    var remainingDur = pomo.total - pomoRecordedSeconds;
+    if (remainingDur > 0) {
+        segmentAccSeconds = remainingDur;
+        recordCurrentSegment(true); // 强制记录剩下的这块拼图
+    } else {
+        segmentStartTime = null;
+        segmentAccSeconds = 0;
+    }
+    pomoRecordedSeconds = 0; // 番茄钟完整结束，清零累计
+    savePomoState();
     recordSession(1);
   }
   savePomoState();
@@ -1556,6 +1577,7 @@ function pomoEnd() {
   // 重置状态（复用 pomoReset 逻辑，但跳过二次 pause）
   segmentStartTime = null;
   segmentAccSeconds = 0;
+  pomoRecordedSeconds = 0;
   pomo.running = false; clearTimeout(pomo.timer);
   focusModeActive = false; updateFocusBtn();
   savePomoState();
@@ -1582,7 +1604,7 @@ function pomoReset() {
   pomoUpdateDisplay();
   segmentStartTime = null;
   segmentAccSeconds = 0;
-  segmentRecorded = false;
+  pomoRecordedSeconds = 0;
   savePomoState();
 }
 function pomoUpdateDots() {
@@ -1596,7 +1618,8 @@ function savePomoState() {
     localStorage.setItem('focus_pomo_state', JSON.stringify({
       timeLeft: pomo.timeLeft, total: pomo.total,
       status: pomo.status, completed: pomo.completed,
-      subject: currentSubject, savedAt: Date.now()
+      subject: currentSubject, savedAt: Date.now(),
+      pomoRecordedSeconds: pomoRecordedSeconds
     }));
   } catch(e) {}
 }
@@ -1612,6 +1635,7 @@ function restorePomoState() {
     pomo.total = s.total || 25*60;
     pomo.status = s.status || 'focus';
     pomo.completed = s.completed || 0;
+    pomoRecordedSeconds = s.pomoRecordedSeconds || 0;
     if (s.subject) { currentSubject = s.subject; updateSubjectBadge();
       var lbl = document.getElementById('pomo-subject-label');
       var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
