@@ -623,6 +623,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   cursor: pointer; font-size: 0.82em; font-family: inherit;
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   transition: all 0.3s ease;
+  outline: none;
+}
+.top-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 .top-btn:hover { background: rgba(0,0,0,0.55); color: #fff; }
 .top-btn.hidden { opacity: 0; pointer-events: none; }
