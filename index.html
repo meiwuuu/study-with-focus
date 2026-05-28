@@ -1074,12 +1074,14 @@ function toggleFocusMode() {
     }
     // If currently in break, skip break and start focus immediately
     if (pomo.status === 'break' || pomo.status === 'long-break') {
-      pomo.status = 'focus';
+      pomoSetStatus('focus');
       pomo.timeLeft = pomoGetDuration();
       pomo.total = pomo.timeLeft;
+      pomoUpdateDisplay();
       segmentStartTime = null;
       segmentAccSeconds = 0;
       segWallStart = null;
+      pomoRecordedSeconds = 0;
     }
     if (!pomo.running) pomoStart();
     focusModeActive = true;
