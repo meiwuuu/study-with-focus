@@ -977,6 +977,8 @@ function closePanel(e) {
   if (e && e.target !== document.getElementById('settings-overlay')) return;
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('pomo-clock').classList.remove('panel-open');
+  // 关闭设置面板时强制刷新主页浮窗为今天的数据
+  todoUpdateFloat();
 }
 function switchPanelTab(name) {
   document.querySelectorAll('#panel-content .panel-tab').forEach(function(t){t.classList.remove('active')});
@@ -1868,10 +1870,11 @@ function todoUpdateFloat() {
     for (var i = 0; i < todos.length; i++) {
       if (!todos[i].completed) items.push({text: todos[i].text, source: 'todo', id: todos[i].id, pinned: todos[i].pinned});
     }
-    if (calSelected && cal.plans[calSelected]) {
-      var plans = cal.plans[calSelected].filter(function(p){ return !p.done; });
+    var _today = fmtLocalDate(new Date());
+    if (cal.plans[_today]) {
+      var plans = cal.plans[_today].filter(function(p){ return !p.done; });
       for (var j = 0; j < plans.length; j++) {
-        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: calSelected});
+        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: _today});
       }
     }
     if (!items.length) { el.classList.remove('show'); return; }
@@ -1897,9 +1900,10 @@ function todoUpdateFloat() {
     var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
     var isPlan = false;
     var activeDate = null;
-    if (!active && calSelected && cal.plans[calSelected]) {
-      active = cal.plans[calSelected].filter(function(p){return !p.done;}).pop();
-      if (active) { isPlan = true; activeDate = calSelected; }
+    var _today2 = fmtLocalDate(new Date());
+    if (!active && cal.plans[_today2]) {
+      active = cal.plans[_today2].filter(function(p){return !p.done;}).pop();
+      if (active) { isPlan = true; activeDate = _today2; }
     }
     
     if (active) {
@@ -2334,9 +2338,13 @@ function renderLearningLog(daily, date) {
 function hasIncompleteItems() {
   // 检查是否有未完成的 todo
   if (todos.some(function(t){ return !t.completed; })) return true;
-  // 检查日历是否有未完成的计划
-  if (calSelected && cal.plans[calSelected]) {
-    if (cal.plans[calSelected].some(function(p){ return !p.done; })) return true;
+  // 检查今天是否有未完成的计划
+  var _today = new Date();
+  var _todayStr = _today.getFullYear() + '-' + 
+    String(_today.getMonth() + 1).padStart(2, '0') + '-' + 
+    String(_today.getDate()).padStart(2, '0');
+  if (cal.plans[_todayStr]) {
+    if (cal.plans[_todayStr].some(function(p){ return !p.done; })) return true;
   }
   return false;
 }
@@ -2460,7 +2468,7 @@ restorePomoState();
 // Restore subject
 try { var s=localStorage.getItem('focus_subject'); if(s) setSubject(s); } catch(e) {}
 // Auto-load today's calendar plans on page init
-setTimeout(function(){ if(typeof calGoToday==='function')calGoToday(); }, 100);
+setTimeout(function(){ if(typeof calGoToday==='function'){ calGoToday(); todoUpdateFloat(); } }, 100);
 // Restore timeline from localStorage
 try {
   var savedTL = JSON.parse(localStorage.getItem('focus_pomo_tl') || '[]');
