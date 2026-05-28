@@ -933,29 +933,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             <button class="btn btn-accent" id="btn-parse-eval" onclick="parseAndSaveEval()" style="width:100%;margin-bottom:8px;">3. 提取分数并保存</button>
             <div id="eval-result" style="font-size:.82em;text-align:center;min-height:1.5em;"></div>
           </div>
-          <div class="card">
-            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">通知调度</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-              <span style="font-size:.78em;color:rgba(255,255,255,.55);">今日计划:</span>
-              <div class="cs-wrap" id="plan-select-wrap" style="min-width:160px;">
-                <div class="cs-trigger" onclick="togglePlanDropdown(event)">
-                  <span class="cs-label" id="plan-select-label">A 计划 (无课日)</span>
-                  <span class="cs-arrow">▾</span>
-                </div>
-                <div class="cs-dropdown" id="plan-select-dropdown">
-                  <div class="cs-option" data-value="A" onclick="selectNotifyPlan('A','A 计划 (无课日)',event)">A 计划 (无课日)</div>
-                  <div class="cs-option" data-value="B_Tue" onclick="selectNotifyPlan('B_Tue','B 计划 (周二日语)',event)">B 计划 (周二日语)</div>
-                  <div class="cs-option" data-value="B_Thu" onclick="selectNotifyPlan('B_Thu','B 计划 (周四 PHP)',event)">B 计划 (周四 PHP)</div>
-                </div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-              <div style="font-size:.72em;color:rgba(255,255,255,.35);" id="notify-status">通知引擎: 检查中…</div>
-              <button class="btn" onclick="testNotify()" style="padding:2px 8px;font-size:.68em;border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.4);">测试</button>
-            </div>
-          </div>
         </div>
-
+      </div>
       </div>
     </div>
   </div>
@@ -2673,143 +2652,6 @@ function parseAndSaveEval() {
   });
 }
 
-// ═══════════ NOTIFICATION SCHEDULER ═══════════
-var notifySchedules = {
-  'A': {
-    '07:30': '早上好！A计划启动，迅速洗漱准备。',
-    '08:00': '黄金时间，开启 408 或数学的高强度专注！',
-    '12:00': '上午战斗结束，吃饭休息一下吧。',
-    '14:00': '下午场开始，英语阅读和政治可以安排上了。',
-    '22:30': '今日目标达成，准备熄灯休息，不要熬夜哦！'
-  },
-  'B_Tue': {
-    '07:30': '周二早！今天有日语课，抓紧上午时间。',
-    '09:50': '准备上日语选修课 (10:05-11:40)，记得带书！',
-    '15:20': '准备上日语课下午场 (15:35-17:10)。',
-    '19:00': '晚间无课时段，火力全开补进度！'
-  },
-  'B_Thu': {
-    '07:30': '周四早！上午是宝贵的自习时间。',
-    '13:45': '准备出发，下午是 PHP 课程 (14:00-17:30)。',
-    '19:00': '晚间冲刺时间，把今天缺失的进度补回来！'
-  }
-};
-var currentNotifyPlan = '';
-var notifiedToday = {};
-
-function testNotify() {
-  if (!('Notification' in window)) {
-    document.getElementById('notify-status').textContent = '通知引擎: 浏览器不支持';
-    return;
-  }
-  if (Notification.permission === 'denied') {
-    document.getElementById('notify-status').textContent = '通知引擎: 运行中 | 已拒绝（请在浏览器设置中改为允许）';
-    return;
-  }
-  if (Notification.permission === 'default') {
-    Notification.requestPermission().then(function(perm) {
-      updateNotifyStatus();
-      if (perm === 'granted') { new Notification('专注教练', { body: '通知授权成功！你会按时收到学习提醒。' }); }
-    });
-    return;
-  }
-  // granted
-  new Notification('专注教练', { body: '通知功能正常！到点就会提醒你。' });
-}
-
-function updateNotifyStatus() {
-  document.getElementById('notify-status').textContent =
-    '通知引擎: 运行中 (' + currentNotifyPlan.replace('_',' ') + ') | ' +
-    (Notification.permission === 'granted' ? '已授权' : '待授权');
-}
-
-function initNotifyScheduler() {
-  if (!('Notification' in window)) {
-    document.getElementById('notify-status').textContent = '通知引擎: 浏览器不支持';
-    return;
-  }
-  if (Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-
-  var day = new Date().getDay();
-  if (day === 2) currentNotifyPlan = 'B_Tue';
-  else if (day === 4) currentNotifyPlan = 'B_Thu';
-  else currentNotifyPlan = 'A';
-
-  var sel = document.getElementById('plan-select-label');
-  var dd = document.getElementById('plan-select-dropdown');
-  if (sel) sel.textContent = currentNotifyPlan === 'B_Tue' ? 'B 计划 (周二日语)' :
-    currentNotifyPlan === 'B_Thu' ? 'B 计划 (周四 PHP)' : 'A 计划 (无课日)';
-  if (dd) {
-    dd.querySelectorAll('.cs-option').forEach(function(o) {
-      o.classList.toggle('selected', o.dataset.value === currentNotifyPlan);
-    });
-  }
-
-  updateNotifyStatus();
-
-  setInterval(checkNotifyTick, 30000);
-}
-
-function checkNotifyTick() {
-  if (Notification.permission !== 'granted') return;
-
-  var now = new Date();
-  var hh = String(now.getHours()).padStart(2, '0');
-  var mm = String(now.getMinutes()).padStart(2, '0');
-  var timeStr = hh + ':' + mm;
-
-  // Reset at midnight
-  if (timeStr === '00:00' || timeStr === '00:01') notifiedToday = {};
-
-  var sched = notifySchedules[currentNotifyPlan];
-  if (sched && sched[timeStr] && !notifiedToday[timeStr]) {
-    new Notification('专注教练', { body: sched[timeStr] });
-    notifiedToday[timeStr] = true;
-  }
-}
-
-function togglePlanDropdown(e) {
-  e.stopPropagation();
-  var dd = document.getElementById('plan-select-dropdown');
-  var tr = document.querySelector('#plan-select-wrap .cs-trigger');
-  var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closePlanDropdown(); }
-  else {
-    // Close any other open dropdowns first
-    closeDateDropdown();
-    dd.classList.add('show'); tr.classList.add('open');
-    if (pc) pc.style.overflowY = 'visible';
-  }
-}
-
-function closePlanDropdown() {
-  var dd = document.getElementById('plan-select-dropdown');
-  var tr = document.querySelector('#plan-select-wrap .cs-trigger');
-  var pc = document.getElementById('panel-content');
-  if (dd) dd.classList.remove('show');
-  if (tr) tr.classList.remove('open');
-  if (pc) pc.style.overflowY = '';
-}
-
-function selectNotifyPlan(value, label, e) {
-  if (e) { e.stopPropagation(); }
-  currentNotifyPlan = value;
-  notifiedToday = {};
-  document.getElementById('plan-select-label').textContent = label;
-  // Update selected class
-  var dd = document.getElementById('plan-select-dropdown');
-  if (dd) {
-    dd.querySelectorAll('.cs-option').forEach(function(o) {
-      o.classList.toggle('selected', o.dataset.value === value);
-    });
-  }
-  closePlanDropdown();
-  updateNotifyStatus();
-}
-
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();
@@ -2836,7 +2678,6 @@ blockRender();
 blockRefresh();
 statsRefresh();
 setInterval(statsRefresh,30000);
-initNotifyScheduler();
 </script>
 </body>
 </html>
