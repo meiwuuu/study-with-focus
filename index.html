@@ -696,6 +696,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
         <button data-tab="stats" onclick="switchPanelTab('stats')">📊 统计</button>
         <button data-tab="log" onclick="switchPanelTab('log')">📋 学习记录</button>
         <button data-tab="theme" onclick="switchPanelTab('theme')">🎨 主题</button>
+        <button data-tab="evaluate" onclick="switchPanelTab('evaluate')">🧠 AI 评价</button>
       </div>
       <div class="panel-content" id="panel-content">
 
@@ -918,6 +919,37 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <input type="range" id="panel-opacity" min="4" max="100" value="10" oninput="updatePanelOpacity(this.value)" style="flex:1;accent-color:var(--accent);">
               <span style="font-size:.78em;color:rgba(255,255,255,.55);min-width:36px;text-align:right;" id="panel-opacity-val">10%</span>
             </div>
+          </div>
+        </div>
+
+        <!-- ═══ AI Evaluate tab ═══ -->
+        <div class="panel-tab" id="ptab-evaluate">
+          <div class="card" style="margin-bottom:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">半手动 AI 评价</div>
+            <p style="font-size:.78em;color:rgba(255,255,255,.4);margin-bottom:12px;">生成提示词 → 贴给 AI → 粘回结果 → 自动提取分数</p>
+            <button class="btn btn-accent" id="btn-gen-prompt" onclick="generateEvalPrompt()" style="width:100%;margin-bottom:10px;">📁 1. 一键下载今日 AI 评估报告 (.txt)</button>
+            <textarea id="ai-response-input" placeholder="2. 将 AI 的回复粘贴到这里…"
+              style="width:100%;height:120px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);color:#fff;font-size:.82em;padding:10px;resize:vertical;font-family:var(--font);"></textarea>
+            <button class="btn btn-accent" id="btn-parse-eval" onclick="parseAndSaveEval()" style="width:100%;margin-bottom:8px;">3. 提取分数并保存</button>
+            <div id="eval-result" style="font-size:.82em;text-align:center;min-height:1.5em;"></div>
+          </div>
+          <div class="card">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">通知调度</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+              <span style="font-size:.78em;color:rgba(255,255,255,.55);">今日计划:</span>
+              <div class="cs-wrap" id="plan-select-wrap" style="min-width:160px;">
+                <div class="cs-trigger" onclick="togglePlanDropdown(event)">
+                  <span class="cs-label" id="plan-select-label">A 计划 (无课日)</span>
+                  <span class="cs-arrow">▾</span>
+                </div>
+                <div class="cs-dropdown" id="plan-select-dropdown">
+                  <div class="cs-option" data-value="A" onclick="selectNotifyPlan('A','A 计划 (无课日)',event)">A 计划 (无课日)</div>
+                  <div class="cs-option" data-value="B_Tue" onclick="selectNotifyPlan('B_Tue','B 计划 (周二日语)',event)">B 计划 (周二日语)</div>
+                  <div class="cs-option" data-value="B_Thu" onclick="selectNotifyPlan('B_Thu','B 计划 (周四 PHP)',event)">B 计划 (周四 PHP)</div>
+                </div>
+              </div>
+            </div>
+            <div style="font-size:.72em;color:rgba(255,255,255,.35);" id="notify-status">通知引擎: 检查中…</div>
           </div>
         </div>
 
@@ -2462,6 +2494,297 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ═══════════ AI EVALUATE ═══════════
+var EVALUATE_PROMPT = '# 考研教练评价系统 · 提示词规范\n\n> 每次生成学习评价时必须遵循此规范。\n> 评价模型: deepseek-v4-pro\n> 评价字数: 200-300 字\n\n---\n\n## 用户背景（必须了解）\n\n- 身份：27届考研生，目标杭州电子科技大学\n- 科目：数学一 + 英语一 + 408计算机综合 + 政治\n- 学校：福建师范大学旗山校区，网络工程1班\n- 日程：\n  - 周二 日语选修（第3-4节 10:05-11:40 + 第7-8节 15:35-17:10）\n  - 周四 PHP（第5-8节 14:00-17:30）\n  - 周一/三/五/周末 无课，全天可自主安排\n- ⚠️ 上课日特殊规则（评价时必须遵守）：\n  - 周二上午10:05-11:40和下午15:35-17:10有课，实际可学习窗口约4-5小时\n  - 周四下午14:00-17:30有课，实际可学习窗口约6-7小时\n  - **上课日总学习时间必然少于无课日，评价时不得因此扣分**\n  - 上课日应关注的是「课余时间利用效率」而非绝对时长\n- 两种学习模式：\n  - A安排（全负荷）：07:30起床 → 22:30熄灯，目标≥6h/≥8番茄\n  - B安排（最低可行）：08:00起床 → 只做核心科目，目标≥3h/≥4番茄\n- 模式判断规则（由系统自动提供）：\n  - 无课日 → A安排（≥6h/≥8番茄）\n  - 有课日 → B安排（≥3h/≥4番茄），不应与时长相较于无课日做对比\n  - 若前一天评价提到疲劳，可建议B安排\n- 每日正常生活开销（约4-5h，这些时段的学习空白不扣分）：\n  - 三餐：早约7:30-8:00、午约11:50-12:30、晚约17:30-18:30，共约2h\n  - 午休：约12:30-13:30，约1h\n  - 洗漱/洗澡/杂务：约1h\n  - 适度娱乐/休息：≤1h属正常调节，>3h才算问题\n  - 有课日加上上课时间（周二约3.5h，周四约3.5h），全天可用学习时间本就有限\n\n---\n\n## 评价维度（四维评分）\n\n### 1. 学习投入（权重40%）\n- 总学习时长是否达标？（系统会自动提供当天目标：A安排 ≥ 6h，B安排 ≥ 3h）\n- 番茄完成数是否合理？（A目标 ≥ 8个，B目标 ≥ 4个）\n- ⚠️ 有课日（周二/周四）系统自动适用B安排标准，评价时应以B标准衡量\n- 是否有长时间空窗？（>2h 无学习 = 扣分，但以下正常活动不计入空窗：上课、三餐、午休、洗漱、通勤、适度娱乐≤1h）\n- 是否在课余黄金时段有产出？（上午课前、午休间隙、晚间）\n- 上课日评价重点：课余碎片时间的利用效率，而非与无课日比时长\n- 娱乐时间超过3h才算「过度娱乐」需警告，≤1h属正常调节不扣分\n\n### 2. 专注质量（权重25%）\n- 是否有频繁暂停？（>3次/小时 = 碎片化警告）\n- 暂停后恢复速度？（<5分钟 = 正常休息，>20分钟 = 分心）\n- 单次连续专注时长？（≥50分钟 = 优秀，<25分钟 = 需改进）\n- 科目是否频繁切换？（>3次/小时 = 注意力分散）\n\n### 3. 生活节奏（权重20%）\n- 起床时间是否合理？（7:00-8:00 = 正常，>9:00 = 警告）\n- 是否在合理时间结束学习？（22:30前 = 健康，>23:30 = 透支）\n- 三餐时间是否被挤占？\n- 午休是否过长？（>1h = 警惕）\n- 上课日特别考量：\n  - 课后是否及时切换回学习状态？（下课后>30分钟仍未学习 = 转换慢）\n  - 上课时段的学习记录空白属正常，不扣分\n- 正常生活时段的学习空白不扣分（三餐、午休、洗漱、通勤、适度娱乐≤1h）\n- 次日有课时是否提前收工？\n\n### 4. 策略与规划（权重15%）\n- 科目分配是否均衡？（四科都有涉猎 > 只攻一科）\n- 是否匹配当前阶段重点？（基础期多数学/408，冲刺期加政治）\n- 是否有复习环节？（学习后是否有回顾）\n- 是否利用了碎片时间？\n\n---\n\n## 评分标准\n\n| 等级 | 分数 | 含义 |\n|------|------|------|\n| S | 95-100 | 完美一天，无可挑剔 |\n| A+ | 90-94 | 表现出色，超额完成 |\n| A | 85-89 | 优秀，达标且高效 |\n| B+ | 80-84 | 良好，基本达标有小瑕疵 |\n| B | 75-79 | 还行，将将及格 |\n| C | 65-74 | 不足，多项指标未达标 |\n| D | <65 | 荒废，需要反思 |\n\n---\n\n## 输出格式（严格遵守）\n\n### 结构（六段式，必须完整）\n\n**第一段：一句话定性**（含日程类型、安排、目标与实际对比、总体定调）\n格式：`周X[有课/无课]课程名，A/B安排目标≥Xh/≥X番茄，实际Xh/X番茄——[定性一句话]。`\n\n**第二段：四维评分**（每维独立段落，格式：维度名（分数/满分）——分析文本）\n\n四个维度固定顺序：\n1. 学习投入（满分40）\n2. 专注质量（满分25）\n3. 生活节奏（满分20）\n4. 策略规划（满分15）\n\n每段分析要求：\n- 用具体数据说话（时间段、分钟数、番茄数、暂停次数等）\n- 找出该维度的最高点和最低点\n- 有课日必须考虑上课时段对学习窗口的影响，扣除上课时间后再评估空窗\n- 评分需综合该维度的正面和负面，不能只看单一方面\n\n**第三段：总分**\n格式：`总分：XX分 / 等级`\n\n**第四段：生活建议**（1段，2-3句话）\n- 概括最关键的1-2个问题\n- 给出具体的改正方向\n- 语气教练式，不空洞表扬也不过度否定\n\n**第五段：明日规划**\n格式：`明日规划（X月X日 周X [有课/无课] [A/B安排]）`\n- 先说明次日日程和适用标准\n- 然后给出具体时间段安排（上午/午休/下午/晚间，每段含科目+番茄数）\n- 最后一行：目标总结（总时长/番茄数/重点科目/收工时间）\n\n**第六段：可选，仅当日有特殊亮点或严重问题时追加一句简短提醒**\n\n### 评分原则\n- 四维分数必须综合评估，不能机械套用模板比例\n- 达标但不优秀 ≠ 满分，有严重短板即使达标也应大幅扣分\n- 有课日和无课日使用不同的目标基准，不能混用\n- 课堂碎片利用是加分项，课后衔接断裂是扣分项，两者独立评估\n\n### 禁止事项\n- 禁用 markdown（**、#、- 等）\n- 禁用空泛表扬（"你很棒""继续加油"类无效）\n- 禁用猜测（没数据不要编）\n- 禁用 emoji\n- 禁止在四维评分中只写结论不写数据依据\n\n---\n\n## 数据来源说明\n\n评价基于以下数据：\n- total_pomodoros: 完成的番茄数（25分钟完整块，来自前端汇总，是权威值）\n- segment_count: 总学习段数（包含不足24分钟的短段）\n- total_seconds / total_minutes: 总学习时长\n- subject_breakdown: 按科目的段数和秒数（{math: {segments: N, seconds: S}, eng: {...}, ...}）\n- timeline: 精细操作日志（start/pause/resume/complete/end/subject_change）\n- segments: 科目分段数据（含start/end/duration/subject）\n- 当前日期: 用于判断星期几、是否有课\n\n⚠️ 数据读取铁律（违反=失信）：\n1. 番茄数以 total_pomodoros 为准，不是 segment_count\n2. 科目分配以 subject_breakdown 为准，不要数字 segments\n3. 如果 segment_count > total_pomodoros，说明有短段（<25分钟），在评价中注明"X段学习中Y个完成番茄"\n4. 禁止猜测——没有标注科目的段不能假定科目\n5. 时间戳是 UTC 格式，需转换为北京时间(+8h)理解作息\n';
+function fmtBeijingTime(utcString) {
+  if (!utcString) return '无时间戳';
+  try {
+    var d = new Date(utcString);
+    if (isNaN(d.getTime())) return utcString;
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0') + ' ' +
+      String(d.getHours()).padStart(2, '0') + ':' +
+      String(d.getMinutes()).padStart(2, '0') + ':' +
+      String(d.getSeconds()).padStart(2, '0');
+  } catch(e) { return utcString; }
+}
+
+async function generateEvalPrompt() {
+  var today = currentLogDate || fmtLocalDate(new Date());
+  var resultEl = document.getElementById('eval-result');
+
+  // Fetch both daily log + full stats (for timeline)
+  var daily = await apiCall('/api/stats/daily?date=' + today);
+  var fullStats = await apiCall('/api/stats');
+
+  if (!daily || !daily.segments || !daily.segments.length) {
+    resultEl.innerHTML = '<span style="color:#f87171;">今天暂无学习记录</span>';
+    return;
+  }
+
+  // ── 1. Basic info ──
+  var weeks = ['周日','周一','周二','周三','周四','周五','周六'];
+  var now = new Date();
+  var dayOfWeek = weeks[now.getDay()];
+  var isClassDay = [2,4].includes(now.getDay());
+  var planType = isClassDay ? 'B安排 (有课日最低可行)' : 'A安排 (无课日全负荷)';
+
+  var totalPomos = fullStats ? (fullStats.today_pomodoros || 0) : (daily.pomodoros || 0);
+  var totalSec = fullStats ? (fullStats.today_time || 0) : (daily.total_time || 0);
+  var totalMin = Math.floor(totalSec / 60);
+  var segs = daily.segments;
+  var segmentCount = segs.length;
+
+  // ── 2. Subject breakdown ──
+  var names = {math:'数学一', cs:'408', eng:'英语一', pol:'政治'};
+  var subjDist = {};
+  segs.forEach(function(s) {
+    var subj = s.subject || 'general';
+    if (!subjDist[subj]) subjDist[subj] = { segments: 0, seconds: 0 };
+    subjDist[subj].segments += 1;
+    subjDist[subj].seconds += (s.duration || 0);
+  });
+
+  // ── 3. Timeline (from full stats daily_logs) ──
+  var timelineRaw = [];
+  if (fullStats && fullStats.daily_logs && fullStats.daily_logs[today]) {
+    timelineRaw = fullStats.daily_logs[today].timeline || [];
+  }
+
+  // ── 4. Build file content ──
+  var txt = '==================================================\n';
+  txt += '【系统核心指令】\n';
+  txt += '请作为我的考研私教，严格根据以下原始打卡数据，\n';
+  txt += '并依照《考研教练评价系统 · 提示词规范》对我进行今日评估。\n';
+  txt += '输出必须遵循六段式结构，用具体数据说话！\n';
+  txt += '==================================================\n\n';
+
+  txt += '【1. 今日基础环境情报】\n';
+  txt += '- 评估日期：' + today + ' (' + dayOfWeek + ')\n';
+  txt += '- 日程分类：' + planType + '\n';
+  txt += '- 权威完成番茄钟数：' + totalPomos + ' 个\n';
+  txt += '- 权威总学习时长：' + totalMin + ' 分钟 (' + totalSec + ' 秒)\n';
+  txt += '- 总复习段数：' + segmentCount + ' 段\n\n';
+
+  txt += '【2. 科目数据统计】\n';
+  for (var k in subjDist) {
+    var mins = Math.floor(subjDist[k].seconds / 60);
+    txt += '- [' + (names[k] || k) + '] 完成 ' + subjDist[k].segments +
+      ' 段学习, 累计 ' + mins + ' 分钟 (' + subjDist[k].seconds + ' 秒)\n';
+  }
+  txt += '\n';
+
+  txt += '【3. 学习分段详细清单】\n';
+  segs.sort(function(a, b) {
+    var ah = parseInt(a.start.split(':')[0]), am = parseInt(a.start.split(':')[1]);
+    var bh = parseInt(b.start.split(':')[0]), bm = parseInt(b.start.split(':')[1]);
+    if (ah < 4) ah += 24; if (bh < 4) bh += 24;
+    return (ah*60+am) - (bh*60+bm);
+  });
+  segs.forEach(function(seg, idx) {
+    var durMin = Math.floor((seg.duration||0) / 60);
+    txt += '段落[' + (idx+1) + '] 科目:' + (names[seg.subject]||seg.subject||'未指定') +
+      ' | 时长:' + durMin + '分(' + (seg.duration||0) + '秒)' +
+      ' | ' + (seg.start||'?') + ' → ' + (seg.end||'?') + '\n';
+  });
+  txt += '\n';
+
+  txt += '【4. 原始精细操作日志流水 (timeline，已转北京时间)】\n';
+  if (timelineRaw.length === 0) { txt += '（暂无精细日志数据）\n'; }
+  else {
+    timelineRaw.forEach(function(log, idx) {
+      var bj = fmtBeijingTime(log.ts);
+      txt += '[' + bj + '] 操作:' + (log.action||'?') +
+        ' | 科目:' + (log.subject||'-') +
+        ' | 累计秒:' + (log.accSeconds||0);
+      if (log.totalSec !== undefined) txt += ' | 总秒:' + log.totalSec;
+      if (log.pomodoroNum !== undefined) txt += ' | 🍅#' + log.pomodoroNum;
+      if (log.from !== undefined) txt += ' | 从:' + log.from + '→' + log.to;
+      txt += '\n';
+    });
+  }
+
+  txt += '评价基于以下数据：\n';
+  txt += '- total_pomodoros: ' + totalPomos + '\n';
+  txt += '- segment_count: ' + segmentCount + '\n';
+  txt += '- total_time: ' + totalMin + ' 分钟 (' + totalSec + ' 秒)\n';
+  txt += '- subject_breakdown: ';
+  var sbParts = [];
+  for (var k in subjDist) {
+    sbParts.push(k + ' {segments:' + subjDist[k].segments + ', seconds:' + subjDist[k].seconds + '}');
+  }
+  txt += sbParts.join(', ') + '\n';
+  txt += '- timeline: ' + timelineRaw.length + ' 条操作记录（见【4】）\n';
+  txt += '- segments: ' + segmentCount + ' 段（见【3】）\n';
+  txt += '- 当前日期: ' + today + ' (' + dayOfWeek + ') | 日程: ' + planType + '\n';
+
+  txt += '\n' + EVALUATE_PROMPT;
+
+  // ── 5. Trigger download ──
+  var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = '今日考研数据_' + today + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  resultEl.innerHTML = '<span style="color:#34d399;">✅ 已下载：今日考研数据_' + today + '.txt</span>';
+}
+
+function parseAndSaveEval() {
+  var text = document.getElementById('ai-response-input').value;
+  if (!text) {
+    document.getElementById('eval-result').innerHTML = '<span style="color:#f87171;">请先粘贴 AI 的回复</span>';
+    return;
+  }
+
+  var scoreMatch = text.match(/总分[：:\s]*(\d+)\s*分/);
+  var levelMatch = text.match(/等级[：:\s]*([A-DS])\s*[级]?/);
+
+  if (!scoreMatch) {
+    document.getElementById('eval-result').innerHTML = '<span style="color:#fbbf24;">⚠ 未找到分数格式（如"总分：85分"），请检查 AI 输出</span>';
+    return;
+  }
+
+  var score = parseInt(scoreMatch[1]);
+  var grade = levelMatch ? levelMatch[1] : '';
+  var today = currentLogDate || fmtLocalDate(new Date());
+
+  document.getElementById('eval-result').innerHTML = '<span style="color:#34d399;">✅ 提取成功！' + score + '分 / ' + (grade||'?') + ' — 保存中…</span>';
+
+  // Save to server
+  apiCall('/api/stats/review', {
+    method: 'POST',
+    body: JSON.stringify({ date: today, text: text, score: score, grade: grade, source: 'manual' })
+  }).then(function(res) {
+    if (res && res.ok) {
+      document.getElementById('eval-result').innerHTML = '<span style="color:#34d399;">✅ 已保存！' + score + '分 / ' + (grade||'?') + ' — 去学习记录页查看</span>';
+      document.getElementById('ai-response-input').value = '';
+    } else {
+      document.getElementById('eval-result').innerHTML = '<span style="color:#f87171;">❌ 保存失败，请检查后端是否运行</span>';
+    }
+  });
+}
+
+// ═══════════ NOTIFICATION SCHEDULER ═══════════
+var notifySchedules = {
+  'A': {
+    '07:30': '早上好！A计划启动，迅速洗漱准备。',
+    '08:00': '黄金时间，开启 408 或数学的高强度专注！',
+    '12:00': '上午战斗结束，吃饭休息一下吧。',
+    '14:00': '下午场开始，英语阅读和政治可以安排上了。',
+    '22:30': '今日目标达成，准备熄灯休息，不要熬夜哦！'
+  },
+  'B_Tue': {
+    '07:30': '周二早！今天有日语课，抓紧上午时间。',
+    '09:50': '准备上日语选修课 (10:05-11:40)，记得带书！',
+    '15:20': '准备上日语课下午场 (15:35-17:10)。',
+    '19:00': '晚间无课时段，火力全开补进度！'
+  },
+  'B_Thu': {
+    '07:30': '周四早！上午是宝贵的自习时间。',
+    '13:45': '准备出发，下午是 PHP 课程 (14:00-17:30)。',
+    '19:00': '晚间冲刺时间，把今天缺失的进度补回来！'
+  }
+};
+var currentNotifyPlan = '';
+var notifiedToday = {};
+
+function initNotifyScheduler() {
+  if (!('Notification' in window)) {
+    document.getElementById('notify-status').textContent = '通知引擎: 浏览器不支持';
+    return;
+  }
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  var day = new Date().getDay();
+  if (day === 2) currentNotifyPlan = 'B_Tue';
+  else if (day === 4) currentNotifyPlan = 'B_Thu';
+  else currentNotifyPlan = 'A';
+
+  var sel = document.getElementById('plan-select-label');
+  var dd = document.getElementById('plan-select-dropdown');
+  if (sel) sel.textContent = currentNotifyPlan === 'B_Tue' ? 'B 计划 (周二日语)' :
+    currentNotifyPlan === 'B_Thu' ? 'B 计划 (周四 PHP)' : 'A 计划 (无课日)';
+  if (dd) {
+    dd.querySelectorAll('.cs-option').forEach(function(o) {
+      o.classList.toggle('selected', o.dataset.value === currentNotifyPlan);
+    });
+  }
+
+  document.getElementById('notify-status').textContent =
+    '通知引擎: 运行中 (' + currentNotifyPlan.replace('_',' ') + ') | ' +
+    (Notification.permission === 'granted' ? '已授权' : '待授权');
+
+  setInterval(checkNotifyTick, 30000);
+}
+
+function checkNotifyTick() {
+  if (Notification.permission !== 'granted') return;
+
+  var now = new Date();
+  var hh = String(now.getHours()).padStart(2, '0');
+  var mm = String(now.getMinutes()).padStart(2, '0');
+  var timeStr = hh + ':' + mm;
+
+  // Reset at midnight
+  if (timeStr === '00:00' || timeStr === '00:01') notifiedToday = {};
+
+  var sched = notifySchedules[currentNotifyPlan];
+  if (sched && sched[timeStr] && !notifiedToday[timeStr]) {
+    new Notification('专注教练', { body: sched[timeStr] });
+    notifiedToday[timeStr] = true;
+  }
+}
+
+function togglePlanDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('plan-select-dropdown');
+  var tr = document.querySelector('#plan-select-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closePlanDropdown(); }
+  else {
+    // Close any other open dropdowns first
+    closeDateDropdown();
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closePlanDropdown() {
+  var dd = document.getElementById('plan-select-dropdown');
+  var tr = document.querySelector('#plan-select-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
+}
+
+function selectNotifyPlan(value, label, e) {
+  if (e) { e.stopPropagation(); }
+  currentNotifyPlan = value;
+  notifiedToday = {};
+  document.getElementById('plan-select-label').textContent = label;
+  // Update selected class
+  var dd = document.getElementById('plan-select-dropdown');
+  if (dd) {
+    dd.querySelectorAll('.cs-option').forEach(function(o) {
+      o.classList.toggle('selected', o.dataset.value === value);
+    });
+  }
+  closePlanDropdown();
+  document.getElementById('notify-status').textContent =
+    '通知引擎: 运行中 (' + value.replace('_',' ') + ') | ' +
+    (Notification.permission === 'granted' ? '已授权' : '待授权');
+}
+
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();
@@ -2488,6 +2811,7 @@ blockRender();
 blockRefresh();
 statsRefresh();
 setInterval(statsRefresh,30000);
+initNotifyScheduler();
 </script>
 </body>
 </html>
