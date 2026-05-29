@@ -278,6 +278,12 @@ def compute_per_date_stats(req_date, stats):
     lines.append(f"═══════════════════════════════════════════")
     lines.append(f"  生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"═══════════════════════════════════════════")
+    # 追加完整评价规范（EVALUATE_PROMPT.md）
+    lines.append("")
+    lines.append("")
+    if os.path.exists(PROMPT_FILE):
+        with open(PROMPT_FILE, 'r', encoding='utf-8') as pf:
+            lines.append(pf.read())
 
     return "\n".join(lines)
 
