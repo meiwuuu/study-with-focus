@@ -2492,129 +2492,43 @@ function fmtBeijingTime(utcString) {
   } catch(e) { return utcString; }
 }
 
+var EVALUATE_PROMPT = '';
+// ⚠️ EVALUATE_PROMPT 已不再在此处维护。
+// 评分规范统一由 EVALUATE_PROMPT.md 管理。
+// evaluate_watchdog.py 读取该文件并注入 cron 评价上下文。
+// 下载 txt 通过服务器端点 /api/stats/evaluate/data 生成。
+
 async function generateEvalPrompt() {
   var today = currentLogDate || fmtLocalDate(new Date());
   var resultEl = document.getElementById('eval-result');
+  resultEl.innerHTML = '<span style="color:#fbbf24;">⏳ 正在生成 ' + today + ' 的数据…</span>';
 
-  // Fetch both daily log + full stats (for timeline)
-  var daily = await apiCall('/api/stats/daily?date=' + today);
-  var fullStats = await apiCall('/api/stats');
+  try {
+    var resp = await fetch(API + '/api/stats/evaluate/data?date=' + today);
+    if (!resp.ok) {
+      resultEl.innerHTML = '<span style="color:#f87171;">' + today + ' 暂无学习记录或服务器错误</span>';
+      return;
+    }
+    var txt = await resp.text();
+    if (!txt || txt.startsWith('错误')) {
+      resultEl.innerHTML = '<span style="color:#f87171;">' + today + ' 暂无学习记录</span>';
+      return;
+    }
 
-  if (!daily || !daily.segments || !daily.segments.length) {
-    resultEl.innerHTML = '<span style="color:#f87171;">今天暂无学习记录</span>';
-    return;
+    var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '考研数据_' + today + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    resultEl.innerHTML = '<span style="color:#34d399;">✅ 已下载：考研数据_' + today + '.txt</span>';
+  } catch(e) {
+    resultEl.innerHTML = '<span style="color:#f87171;">❌ 下载失败：' + e.message + '</span>';
   }
-
-  // ── 1. Basic info ──
-  var weeks = ['周日','周一','周二','周三','周四','周五','周六'];
-  var now = new Date();
-  var dayOfWeek = weeks[now.getDay()];
-  var isClassDay = [2,4].includes(now.getDay());
-  var planType = isClassDay ? 'B安排 (有课日最低可行)' : 'A安排 (无课日全负荷)';
-
-  var totalPomos = fullStats ? (fullStats.today_pomodoros || 0) : (daily.pomodoros || 0);
-  var totalSec = fullStats ? (fullStats.today_time || 0) : (daily.total_time || 0);
-  var totalMin = Math.floor(totalSec / 60);
-  var segs = daily.segments;
-  var segmentCount = segs.length;
-
-  // ── 2. Subject breakdown ──
-  var names = {math:'数学一', cs:'408', eng:'英语一', pol:'政治'};
-  var subjDist = {};
-  segs.forEach(function(s) {
-    var subj = s.subject || 'general';
-    if (!subjDist[subj]) subjDist[subj] = { segments: 0, seconds: 0 };
-    subjDist[subj].segments += 1;
-    subjDist[subj].seconds += (s.duration || 0);
-  });
-
-  // ── 3. Timeline (from full stats daily_logs) ──
-  var timelineRaw = [];
-  if (fullStats && fullStats.daily_logs && fullStats.daily_logs[today]) {
-    timelineRaw = fullStats.daily_logs[today].timeline || [];
-  }
-
-  // ── 4. Build file content ──
-  var txt = '==================================================\n';
-  txt += '【系统核心指令】\n';
-  txt += '请作为我的考研私教，严格根据以下原始打卡数据，\n';
-  txt += '并依照《考研教练评价系统 · 提示词规范》对我进行今日评估。\n';
-  txt += '输出必须遵循六段式结构，用具体数据说话！\n';
-  txt += '==================================================\n\n';
-
-  txt += '【1. 今日基础环境情报】\n';
-  txt += '- 评估日期：' + today + ' (' + dayOfWeek + ')\n';
-  txt += '- 日程分类：' + planType + '\n';
-  txt += '- 权威完成番茄钟数：' + totalPomos + ' 个\n';
-  txt += '- 权威总学习时长：' + totalMin + ' 分钟 (' + totalSec + ' 秒)\n';
-  txt += '- 总复习段数：' + segmentCount + ' 段\n\n';
-
-  txt += '【2. 科目数据统计】\n';
-  for (var k in subjDist) {
-    var mins = Math.floor(subjDist[k].seconds / 60);
-    txt += '- [' + (names[k] || k) + '] 完成 ' + subjDist[k].segments +
-      ' 段学习, 累计 ' + mins + ' 分钟 (' + subjDist[k].seconds + ' 秒)\n';
-  }
-  txt += '\n';
-
-  txt += '【3. 学习分段详细清单】\n';
-  segs.sort(function(a, b) {
-    var ah = parseInt(a.start.split(':')[0]), am = parseInt(a.start.split(':')[1]);
-    var bh = parseInt(b.start.split(':')[0]), bm = parseInt(b.start.split(':')[1]);
-    if (ah < 4) ah += 24; if (bh < 4) bh += 24;
-    return (ah*60+am) - (bh*60+bm);
-  });
-  segs.forEach(function(seg, idx) {
-    var durMin = Math.floor((seg.duration||0) / 60);
-    txt += '段落[' + (idx+1) + '] 科目:' + (names[seg.subject]||seg.subject||'未指定') +
-      ' | 时长:' + durMin + '分(' + (seg.duration||0) + '秒)' +
-      ' | ' + (seg.start||'?') + ' → ' + (seg.end||'?') + '\n';
-  });
-  txt += '\n';
-
-  txt += '【4. 原始精细操作日志流水 (timeline，已转北京时间)】\n';
-  if (timelineRaw.length === 0) { txt += '（暂无精细日志数据）\n'; }
-  else {
-    timelineRaw.forEach(function(log, idx) {
-      var bj = fmtBeijingTime(log.ts);
-      txt += '[' + bj + '] 操作:' + (log.action||'?') +
-        ' | 科目:' + (log.subject||'-') +
-        ' | 累计秒:' + (log.accSeconds||0);
-      if (log.totalSec !== undefined) txt += ' | 总秒:' + log.totalSec;
-      if (log.pomodoroNum !== undefined) txt += ' | 🍅#' + log.pomodoroNum;
-      if (log.from !== undefined) txt += ' | 从:' + log.from + '→' + log.to;
-      txt += '\n';
-    });
-  }
-
-  txt += '评价基于以下数据：\n';
-  txt += '- total_pomodoros: ' + totalPomos + '\n';
-  txt += '- segment_count: ' + segmentCount + '\n';
-  txt += '- total_time: ' + totalMin + ' 分钟 (' + totalSec + ' 秒)\n';
-  txt += '- subject_breakdown: ';
-  var sbParts = [];
-  for (var k in subjDist) {
-    sbParts.push(k + ' {segments:' + subjDist[k].segments + ', seconds:' + subjDist[k].seconds + '}');
-  }
-  txt += sbParts.join(', ') + '\n';
-  txt += '- timeline: ' + timelineRaw.length + ' 条操作记录（见【4】）\n';
-  txt += '- segments: ' + segmentCount + ' 段（见【3】）\n';
-  txt += '- 当前日期: ' + today + ' (' + dayOfWeek + ') | 日程: ' + planType + '\n';
-
-  txt += '\n' + EVALUATE_PROMPT;
-
-  // ── 5. Trigger download ──
-  var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = '今日考研数据_' + today + '.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  resultEl.innerHTML = '<span style="color:#34d399;">✅ 已下载：今日考研数据_' + today + '.txt</span>';
 }
 
 function parseAndSaveEval() {
@@ -2625,7 +2539,6 @@ function parseAndSaveEval() {
   }
 
   var scoreMatch = text.match(/总分[：:\s]*(\d+)\s*分/);
-  var levelMatch = text.match(/等级[：:\s]*([A-DS])\s*[级]?/);
 
   if (!scoreMatch) {
     document.getElementById('eval-result').innerHTML = '<span style="color:#fbbf24;">⚠ 未找到分数格式（如"总分：85分"），请检查 AI 输出</span>';
@@ -2633,7 +2546,15 @@ function parseAndSaveEval() {
   }
 
   var score = parseInt(scoreMatch[1]);
-  var grade = levelMatch ? levelMatch[1] : '';
+  // 根据分数自动计算等级
+  var grade = '';
+  if (score >= 95) grade = 'S';
+  else if (score >= 90) grade = 'A+';
+  else if (score >= 85) grade = 'A';
+  else if (score >= 80) grade = 'B+';
+  else if (score >= 75) grade = 'B';
+  else if (score >= 65) grade = 'C';
+  else grade = 'D';
   var today = currentLogDate || fmtLocalDate(new Date());
 
   document.getElementById('eval-result').innerHTML = '<span style="color:#34d399;">✅ 提取成功！' + score + '分 / ' + (grade||'?') + ' — 保存中…</span>';

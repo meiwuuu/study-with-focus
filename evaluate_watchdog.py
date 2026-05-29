@@ -8,6 +8,8 @@ cron 每分钟跑一次（no_agent=False），脚本 stdout 注入 agent 上下�
 1. evaluate_instructions: 评价规范（来自 EVALUATE_PROMPT.md）
 2. user_background: 用户背景（日程、目标等）
 3. learning_data: 学习数据（timeline、stats 等）
+
+修复：支持任意日期——从 daily_logs[date] 提取数据，不再硬编码 today_*。
 """
 import json
 import sys
@@ -95,6 +97,192 @@ def load_evaluate_instructions():
     return "评价规范文档未找到"
 
 
+def build_context(req_date, stats):
+    """
+    为指定日期构建完整的评价上下文。
+    从 daily_logs[date] 提取统计数据（而非全局 today_*）。
+    """
+    daily_logs = stats.get("daily_logs", {})
+    sessions = stats.get("sessions", [])
+
+    # ── 从 daily_logs 获取该日期的完整数据 ──
+    date_log = daily_logs.get(req_date, {})
+
+    # 该日期的 segments（科目分段）
+    segments = date_log.get("segments", [])
+
+    # 该日期的 timeline（精细操作日志）
+    date_timeline = date_log.get("timeline", [])
+
+    # 同时从 sessions 中补充 timeline（兼容旧数据）
+    for s in sessions:
+        if s.get("date", "").startswith(req_date) and "timeline" in s:
+            date_timeline.extend(s["timeline"])
+
+    # ── 核心统计：从 daily_log 取，fallback 到 session 汇总 ──
+    date_pomodoros = date_log.get("pomodoros", 0)
+    date_total_seconds = date_log.get("total_time", 0)
+
+    # fallback: 如果 daily_log 没有统计数据（旧格式），从 segments/sessions 计算
+    if date_pomodoros == 0 and date_total_seconds == 0 and segments:
+        date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+        date_total_seconds = sum(s.get("duration", 0) for s in segments)
+
+    # 如果 daily_log 也没有 segments，从 sessions 计算
+    if not segments and not date_log:
+        date_ses = [s for s in sessions if s.get("date", "").startswith(req_date)]
+        date_pomodoros = sum(s.get("pomodoros", 0) for s in date_ses)
+        date_total_seconds = sum(s.get("duration", 0) for s in date_ses)
+
+    # ── 该日期的 session 列表 ──
+    date_sessions = [s for s in sessions if s.get("date", "").startswith(req_date)]
+
+    # ── 科目分布（从 segments 计算）──
+    subject_breakdown = {}
+    for seg in segments:
+        subj = seg.get("subject", "other")
+        if subj not in subject_breakdown:
+            subject_breakdown[subj] = {"segments": 0, "seconds": 0}
+        subject_breakdown[subj]["segments"] += 1
+        subject_breakdown[subj]["seconds"] += seg.get("duration", 0)
+
+    segment_count = len(segments)
+
+    # ── 星期 / 日程判断 ──
+    weekday = get_weekday_name(req_date)
+    today_schedule = USER_BACKGROUND["schedule"].get(weekday, "无课")
+    has_class = "无课" not in today_schedule
+    suggested_mode = "B" if has_class else "A"
+    target_h = USER_BACKGROUND["target_hours"][suggested_mode]
+    target_p = USER_BACKGROUND["target_pomodoros"][suggested_mode]
+
+    # ── 构建上下文 ──
+    context = {
+        "evaluate_instructions": load_evaluate_instructions(),
+        "user_background": {
+            **USER_BACKGROUND,
+            "target_mode": suggested_mode,
+            "target_hours_today": target_h,
+            "target_pomodoros_today": target_p,
+            "today_weekday": weekday,
+            "today_has_class": has_class,
+            "today_schedule": today_schedule,
+        },
+        "learning_data": {
+            "date": req_date,
+            "total_seconds": date_total_seconds,
+            "total_minutes": round(date_total_seconds / 60),
+            "total_pomodoros": date_pomodoros,
+            "segment_count": segment_count,
+            "subject_breakdown": subject_breakdown,
+            "session_count": len(date_sessions),
+            "segments": segments,
+            "timeline": date_timeline,
+            "timeline_summary": summarize_timeline(date_timeline),
+            "has_timeline": len(date_timeline) > 0,
+            "has_subjects": any(s.get("subject") for s in segments),
+        },
+    }
+
+    return context
+
+
+def compute_per_date_stats(req_date, stats):
+    """
+    为指定日期计算统计数据（供 txt 输出用）。
+    返回纯文本摘要。
+    """
+    daily_logs = stats.get("daily_logs", {})
+    sessions = stats.get("sessions", [])
+    date_log = daily_logs.get(req_date, {})
+    segments = date_log.get("segments", [])
+
+    date_pomodoros = date_log.get("pomodoros", 0)
+    date_total_seconds = date_log.get("total_time", 0)
+
+    if date_pomodoros == 0 and date_total_seconds == 0 and segments:
+        date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+        date_total_seconds = sum(s.get("duration", 0) for s in segments)
+
+    if not segments and not date_log:
+        date_ses = [s for s in sessions if s.get("date", "").startswith(req_date)]
+        date_pomodoros = sum(s.get("pomodoros", 0) for s in date_ses)
+        date_total_seconds = sum(s.get("duration", 0) for s in date_ses)
+
+    date_minutes = round(date_total_seconds / 60)
+    date_hours = round(date_minutes / 60, 1)
+    segment_count = len(segments)
+
+    # 科目分布
+    subject_breakdown = {}
+    for seg in segments:
+        subj = seg.get("subject", "other")
+        if subj not in subject_breakdown:
+            subject_breakdown[subj] = {"segments": 0, "seconds": 0}
+        subject_breakdown[subj]["segments"] += 1
+        subject_breakdown[subj]["seconds"] += seg.get("duration", 0)
+
+    # 日期信息
+    weekday = get_weekday_name(req_date)
+    schedule = USER_BACKGROUND["schedule"].get(weekday, "无课")
+    has_class = "无课" not in schedule
+    mode = "B" if has_class else "A"
+    
+    # 生成 segments 明细
+    segment_lines = []
+    for i, seg in enumerate(segments):
+        subj = SUBJECT_NAMES.get(seg.get("subject", ""), seg.get("subject", "") or "未选科")
+        dur_min = round(seg.get("duration", 0) / 60)
+        segment_lines.append(f"  #{i+1} {seg['start']}-{seg['end']} | {subj} | {dur_min}分钟")
+
+    lines = []
+    lines.append(f"═══════════════════════════════════════════")
+    lines.append(f"  考研学习数据提取 — {req_date}（{weekday}）")
+    lines.append(f"═══════════════════════════════════════════")
+    lines.append(f"")
+    lines.append(f"【基本信息】")
+    lines.append(f"  日期：{req_date} {weekday}")
+    lines.append(f"  日程分类：{mode}安排（{schedule}）")
+    lines.append(f"  目标：≥{USER_BACKGROUND['target_hours'][mode]}小时 / ≥{USER_BACKGROUND['target_pomodoros'][mode]}番茄")
+    lines.append(f"")
+    lines.append(f"【核心统计】")
+    lines.append(f"  - total_pomodoros: {date_pomodoros} 个")
+    lines.append(f"  - segment_count: {segment_count} 段")
+    lines.append(f"  - total_time: {date_total_seconds} 秒（{date_minutes} 分钟 / {date_hours} 小时）")
+    lines.append(f"  - 权威完成番茄钟数：{date_pomodoros} 个")
+    lines.append(f"  - 权威总学习时长：{date_minutes} 分钟（{date_total_seconds} 秒）")
+    lines.append(f"")
+    lines.append(f"【科目分布】")
+    subj_order = ["math", "cs", "eng", "pol"]
+    for subj in subj_order:
+        if subj in subject_breakdown:
+            info = subject_breakdown[subj]
+            name = SUBJECT_NAMES.get(subj, subj)
+            mins = round(info["seconds"] / 60)
+            lines.append(f"  {name}：{info['segments']}段，{mins}分钟")
+    other_subjs = [k for k in subject_breakdown if k not in subj_order]
+    for subj in other_subjs:
+        info = subject_breakdown[subj]
+        name = SUBJECT_NAMES.get(subj, subj)
+        mins = round(info["seconds"] / 60)
+        lines.append(f"  {name}：{info['segments']}段，{mins}分钟")
+    if not subject_breakdown:
+        lines.append(f"  （无科目数据）")
+    lines.append(f"")
+    lines.append(f"【学习段明细】")
+    if segment_lines:
+        lines.extend(segment_lines)
+    else:
+        lines.append(f"  （无记录）")
+    lines.append(f"")
+    lines.append(f"═══════════════════════════════════════════")
+    lines.append(f"  生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"═══════════════════════════════════════════")
+
+    return "\n".join(lines)
+
+
+# ═══════════ Main ═══════════
 try:
     if not os.path.exists(REQUEST_FILE):
         sys.exit(0)
@@ -110,69 +298,14 @@ try:
         with open(STATS_FILE, 'r', encoding='utf-8') as f:
             stats = json.load(f)
 
-    sessions = stats.get("sessions", [])
-    daily_logs = stats.get("daily_logs", {})
-    date_log = daily_logs.get(req_date, {})
+    # ── 构建评价上下文（使用 per-date 数据）──
+    context = build_context(req_date, stats)
 
-    # Collect all timeline events for this date
-    date_timeline = date_log.get("timeline", [])
-    for s in sessions:
-        if s.get("date", "").startswith(req_date) and "timeline" in s:
-            date_timeline.extend(s["timeline"])
-
-    # Count stats — use top-level fields (already accurate) + segment details
-    date_sessions = [s for s in sessions if s.get("date", "").startswith(req_date)]
-    segments = date_log.get("segments", [])
-
-    # Top-level values are the single source of truth for totals
-    total_seconds = stats.get("today_time", 0)
-    total_pomodoros = stats.get("today_pomodoros", 0)
-    segment_count = len(segments)
-
-    # Per-subject breakdown from segments (NOT sessions, to avoid double-counting)
-    subject_breakdown = {}
-    for seg in segments:
-        subj = seg.get("subject", "other")
-        if subj not in subject_breakdown:
-            subject_breakdown[subj] = {"segments": 0, "seconds": 0}
-        subject_breakdown[subj]["segments"] += 1
-        subject_breakdown[subj]["seconds"] += seg.get("duration", 0)
-
-    # Determine weekday and schedule info
-    weekday = get_weekday_name(req_date)
-    today_schedule = USER_BACKGROUND["schedule"].get(weekday, "无课")
-    has_class = "无课" not in today_schedule
-    suggested_mode = "B" if has_class else "A"
-    target_h = USER_BACKGROUND["target_hours"][suggested_mode]
-    target_p = USER_BACKGROUND["target_pomodoros"][suggested_mode]
-
-    # Build complete context
-    context = {
-        "evaluate_instructions": load_evaluate_instructions(),
-        "user_background": {
-            **USER_BACKGROUND,
-            "target_mode": suggested_mode,
-            "target_hours_today": target_h,
-            "target_pomodoros_today": target_p,
-            "today_weekday": weekday,
-            "today_has_class": has_class,
-            "today_schedule": today_schedule,
-        },
-        "learning_data": {
-            "date": req_date,
-            "total_seconds": total_seconds,
-            "total_minutes": round(total_seconds / 60),
-            "total_pomodoros": total_pomodoros,       # completed 25-min blocks (from top-level)
-            "segment_count": segment_count,            # total learning blocks including short ones
-            "subject_breakdown": subject_breakdown,    # per-subject: {math:{segments:N,seconds:S}, ...}
-            "session_count": len(date_sessions),
-            "segments": segments,
-            "timeline": date_timeline,
-            "timeline_summary": summarize_timeline(date_timeline),
-            "has_timeline": len(date_timeline) > 0,
-            "has_subjects": any(s.get("subject") for s in segments),
-        },
-    }
+    # ── 同时生成可下载的 txt 摘要 ──
+    txt_summary = compute_per_date_stats(req_date, stats)
+    txt_path = os.path.join(SCRIPT_DIR, f"evaluate_{req_date}.txt")
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        f.write(txt_summary)
 
     print(json.dumps(context, ensure_ascii=False))
 

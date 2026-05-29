@@ -16,8 +16,19 @@ taskkill /f /im pythonw.exe >nul 2>&1
 
 echo ================================
 echo   Study With Focus Backend
-echo   http://localhost:8765
+echo   file:///E:/code/hermes/focus/index.html
 echo ================================
-echo.
-python server.py
-pause
+echo Starting backend on port 8765...
+pythonw server.py
+
+:: Wait for server to be ready
+echo Waiting for server...
+:wait
+timeout /t 1 /nobreak >nul
+curl -s http://localhost:8765/api/status >nul 2>&1
+if errorlevel 1 goto wait
+
+:: Open browser
+echo Opening...
+start "" "file:///E:/code/hermes/focus/index.html"
+exit

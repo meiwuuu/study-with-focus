@@ -350,6 +350,136 @@ class FocusHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"date": date, "text": None})
 
+        elif path == "/api/stats/evaluate/data":
+            # 为指定日期生成/返回评价数据 txt（可下载）
+            qs = parse_qs(urlparse(self.path).query)
+            date = qs.get("date", [effective_date_str()])[0]
+            # 先检查是否已有生成的 txt 文件
+            txt_path = DATA_DIR / f"evaluate_{date}.txt"
+            if txt_path.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Disposition",
+                    f'attachment; filename="evaluate_{date}.txt"')
+                self.send_header("Access-Control-Allow-Origin", self._get_allowed_origin())
+                self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
+                self.end_headers()
+                with open(txt_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+            # 没文件则实时生成
+            with stats_lock:
+                stats = load_json(STATS_FILE, get_default_stats())
+            # 内联计算 per-date stats（避免动态导入 evaluate_watchdog.py 的跨进程问题）
+            daily_logs = stats.get("daily_logs", {})
+            sessions = stats.get("sessions", [])
+            date_log = daily_logs.get(date, {})
+            segments = date_log.get("segments", [])
+
+            date_pomodoros = date_log.get("pomodoros", 0)
+            date_total_seconds = date_log.get("total_time", 0)
+            if date_pomodoros == 0 and date_total_seconds == 0 and segments:
+                date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+                date_total_seconds = sum(s.get("duration", 0) for s in segments)
+            if not segments and not date_log:
+                date_ses = [s for s in sessions if s.get("date", "").startswith(date)]
+                date_pomodoros = sum(s.get("pomodoros", 0) for s in date_ses)
+                date_total_seconds = sum(s.get("duration", 0) for s in date_ses)
+            date_minutes = round(date_total_seconds / 60)
+            date_hours = round(date_minutes / 60, 1)
+
+            _subj_names = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治"}
+            subject_breakdown = {}
+            for seg in segments:
+                subj = seg.get("subject", "other")
+                if subj not in subject_breakdown:
+                    subject_breakdown[subj] = {"segments": 0, "seconds": 0}
+                subject_breakdown[subj]["segments"] += 1
+                subject_breakdown[subj]["seconds"] += seg.get("duration", 0)
+
+            # 星期/日程
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d")
+                days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+                weekday = days[dt.weekday()]
+            except:
+                weekday = "未知"
+            _schedule_map = {
+                "周一": "无课，全天自主", "周二": "日语选修（第3-4节 10:05-11:40 + 第7-8节 15:35-17:10）",
+                "周三": "无课，全天自主", "周四": "PHP（第5-8节 14:00-17:30）",
+                "周五": "无课，全天自主", "周六": "无课，全天自主", "周日": "无课，全天自主",
+            }
+            schedule = _schedule_map.get(weekday, "无课")
+            has_class = "无课" not in schedule
+            mode = "B" if has_class else "A"
+            target_h = 6 if not has_class else 3
+            target_p = 8 if not has_class else 4
+
+            # 构建 txt
+            lines = []
+            lines.append("═══════════════════════════════════════════")
+            lines.append(f"  考研学习数据提取 — {date}（{weekday}）")
+            lines.append("═══════════════════════════════════════════")
+            lines.append("")
+            lines.append("【基本信息】")
+            lines.append(f"  日期：{date} {weekday}")
+            lines.append(f"  日程分类：{mode}安排（{schedule}）")
+            lines.append(f"  目标：≥{target_h}小时 / ≥{target_p}番茄")
+            lines.append("")
+            lines.append("【核心统计】")
+            lines.append(f"  - total_pomodoros: {date_pomodoros} 个")
+            lines.append(f"  - segment_count: {len(segments)} 段")
+            lines.append(f"  - total_time: {date_total_seconds} 秒（{date_minutes} 分钟 / {date_hours} 小时）")
+            lines.append(f"  - 权威完成番茄钟数：{date_pomodoros} 个")
+            lines.append(f"  - 权威总学习时长：{date_minutes} 分钟（{date_total_seconds} 秒）")
+            lines.append("")
+            lines.append("【科目分布】")
+            for subj in ["math", "cs", "eng", "pol"]:
+                if subj in subject_breakdown:
+                    info = subject_breakdown[subj]
+                    name = _subj_names.get(subj, subj)
+                    mins = round(info["seconds"] / 60)
+                    lines.append(f"  {name}：{info['segments']}段，{mins}分钟")
+            other_subjs = [k for k in subject_breakdown if k not in ["math", "cs", "eng", "pol"]]
+            for subj in other_subjs:
+                info = subject_breakdown[subj]
+                name = _subj_names.get(subj, subj)
+                mins = round(info["seconds"] / 60)
+                lines.append(f"  {name}：{info['segments']}段，{mins}分钟")
+            if not subject_breakdown:
+                lines.append("  （无科目数据）")
+            lines.append("")
+            lines.append("【学习段明细】")
+            if segments:
+                for i, seg in enumerate(segments):
+                    sname = _subj_names.get(seg.get("subject", ""), seg.get("subject", "") or "未选科")
+                    dur_min = round(seg.get("duration", 0) / 60)
+                    lines.append(f"  #{i+1} {seg['start']}-{seg['end']} | {sname} | {dur_min}分钟")
+            else:
+                lines.append("  （无记录）")
+            lines.append("")
+            lines.append("═══════════════════════════════════════════")
+            lines.append(f"  生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            lines.append("═══════════════════════════════════════════")
+            # 追加完整评价规范（EVALUATE_PROMPT.md）
+            lines.append("")
+            lines.append("")
+            prompt_file = DATA_DIR / "EVALUATE_PROMPT.md"
+            if prompt_file.exists():
+                with open(prompt_file, 'r', encoding='utf-8') as pf:
+                    lines.append(pf.read())
+            txt = "\n".join(lines)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Disposition",
+                f'attachment; filename="evaluate_{date}.txt"')
+            self.send_header("Access-Control-Allow-Origin", self._get_allowed_origin())
+            self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
+            self.end_headers()
+            self.wfile.write(txt.encode("utf-8"))
+            return
+
         else:
             self._send_json({"error": "not found"}, 404)
 
