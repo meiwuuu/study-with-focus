@@ -2473,6 +2473,9 @@ document.addEventListener('keydown', function(e) {
     e.preventDefault();
     if (pomo.running) pomoPause();
     else pomoStart();
+    
+    // 唤醒 UI（顶部时间浮窗 + 底部状态栏，3秒后自动淡出）
+    resetInactivity();
   }
 });
 
