@@ -421,6 +421,13 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
 /* ═══════════ Calendar tab ═══════════ */
 .cal-month-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 14px; }
+.cal-toggle-btn {
+  font-size: .62em; padding: 2px 10px;
+  background: rgba(96,165,250,.1); border: 1px solid rgba(96,165,250,.2);
+  color: var(--accent); border-radius: var(--radius-sm); cursor: pointer;
+  transition: all .2s;
+}
+.cal-toggle-btn:hover { background: rgba(96,165,250,.2); }
 .cal-stat {
   text-align: center; padding: 10px 6px;
   background: var(--card);
@@ -693,8 +700,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
         <button data-tab="calendar" onclick="switchPanelTab('calendar')">📅 学习日历</button>
         <button data-tab="todos" onclick="switchPanelTab('todos')">✅ 待办列表</button>
         <button data-tab="block" onclick="switchPanelTab('block')">🛡️ 网络屏蔽</button>
-        <button data-tab="stats" onclick="switchPanelTab('stats')">📊 统计</button>
         <button data-tab="log" onclick="switchPanelTab('log')">📋 学习记录</button>
+        <button data-tab="manual" onclick="switchPanelTab('manual')">⏳ 数据修正</button>
         <button data-tab="theme" onclick="switchPanelTab('theme')">🎨 主题</button>
         <button data-tab="evaluate" onclick="switchPanelTab('evaluate')">🧠 AI 评价</button>
       </div>
@@ -755,6 +762,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
         <!-- ═══ Calendar tab ═══ -->
         <div class="panel-tab" id="ptab-calendar">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:.68em;color:rgba(255,255,255,.45);" id="cal-stats-label">本月统计</span>
+            <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
+          </div>
           <div class="cal-month-stats" id="cal-month-stats">
             <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl">活跃天数</div></div>
             <div class="cal-stat"><div class="val" id="cal-total-time">0m</div><div class="lbl">总学习</div></div>
@@ -832,23 +843,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="block-note">⚠ 需以管理员权限运行后端 (python server.py)</div>
         </div>
 
-        <!-- ═══ Stats tab ═══ -->
-        <div class="panel-tab" id="ptab-stats">
-          <div class="card">
-            <div class="stat-grid">
-              <div class="stat-item"><div class="lbl">本次时长</div><div class="val" id="stat-session">0m</div></div>
-              <div class="stat-item"><div class="lbl">今日番茄</div><div class="val accent" id="stat-today-pomos">0</div></div>
-              <div class="stat-item"><div class="lbl">今日总时长</div><div class="val" id="stat-today-time">0m</div></div>
-              <div class="stat-item"><div class="lbl">总学习时长</div><div class="val cyan" id="stat-total-time">0m</div></div>
-            </div>
-          </div>
-          <div class="card" style="margin-bottom:10px;">
-            <div style="font-size:.78em;color:rgba(255,255,255,.40);margin-bottom:8px;">总番茄数</div>
-            <div style="font-size:1.6em;font-weight:700;" class="val accent" id="stat-total-pomos">0</div>
-          </div>
-          <button class="btn btn-red btn-sm" onclick="resetStats()" style="width:100%;">重置统计</button>
-        </div>
-
         <!-- ═══ Learning Log tab ═══ -->
         <div class="panel-tab" id="ptab-log">
           <!-- Top bar: date selector + refresh | finish button -->
@@ -864,11 +858,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               </div>
               <button class="btn btn-sm btn-accent" onclick="loadLearningLog()">刷新</button>
             </div>
-            <button class="btn btn-accent" id="btn-finish-day" onclick="finishDayReview()"
-              style="white-space:nowrap;font-size:.82em;padding:8px 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;font-weight:600;border-radius:var(--radius-sm);cursor:pointer;transition:all .2s;box-shadow:0 2px 8px rgba(99,102,241,.25);"
-              onmouseover="this.style.boxShadow='0 4px 16px rgba(99,102,241,.4)';this.style.transform='translateY(-1px)'"
-              onmouseout="this.style.boxShadow='0 2px 8px rgba(99,102,241,.25)';this.style.transform='none'"
-              >🧠 完结今日学习 → AI总结</button>
           </div>
           <!-- AI Review card (shown when review exists) -->
           <div id="log-review"></div>
@@ -878,6 +867,89 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <div style="font-size:2em;margin-bottom:8px;">📋</div>
               <div>暂无学习记录</div>
             </div>
+          </div>
+        </div>
+
+        <!-- ═══ Manual data correction tab ═══ -->
+        <div class="panel-tab" id="ptab-manual">
+          <div class="card" style="margin-bottom:14px; border-color: rgba(96, 165, 250, 0.3);">
+            <div style="font-size:.95em;font-weight:600;margin-bottom:14px;color:var(--accent);">➕ 添加离线学习记录</div>
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <!-- 日期 + 科目：两个自定义下拉 -->
+              <div style="display:flex; gap:10px; align-items:center;">
+                <span style="font-size:.82em; color:#aaa; width:65px;flex-shrink:0;">日期</span>
+                <div class="cs-wrap" id="man-date-wrap" style="min-width:130px;">
+                  <div class="cs-trigger" onclick="toggleManDateDropdown(event)">
+                    <span class="cs-label" id="man-date-label">今天</span>
+                    <span class="cs-arrow">▾</span>
+                  </div>
+                  <div class="cs-dropdown" id="man-date-dropdown"></div>
+                </div>
+                <span style="font-size:.82em; color:#aaa;width:32px;flex-shrink:0;">科目</span>
+                <div class="cs-wrap" id="man-subject-wrap" style="flex:1;">
+                  <div class="cs-trigger" onclick="toggleManSubjectDropdown(event)">
+                    <span class="cs-label" id="man-subject-label">数学一</span>
+                    <span class="cs-arrow">▾</span>
+                  </div>
+                  <div class="cs-dropdown" id="man-subject-dropdown">
+                    <div class="cs-option selected" data-value="math" onclick="setManSubject('math',event)">数学一</div>
+                    <div class="cs-option" data-value="cs" onclick="setManSubject('cs',event)">408综合</div>
+                    <div class="cs-option" data-value="eng" onclick="setManSubject('eng',event)">英语一</div>
+                    <div class="cs-option" data-value="pol" onclick="setManSubject('pol',event)">政治</div>
+                  </div>
+                </div>
+              </div>
+              <!-- 时间跨度：可输入 + 快捷下拉 -->
+              <div style="display:flex; gap:10px; align-items:center;">
+                <span style="font-size:.82em; color:#aaa; width:65px;flex-shrink:0;">时间跨度</span>
+                <div class="cs-wrap" id="man-start-wrap" style="flex:1;">
+                  <div class="cs-trigger" style="cursor:text;gap:0;">
+                    <input type="text" id="man-start-input" value="08:00" placeholder="HH:MM"
+                      oninput="onManTimeInput('start')" onchange="autoCalcManualStats()"
+                      style="background:none;border:none;color:#fff;font-family:var(--mono);font-size:.82em;outline:none;width:100%;padding:0;">
+                    <span class="cs-arrow" style="cursor:pointer;flex-shrink:0;padding-left:6px;" onclick="toggleManStartDropdown(event)">▾</span>
+                  </div>
+                  <div class="cs-dropdown" id="man-start-dropdown" style="max-height:220px;"></div>
+                </div>
+                <span style="color:#666;flex-shrink:0;">至</span>
+                <div class="cs-wrap" id="man-end-wrap" style="flex:1;">
+                  <div class="cs-trigger" style="cursor:text;gap:0;">
+                    <input type="text" id="man-end-input" value="10:00" placeholder="HH:MM"
+                      oninput="onManTimeInput('end')" onchange="autoCalcManualStats()"
+                      style="background:none;border:none;color:#fff;font-family:var(--mono);font-size:.82em;outline:none;width:100%;padding:0;">
+                    <span class="cs-arrow" style="cursor:pointer;flex-shrink:0;padding-left:6px;" onclick="toggleManEndDropdown(event)">▾</span>
+                  </div>
+                  <div class="cs-dropdown" id="man-end-dropdown" style="max-height:220px;"></div>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.25); padding:14px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div>
+                    <div style="font-size:.85em;">是否记为一次完整的番茄钟？</div>
+                    <div style="font-size:.7em; color:#888;">(若开启，将增加1个打卡番茄数)</div>
+                  </div>
+                  <label class="toggle">
+                    <input type="checkbox" id="man-is-pomo" onchange="autoCalcManualStats()">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <hr style="border:none; border-top:1px dashed rgba(255,255,255,0.1); margin:0;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div>
+                    <div style="font-size:.85em;">实际有效学习时长 (分钟)</div>
+                    <div style="font-size:.7em; color:#888;">(计入后台统计的绝对专注时间)</div>
+                  </div>
+                  <div class="cs-trigger" style="width:90px;cursor:text;justify-content:center;">
+                    <input type="number" id="man-duration-min" placeholder="分钟"
+                      style="background:none;border:none;color:var(--break);font-family:var(--mono);font-size:1em;font-weight:bold;outline:none;width:100%;text-align:center;padding:0;">
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-accent" onclick="submitDetailedManualRecord()" style="justify-content:center; padding:10px; font-size:.9em;">💾 提交并入库</button>
+            </div>
+          </div>
+          <div style="text-align:center; font-size:.75em; color:rgba(255,255,255,0.3);">
+            提交后的记录可在「📋 学习记录」页面查看，如需删除请前往该页面操作。
           </div>
         </div>
 
@@ -1002,6 +1074,7 @@ function switchPanelTab(name) {
   if (tab) tab.classList.add('active');
   if (btn) btn.classList.add('active');
   if (name === 'log') loadLearningLog();
+  if (name === 'manual') { initManDateSelect(); initManTimeSelects(); }
 }
 
 // ─── Inactivity hide ───
@@ -1338,6 +1411,14 @@ document.addEventListener('click', function(e) {
   if (wrap && !wrap.contains(e.target)) closeSubjectDropdown();
   var dw = document.getElementById('log-date-wrap');
   if (dw && !dw.contains(e.target)) closeDateDropdown();
+  var mdw = document.getElementById('man-date-wrap');
+  if (mdw && !mdw.contains(e.target)) closeManDateDropdown();
+  var msw = document.getElementById('man-subject-wrap');
+  if (msw && !msw.contains(e.target)) closeManSubjectDropdown();
+  var mstw = document.getElementById('man-start-wrap');
+  if (mstw && !mstw.contains(e.target)) closeManStartDropdown();
+  var medw = document.getElementById('man-end-wrap');
+  if (medw && !medw.contains(e.target)) closeManEndDropdown();
 });
 
 function updateSubjectBadge() {
@@ -1693,6 +1774,14 @@ function calFmt(y,m,d) { return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).
 function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?h+'h'+m+'m':m+'m'; }
 function calHeat(s) { if(s<=0)return 0; if(s<3600)return 1; if(s<10800)return 2; if(s<21600)return 3; return 4; }
 
+var calStatsMode = 'month';
+function toggleCalStats() {
+  calStatsMode = calStatsMode === 'month' ? 'all' : 'month';
+  document.getElementById('cal-stats-label').textContent = calStatsMode === 'month' ? '本月统计' : '全部统计';
+  document.getElementById('cal-stats-toggle').textContent = calStatsMode === 'month' ? '全部' : '本月';
+  calRender();
+}
+
 function calRender() {
   document.getElementById('cal-month-title').textContent = calYear+'年'+(calMonth+1)+'月';
   var fd = new Date(calYear,calMonth,1).getDay();
@@ -1705,14 +1794,29 @@ function calRender() {
     var k=calFmt(calYear,calMonth,d),l=cal.dailyLog[k];
     if(l&&l.studyTime>0){ad++;tt+=l.studyTime||0;tp+=l.pomodoros||0;}
   }
-  document.getElementById('cal-active-days').textContent = ad;
-  document.getElementById('cal-total-time').textContent = calFmtTime(tt);
-  document.getElementById('cal-total-pomos').textContent = tp;
+  // Compute all-time totals from localStorage (same source as monthly)
+  var allAd = 0, allTt = 0, allTp = 0;
+  for (var key in cal.dailyLog) {
+    var e = cal.dailyLog[key];
+    if (e.studyTime > 0) { allAd++; allTt += e.studyTime || 0; allTp += e.pomodoros || 0; }
+  }
 
-  // Sync active days count from server (only if calendar has no data yet)
-  fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
-    if (s.total_time > 0 && ad === 0) document.getElementById('cal-active-days').textContent = '…';
-  }).catch(function(){});
+  if (calStatsMode === 'all') {
+    document.getElementById('cal-active-days').textContent = allAd;
+    document.getElementById('cal-total-time').textContent = calFmtTime(allTt);
+    document.getElementById('cal-total-pomos').textContent = allTp;
+  } else {
+    document.getElementById('cal-active-days').textContent = ad;
+    document.getElementById('cal-total-time').textContent = calFmtTime(tt);
+    document.getElementById('cal-total-pomos').textContent = tp;
+  }
+
+  // Sync from server if localStorage has no data
+  if (ad === 0) {
+    fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
+      if (s.total_time > 0) document.getElementById('cal-active-days').textContent = '…';
+    }).catch(function(){});
+  }
 
   var h='';
   for (var i=fd-1;i>=0;i--) h+='<div class="cal-day other"><span class="day-num">'+(pd-i)+'</span></div>';
@@ -2004,9 +2108,8 @@ async function blockRemove(d){
 
 // ═══════════ STATS ═══════════
 var stats={today_time:0,today_pomodoros:0,total_time:0,total_pomodoros:0};
-var sessionTime=0;
 async function statsRefresh(){
-  var d=await apiCall('/api/stats');if(d)stats=d;updateStatusBar();updateStatsTab();
+  var d=await apiCall('/api/stats');if(d)stats=d;updateStatusBar();
   // Also ping status for server indicator
   var s=await apiCall('/api/status');
   var el=document.getElementById('sb-server');
@@ -2014,32 +2117,20 @@ async function statsRefresh(){
   else if (s.admin_error) el.textContent = '后端 🔒';
   else el.textContent = '后端 ✓';
 }
-function updateStatsTab(){
-  document.getElementById('stat-session').textContent = fmtTime(sessionTime);
-  document.getElementById('stat-today-time').textContent = fmtTime(stats.today_time||0);
-  document.getElementById('stat-today-pomos').textContent = stats.today_pomodoros||0;
-  document.getElementById('stat-total-time').textContent = fmtTime(stats.total_time||0);
-  document.getElementById('stat-total-pomos').textContent = stats.total_pomodoros||0;
-}
-async function resetStats(){
-  stats={today_time:0,today_pomodoros:0,total_time:0,total_pomodoros:0};
-  sessionTime=0;
-  updateStatusBar();updateStatsTab();
-}
-function fmtTime(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?h+'h '+m+'m':m+'m';}
 function fmtTimeShort(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?h+'h'+m+'m':m+'m';}
 
 async function recordSession(pomos) {
-  calAddStudyTime(pomos * (parseInt(document.getElementById('pomo-focus').value)||25) * 60);
-  calAddPomodoro();
   var dur = pomos * (parseInt(document.getElementById('pomo-focus').value)||25) * 60;
-  sessionTime += dur;
   if (dur > 0) {
     var tl = tlGetAndClear();
     var d = await apiCall('/api/stats/session', {method:'POST',body:JSON.stringify({
       duration:dur, pomodoros:pomos||0, timeline: tl
     })});
-    if (d) { stats = d.stats; updateStatusBar(); updateStatsTab(); }
+    if (d) {
+      stats = d.stats; updateStatusBar();
+      calAddStudyTime(dur);
+      calAddPomodoro();
+    }
   }
   calRender();
 }
@@ -2065,87 +2156,6 @@ function fmtDuration(s) {
     return sec > 0 ? h + 'h ' + m + 'm ' + sec + 's' : h + 'h ' + m + 'min';
   }
   return sec > 0 ? m + '分' + String(sec).padStart(2,'0') + '秒' : m + 'min';
-}
-
-async function finishDayReview() {
-  var btn = document.getElementById('btn-finish-day');
-  var today = currentLogDate || fmtLocalDate(new Date());
-
-  // Submit evaluate request
-  var res = await apiCall('/api/stats/evaluate', {
-    method: 'POST',
-    body: JSON.stringify({ date: today })
-  });
-
-  if (res && res.ok) {
-    // Remove any leftover progress indicator
-    var oldP = document.getElementById('eval-progress');
-    if (oldP) oldP.remove();
-
-    btn.textContent = '⏳ 已提交，等待AI…';
-    btn.style.opacity = '0.7';
-    btn.style.pointerEvents = 'none';
-
-    // Inject a visible progress indicator below the button
-    var progressEl = document.createElement('div');
-    progressEl.id = 'eval-progress';
-    progressEl.style.cssText = 'text-align:center;font-size:.82em;color:rgba(255,255,255,.6);margin-top:8px;transition:all .3s;';
-    progressEl.textContent = '已提交评价请求…';
-    btn.parentNode.insertBefore(progressEl, btn.nextSibling);
-
-    // Poll for review completion (up to 180 seconds)
-    var attempts = 0;
-    var maxAttempts = 36;  // 36 * 5s = 180s
-    var startTime = Date.now();
-    var poller = setInterval(async function() {
-      attempts++;
-      try {
-        var reviewRes = await fetch(API + '/api/stats/review?date=' + today);
-        var review = await reviewRes.json();
-        if (review && review.text) {
-          clearInterval(poller);
-          btn.textContent = '✅ 已完成 · 刷新查看';
-          btn.style.opacity = '1';
-          btn.style.pointerEvents = 'auto';
-          if (progressEl) { progressEl.textContent = '✅ 评价已生成！刷新查看'; progressEl.style.color = '#34d399'; }
-          loadLearningLog();
-        } else if (attempts >= maxAttempts) {
-          clearInterval(poller);
-          btn.textContent = '🧠 完结今日学习 → AI总结';
-          btn.style.opacity = '1';
-          btn.style.pointerEvents = 'auto';
-          if (progressEl) { progressEl.textContent = '⏱ 超时，请稍后刷新页面查看'; progressEl.style.color = '#f87171'; }
-        } else {
-          var elapsed = Math.floor((Date.now() - startTime) / 1000);
-          var msg = '';
-          if (elapsed <= 60) {
-            msg = '⏳ 已提交 (' + elapsed + 's) — 等待 cron 调度…';
-            btn.textContent = '⏳ 已提交 (' + elapsed + 's)';
-          } else if (elapsed <= 120) {
-            msg = '🤖 AI 分析中 (' + elapsed + 's) — deepseek 生成中…';
-            btn.textContent = '🤖 AI分析中 (' + elapsed + 's)';
-          } else {
-            msg = '🤖 仍在处理 (' + elapsed + 's) — 请耐心等待…';
-            btn.textContent = '🤖 仍在处理 (' + elapsed + 's)';
-          }
-          if (progressEl) progressEl.textContent = msg;
-        }
-      } catch(e) {
-        if (progressEl) { progressEl.textContent = '⚠️ 网络错误 (' + (attempts*5) + 's) — 重试中…'; progressEl.style.color = '#fbbf24'; }
-        if (attempts >= maxAttempts) {
-          clearInterval(poller);
-          btn.textContent = '🧠 完结今日学习 → AI总结';
-          btn.style.opacity = '1';
-          btn.style.pointerEvents = 'auto';
-          if (progressEl) { progressEl.textContent = '⏱ 网络超时，请稍后刷新'; progressEl.style.color = '#f87171'; }
-        }
-      }
-    }, 5000);
-  } else {
-    btn.textContent = '❌ 提交失败';
-    btn.style.color = '#f87171';
-    setTimeout(function(){ btn.textContent = '🧠 完结今日学习 → AI总结'; btn.style.color = ''; }, 3000);
-  }
 }
 
 var currentLogDate = '';
@@ -2324,10 +2334,16 @@ function renderLearningLog(daily, date) {
 
   // Segments table
   html += '<div class="card">';
-  html += '<div style="font-size:.82em;color:rgba(255,255,255,.4);margin-bottom:8px;">学习时段</div>';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+  html += '<span style="font-size:.82em;color:rgba(255,255,255,.4);">学习时段</span>';
+  html += '<button class="btn btn-sm" id="btn-edit-segments" onclick="toggleEditMode()" style="font-size:.72em;">编辑</button>';
+  html += '</div>';
   html += '<div style="overflow-x:auto;">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:.78em;">';
   html += '<thead><tr style="color:rgba(255,255,255,.4);">';
+  if (editMode) {
+    html += '<th style="width:30px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);"></th>';
+  }
   html += '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.08);">开始</th>';
   html += '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.08);">结束</th>';
   html += '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.08);">时长</th>';
@@ -2338,6 +2354,9 @@ function renderLearningLog(daily, date) {
     var name = SUBJECT_NAMES[s.subject] || '—';
     var color = SUBJECT_COLORS[s.subject] || 'rgba(255,255,255,.4)';
     html += '<tr style="border-bottom:1px solid rgba(255,255,255,.04);">';
+    if (editMode) {
+      html += '<td style="padding:7px 8px;width:30px;"><input type="checkbox" class="seg-check" data-idx="' + i + '" onchange="onSegCheck(this)" style="accent-color:var(--red);cursor:pointer;"></td>';
+    }
     html += '<td style="padding:7px 8px;font-family:var(--mono);">' + (s.start||'--') + '</td>';
     html += '<td style="padding:7px 8px;font-family:var(--mono);">' + (s.end||'--') + '</td>';
     html += '<td style="padding:7px 8px;font-family:var(--mono);">' + fmtDuration(s.duration||0) + '</td>';
@@ -2345,7 +2364,14 @@ function renderLearningLog(daily, date) {
     html += '</tr>';
   });
 
-  html += '</tbody></table></div></div>';
+  html += '</tbody></table>';
+  if (editMode) {
+    html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">';
+    html += '<button class="btn btn-red btn-sm" onclick="batchDeleteSegments()">删除选中</button>';
+    html += '<button class="btn btn-sm" onclick="toggleEditMode()">取消</button>';
+    html += '</div>';
+  }
+  html += '</div></div>';
 
   container.innerHTML = html;
 }
@@ -2478,6 +2504,309 @@ document.addEventListener('keydown', function(e) {
     resetInactivity();
   }
 });
+
+// ═══════════ 手动记录与数据修正引擎 ═══════════
+var manDate = '';
+var manDateLabel = '';
+var manSubject = 'math';
+var manStartTime = '08:00';
+var manEndTime = '10:00';
+var editMode = false;
+var checkedSegments = {};
+
+// ─── 时间选项生成（06:00-23:30，每30分钟）───
+function buildTimeOptions() {
+  var html = '';
+  for (var h = 6; h <= 23; h++) {
+    for (var m = 0; m < 60; m += 30) {
+      var t = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      html += '<div class="cs-option" data-value="' + t + '" onclick="">' + t + '</div>';
+    }
+  }
+  return html;
+}
+
+function initManTimeSelects() {
+  var sd = document.getElementById('man-start-dropdown');
+  var ed = document.getElementById('man-end-dropdown');
+  if (!sd || !ed) return;
+  if (sd.children.length === 0) {
+    // 填充选项后重新绑定 onclick（避免内联事件过长）
+    var opts = buildTimeOptions();
+    sd.innerHTML = opts;
+    ed.innerHTML = opts;
+    // 给选项绑定事件
+    [sd, ed].forEach(function(dd, idx) {
+      var setFn = idx === 0 ? 'setManStart' : 'setManEnd';
+      var children = dd.querySelectorAll('.cs-option');
+      children.forEach(function(opt) {
+        opt.setAttribute('onclick', setFn + "('" + opt.dataset.value + "',event)");
+      });
+    });
+    // 高亮默认值
+    updateManTimeHighlight('man-start-dropdown', manStartTime);
+    updateManTimeHighlight('man-end-dropdown', manEndTime);
+  }
+}
+
+function updateManTimeHighlight(ddId, val) {
+  var opts = document.querySelectorAll('#' + ddId + ' .cs-option');
+  opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === val); });
+}
+
+// ─── 日期下拉 ───
+function initManDateSelect() {
+  var dd = document.getElementById('man-date-dropdown');
+  if (!dd || dd.children.length > 0) return; // 已初始化
+  var today = new Date();
+  var html = '';
+  for (var i = 0; i <= 29; i++) {
+    var d = new Date(today); d.setDate(d.getDate() - i);
+    var ds = fmtLocalDate(d);
+    var label = (d.getMonth()+1) + '/' + d.getDate();
+    if (i === 0) label += ' (今天)';
+    else if (i === 1) label += ' (昨天)';
+    var sel = (i === 0) ? ' class="cs-option selected"' : ' class="cs-option"';
+    html += '<div data-value="' + ds + '" data-label="' + label.replace(/"/g, '&quot;') + '" onclick="setManDate(\'' + ds + '\',\'' + label.replace(/'/g, "\\'") + '\',event)"' + sel + '>' + label + '</div>';
+  }
+  dd.innerHTML = html;
+  // 默认选中今天
+  var todayStr = fmtLocalDate(today);
+  var todayLabel = (today.getMonth()+1) + '/' + today.getDate() + ' (今天)';
+  if (!manDate) { manDate = todayStr; manDateLabel = todayLabel; }
+  document.getElementById('man-date-label').textContent = manDateLabel || todayLabel;
+}
+
+function setManDate(dateStr, label, e) {
+  if (e) { e.stopPropagation(); closeManDateDropdown(); }
+  manDate = dateStr;
+  manDateLabel = label;
+  document.getElementById('man-date-label').textContent = label;
+  var opts = document.querySelectorAll('#man-date-dropdown .cs-option');
+  opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === dateStr); });
+}
+
+function toggleManDateDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('man-date-dropdown');
+  var tr = document.querySelector('#man-date-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closeManDateDropdown(); }
+  else {
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closeManDateDropdown() {
+  var dd = document.getElementById('man-date-dropdown');
+  var tr = document.querySelector('#man-date-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
+}
+
+// ─── 科目下拉 ───
+function setManSubject(subj, e) {
+  if (e) { e.stopPropagation(); closeManSubjectDropdown(); }
+  manSubject = subj;
+  var names = {math:'数学一', cs:'408综合', eng:'英语一', pol:'政治'};
+  document.getElementById('man-subject-label').textContent = names[subj] || '数学一';
+  var opts = document.querySelectorAll('#man-subject-dropdown .cs-option');
+  opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === subj); });
+}
+
+function toggleManSubjectDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('man-subject-dropdown');
+  var tr = document.querySelector('#man-subject-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closeManSubjectDropdown(); }
+  else {
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closeManSubjectDropdown() {
+  var dd = document.getElementById('man-subject-dropdown');
+  var tr = document.querySelector('#man-subject-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
+}
+
+// ─── 时间输入同步 ───
+function onManTimeInput(which) {
+  var input = document.getElementById('man-' + which + '-input');
+  if (!input) return;
+  if (which === 'start') manStartTime = input.value;
+  else manEndTime = input.value;
+}
+
+// ─── 开始时间 ───
+function setManStart(t, e) {
+  if (e) { e.stopPropagation(); closeManStartDropdown(); }
+  manStartTime = t;
+  document.getElementById('man-start-input').value = t;
+  updateManTimeHighlight('man-start-dropdown', t);
+  autoCalcManualStats();
+}
+
+function toggleManStartDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('man-start-dropdown');
+  var tr = document.querySelector('#man-start-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closeManStartDropdown(); }
+  else {
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closeManStartDropdown() {
+  var dd = document.getElementById('man-start-dropdown');
+  var tr = document.querySelector('#man-start-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
+}
+
+// ─── 结束时间 ───
+function setManEnd(t, e) {
+  if (e) { e.stopPropagation(); closeManEndDropdown(); }
+  manEndTime = t;
+  document.getElementById('man-end-input').value = t;
+  updateManTimeHighlight('man-end-dropdown', t);
+  autoCalcManualStats();
+}
+
+function toggleManEndDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('man-end-dropdown');
+  var tr = document.querySelector('#man-end-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  var open = dd.classList.contains('show');
+  if (open) { closeManEndDropdown(); }
+  else {
+    dd.classList.add('show'); tr.classList.add('open');
+    if (pc) pc.style.overflowY = 'visible';
+  }
+}
+
+function closeManEndDropdown() {
+  var dd = document.getElementById('man-end-dropdown');
+  var tr = document.querySelector('#man-end-wrap .cs-trigger');
+  var pc = document.getElementById('panel-content');
+  if (dd) dd.classList.remove('show');
+  if (tr) tr.classList.remove('open');
+  if (pc) pc.style.overflowY = '';
+}
+
+// ─── 智能联动计算 ───
+function autoCalcManualStats() {
+    var start = manStartTime;
+    var end = manEndTime;
+    var isPomo = document.getElementById('man-is-pomo').checked;
+    var durInput = document.getElementById('man-duration-min');
+
+    if (isPomo) {
+        var defaultPomoMin = parseInt(document.getElementById('pomo-focus').value) || 25;
+        durInput.value = defaultPomoMin;
+    } else if (start && end) {
+        var dStart = new Date('1970-01-01T' + start + ':00');
+        var dEnd = new Date('1970-01-01T' + end + ':00');
+        if (dEnd <= dStart) dEnd.setDate(dEnd.getDate() + 1);
+        var mins = Math.floor((dEnd - dStart) / 60000);
+        durInput.value = mins;
+    }
+}
+
+// ─── 提交精细化记录 ───
+async function submitDetailedManualRecord() {
+    var dateVal = manDate || fmtLocalDate(new Date());
+    var startVal = manStartTime;
+    var endVal = manEndTime;
+    var subjVal = manSubject;
+    var isPomo = document.getElementById('man-is-pomo').checked;
+    var actualMins = parseInt(document.getElementById('man-duration-min').value);
+
+    if (!startVal || !endVal) return alert("请填写完整的起止时间！");
+    if (isNaN(actualMins) || actualMins <= 0) return alert("实际有效学习时长必须大于 0！");
+
+    var durationSeconds = actualMins * 60;
+    var pomodorosCount = isPomo ? 1 : 0;
+
+    var res = await apiCall('/api/stats/segment/manual', {
+        method: 'POST',
+        body: JSON.stringify({
+            date: dateVal,
+            start_time: startVal,
+            end_time: endVal,
+            duration: durationSeconds,
+            pomodoros: pomodorosCount,
+            subject: subjVal
+        })
+    });
+
+    if (res && res.ok) {
+        // 清空时间输入框（保留日期和科目方便连续录入）
+        document.getElementById('man-start-input').value = '';
+        document.getElementById('man-end-input').value = '';
+        manStartTime = ''; manEndTime = '';
+        document.getElementById('man-duration-min').value = '';
+        document.getElementById('man-is-pomo').checked = false;
+        statsRefresh();
+        if (currentLogDate === dateVal) loadLearningLog();
+        alert("✅ 数据已入库！\n" + actualMins + " 分钟已加进总时长\n增加了 " + pomodorosCount + " 个番茄钟");
+    } else {
+        alert("❌ 提交失败，请检查后台运行状态。");
+    }
+}
+
+// ─── 学习记录页编辑模式（勾选批量删除）───
+function toggleEditMode() {
+  editMode = !editMode;
+  checkedSegments = {};
+  var btn = document.getElementById('btn-edit-segments');
+  if (btn) btn.textContent = editMode ? '完成' : '编辑';
+  loadLearningLog();
+}
+
+function onSegCheck(cb) {
+  var idx = parseInt(cb.dataset.idx);
+  if (cb.checked) checkedSegments[idx] = true;
+  else delete checkedSegments[idx];
+}
+
+async function batchDeleteSegments() {
+  var keys = Object.keys(checkedSegments);
+  if (keys.length === 0) return alert('请先勾选要删除的记录！');
+  if (!confirm('确定要删除选中的 ' + keys.length + ' 条记录吗？后台总时长和番茄数也会随之扣除。')) return;
+
+  var indices = keys.map(Number).sort(function(a,b){ return b - a; });
+  var date = currentLogDate || fmtLocalDate(new Date());
+  var allOk = true;
+  for (var i = 0; i < indices.length; i++) {
+    var res = await apiCall('/api/stats/segment/delete', {
+      method: 'POST',
+      body: JSON.stringify({ date: date, index: indices[i] })
+    });
+    if (!res || !res.ok) allOk = false;
+  }
+  editMode = false;
+  checkedSegments = {};
+  loadLearningLog();
+  statsRefresh();
+  if (!allOk) alert('部分删除失败，请检查后台！');
+}
 
 // ═══════════ AI EVALUATE ═══════════
 var EVALUATE_PROMPT = '# 考研教练评价系统 · 提示词规范\n\n> 每次生成学习评价时必须遵循此规范。\n> 评价模型: deepseek-v4-pro\n> 评价字数: 800-1000 字\n\n---\n\n## 用户背景（必须了解）\n\n- 身份：27届考研生，目标杭州电子科技大学\n- 科目：数学一 + 英语一 + 408计算机综合 + 政治\n- 学校：福建师范大学旗山校区，网络工程1班\n- 日程：\n  - 周二 日语选修（第3-4节 10:05-11:40 + 第7-8节 15:35-17:10）\n  - 周四 PHP（第5-8节 14:00-17:30）\n  - 周一/三/五/周末 无课，全天可自主安排\n- ⚠️ 上课日特殊规则（评价时必须遵守）：\n  - 周二上午10:05-11:40和下午15:35-17:10有课，实际可学习窗口约4-5小时\n  - 周四下午14:00-17:30有课，实际可学习窗口约6-7小时\n  - **上课日总学习时间必然少于无课日，评价时不得因此扣分**\n  - 上课日应关注的是「课余时间利用效率」而非绝对时长\n- 两种学习模式：\n  - A安排（全负荷）：07:30起床 → 22:30熄灯，目标≥6h/≥8番茄\n  - B安排（最低可行）：08:00起床 → 只做核心科目，目标≥3h/≥4番茄\n- 模式判断规则（由系统自动提供）：\n  - 无课日 → A安排（≥6h/≥8番茄）\n  - 有课日 → B安排（≥3h/≥4番茄），不应与时长相较于无课日做对比\n  - 若前一天评价提到疲劳，可建议B安排\n- 每日正常生活开销（约4-5h，这些时段的学习空白不扣分）：\n  - 三餐：早约7:30-8:00、午约11:50-12:30、晚约17:30-18:30，共约2h\n  - 午休：约12:30-13:30，约1h\n  - 洗漱/洗澡/杂务：约1h\n  - 适度娱乐/休息：≤1h属正常调节，>3h才算问题\n  - 有课日加上上课时间（周二约3.5h，周四约3.5h），全天可用学习时间本就有限\n\n---\n\n## 评价维度（四维评分）\n\n### 1. 学习投入（权重40%）\n- 总学习时长是否达标？（系统会自动提供当天目标：A安排 ≥ 6h，B安排 ≥ 3h）\n- 番茄完成数是否合理？（A目标 ≥ 8个，B目标 ≥ 4个）\n- ⚠️ 有课日（周二/周四）系统自动适用B安排标准，评价时应以B标准衡量\n- 是否有长时间空窗？（>2h 无学习 = 扣分，但以下正常活动不计入空窗：上课、三餐、午休、洗漱、通勤、适度娱乐≤1h）\n- 是否在课余黄金时段有产出？（上午课前、午休间隙、晚间）\n- 上课日评价重点：课余碎片时间的利用效率，而非与无课日比时长\n- 娱乐时间超过3h才算「过度娱乐」需警告，≤1h属正常调节不扣分\n\n### 2. 专注质量（权重25%）\n- 是否有频繁暂停？（>3次/小时 = 碎片化警告）\n- 暂停后恢复速度？（<5分钟 = 正常休息，>20分钟 = 分心）\n- 单次连续专注时长？（≥50分钟 = 优秀，<25分钟 = 需改进）\n- 科目是否频繁切换？（>3次/小时 = 注意力分散）\n\n### 3. 生活节奏（权重20%）\n- 起床时间是否合理？（7:00-8:00 = 正常，>9:00 = 警告）\n- 是否在合理时间结束学习？（22:30前 = 健康，>23:30 = 透支）\n- 三餐时间是否被挤占？\n- 午休是否过长？（>1h = 警惕）\n- 上课日特别考量：\n  - 课后是否及时切换回学习状态？（下课后>30分钟仍未学习 = 转换慢）\n  - 上课时段的学习记录空白属正常，不扣分\n- 正常生活时段的学习空白不扣分（三餐、午休、洗漱、通勤、适度娱乐≤1h）\n- 次日有课时是否提前收工？\n\n### 4. 策略与规划（权重15%）\n- 科目分配是否均衡？（四科都有涉猎 > 只攻一科）\n- 是否匹配当前阶段重点？（基础期多数学/408，冲刺期加政治）\n- 是否有复习环节？（学习后是否有回顾）\n- 是否利用了碎片时间？\n\n---\n\n## 评分标准\n\n| 等级 | 分数 | 含义 |\n|------|------|------|\n| S | 95-100 | 完美一天，无可挑剔 |\n| A+ | 90-94 | 表现出色，超额完成 |\n| A | 85-89 | 优秀，达标且高效 |\n| B+ | 80-84 | 良好，基本达标有小瑕疵 |\n| B | 75-79 | 还行，将将及格 |\n| C | 65-74 | 不足，多项指标未达标 |\n| D | <65 | 荒废，需要反思 |\n\n---\n\n## 输出格式（严格遵守）\n\n### 结构（六段式，必须完整）\n\n**第一段：一句话定性**（含日程类型、安排、目标与实际对比、总体定调）\n格式：`周X[有课/无课]课程名，A/B安排目标≥Xh/≥X番茄，实际Xh/X番茄——[定性一句话]。`\n\n**第二段：四维评分**（每维独立段落，格式：维度名（分数/满分）——分析文本）\n\n四个维度固定顺序：\n1. 学习投入（满分40）\n2. 专注质量（满分25）\n3. 生活节奏（满分20）\n4. 策略规划（满分15）\n\n每段分析要求：\n- 用具体数据说话（时间段、分钟数、番茄数、暂停次数等）\n- 找出该维度的最高点和最低点\n- 有课日必须考虑上课时段对学习窗口的影响，扣除上课时间后再评估空窗\n- 评分需综合该维度的正面和负面，不能只看单一方面\n\n**第三段：总分**\n格式：`总分：XX分 / 等级`\n\n**第四段：生活建议**（1段，2-3句话）\n- 概括最关键的1-2个问题\n- 给出具体的改正方向\n- 语气教练式，不空洞表扬也不过度否定\n\n**第五段：明日规划**\n格式：`明日规划（X月X日 周X [有课/无课] [A/B安排]）`\n- 先说明次日日程和适用标准\n- 然后给出具体时间段安排（上午/午休/下午/晚间，每段含科目+番茄数）\n- 最后一行：目标总结（总时长/番茄数/重点科目/收工时间）\n\n**第六段：可选，仅当日有特殊亮点或严重问题时追加一句简短提醒**\n\n### 评分原则\n- 四维分数必须综合评估，不能机械套用模板比例\n- 达标但不优秀 ≠ 满分，有严重短板即使达标也应大幅扣分\n- 有课日和无课日使用不同的目标基准，不能混用\n- 课堂碎片利用是加分项，课后衔接断裂是扣分项，两者独立评估\n\n### 禁止事项\n- 禁用 markdown（**、#、- 等）\n- 禁用空泛表扬（"你很棒""继续加油"类无效）\n- 禁用猜测（没数据不要编）\n- 禁用 emoji\n- 禁止在四维评分中只写结论不写数据依据\n\n---\n\n## 数据来源说明\n\n评价基于以下数据：\n- total_pomodoros: 完成的番茄数（25分钟完整块，来自前端汇总，是权威值）\n- segment_count: 总学习段数（包含不足24分钟的短段）\n- total_seconds / total_minutes: 总学习时长\n- subject_breakdown: 按科目的段数和秒数（{math: {segments: N, seconds: S}, eng: {...}, ...}）\n- timeline: 精细操作日志（start/pause/resume/complete/end/subject_change）\n- segments: 科目分段数据（含start/end/duration/subject）\n- 当前日期: 用于判断星期几、是否有课\n\n⚠️ 数据读取铁律（违反=失信）：\n1. 番茄数以 total_pomodoros 为准，不是 segment_count\n2. 科目分配以 subject_breakdown 为准，不要数字 segments\n3. 如果 segment_count > total_pomodoros，说明有短段（<25分钟），在评价中注明"X段学习中Y个完成番茄"\n4. 禁止猜测——没有标注科目的段不能假定科目\n5. 时间戳是 UTC 格式，需转换为北京时间(+8h)理解作息\n';
