@@ -2120,17 +2120,15 @@ async function statsRefresh(){
 function fmtTimeShort(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?h+'h'+m+'m':m+'m';}
 
 async function recordSession(pomos) {
+  calAddStudyTime(pomos * (parseInt(document.getElementById('pomo-focus').value)||25) * 60);
+  calAddPomodoro();
   var dur = pomos * (parseInt(document.getElementById('pomo-focus').value)||25) * 60;
   if (dur > 0) {
     var tl = tlGetAndClear();
     var d = await apiCall('/api/stats/session', {method:'POST',body:JSON.stringify({
       duration:dur, pomodoros:pomos||0, timeline: tl
     })});
-    if (d) {
-      stats = d.stats; updateStatusBar();
-      calAddStudyTime(dur);
-      calAddPomodoro();
-    }
+    if (d) { stats = d.stats; updateStatusBar(); }
   }
   calRender();
 }
