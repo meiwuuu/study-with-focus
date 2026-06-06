@@ -420,10 +420,14 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 }
 
 /* ═══════════ Calendar tab ═══════════ */
-.cal-month-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 6px; }
-.cal-alltime-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 14px; }
-.cal-alltime-stats .cal-stat { background: rgba(96,165,250,.08); border-color: rgba(96,165,250,.15); }
-.cal-alltime-stats .cal-stat .val { color: var(--accent); }
+.cal-month-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 14px; }
+.cal-toggle-btn {
+  font-size: .62em; padding: 2px 10px;
+  background: rgba(96,165,250,.1); border: 1px solid rgba(96,165,250,.2);
+  color: var(--accent); border-radius: var(--radius-sm); cursor: pointer;
+  transition: all .2s;
+}
+.cal-toggle-btn:hover { background: rgba(96,165,250,.2); }
 .cal-stat {
   text-align: center; padding: 10px 6px;
   background: var(--card);
@@ -758,10 +762,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
         <!-- ═══ Calendar tab ═══ -->
         <div class="panel-tab" id="ptab-calendar">
-          <div class="cal-alltime-stats" id="cal-alltime-stats">
-            <div class="cal-stat"><div class="val" id="cal-all-active-days">0</div><div class="lbl">总活跃天</div></div>
-            <div class="cal-stat"><div class="val" id="cal-all-total-time">0m</div><div class="lbl">总时长</div></div>
-            <div class="cal-stat"><div class="val" id="cal-all-total-pomos">0</div><div class="lbl">总番茄</div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:.68em;color:rgba(255,255,255,.45);" id="cal-stats-label">本月统计</span>
+            <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
           </div>
           <div class="cal-month-stats" id="cal-month-stats">
             <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl">活跃天数</div></div>
@@ -1771,6 +1774,14 @@ function calFmt(y,m,d) { return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).
 function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?h+'h'+m+'m':m+'m'; }
 function calHeat(s) { if(s<=0)return 0; if(s<3600)return 1; if(s<10800)return 2; if(s<21600)return 3; return 4; }
 
+var calStatsMode = 'month';
+function toggleCalStats() {
+  calStatsMode = calStatsMode === 'month' ? 'all' : 'month';
+  document.getElementById('cal-stats-label').textContent = calStatsMode === 'month' ? '本月统计' : '全部统计';
+  document.getElementById('cal-stats-toggle').textContent = calStatsMode === 'month' ? '全部' : '本月';
+  calRender();
+}
+
 function calRender() {
   document.getElementById('cal-month-title').textContent = calYear+'年'+(calMonth+1)+'月';
   var fd = new Date(calYear,calMonth,1).getDay();
@@ -1783,21 +1794,29 @@ function calRender() {
     var k=calFmt(calYear,calMonth,d),l=cal.dailyLog[k];
     if(l&&l.studyTime>0){ad++;tt+=l.studyTime||0;tp+=l.pomodoros||0;}
   }
-  document.getElementById('cal-active-days').textContent = ad;
-  document.getElementById('cal-total-time').textContent = calFmtTime(tt);
-  document.getElementById('cal-total-pomos').textContent = tp;
+  // Compute all-time totals from localStorage (same source as monthly)
+  var allAd = 0, allTt = 0, allTp = 0;
+  for (var key in cal.dailyLog) {
+    var e = cal.dailyLog[key];
+    if (e.studyTime > 0) { allAd++; allTt += e.studyTime || 0; allTp += e.pomodoros || 0; }
+  }
 
-  // Sync active days count from server (only if calendar has no data yet)
-  fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
-    if (s.total_time > 0 && ad === 0) document.getElementById('cal-active-days').textContent = '…';
-    // Update all-time totals
-    var allDays = 0;
-    var dl = s.daily_logs || {};
-    for (var d in dl) { if (dl[d].total_time > 0) allDays++; }
-    document.getElementById('cal-all-active-days').textContent = allDays;
-    document.getElementById('cal-all-total-time').textContent = calFmtTime(s.total_time || 0);
-    document.getElementById('cal-all-total-pomos').textContent = s.total_pomodoros || 0;
-  }).catch(function(){});
+  if (calStatsMode === 'all') {
+    document.getElementById('cal-active-days').textContent = allAd;
+    document.getElementById('cal-total-time').textContent = calFmtTime(allTt);
+    document.getElementById('cal-total-pomos').textContent = allTp;
+  } else {
+    document.getElementById('cal-active-days').textContent = ad;
+    document.getElementById('cal-total-time').textContent = calFmtTime(tt);
+    document.getElementById('cal-total-pomos').textContent = tp;
+  }
+
+  // Sync from server if localStorage has no data
+  if (ad === 0) {
+    fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
+      if (s.total_time > 0) document.getElementById('cal-active-days').textContent = '…';
+    }).catch(function(){});
+  }
 
   var h='';
   for (var i=fd-1;i>=0;i--) h+='<div class="cal-day other"><span class="day-num">'+(pd-i)+'</span></div>';
