@@ -946,6 +946,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 </div>
               </div>
               <button class="btn btn-accent" onclick="submitDetailedManualRecord()" style="justify-content:center; padding:10px; font-size:.9em;">💾 提交并入库</button>
+              <div id="man-status" style="text-align:center;font-size:.75em;margin-top:6px;min-height:1.2em;"></div>
             </div>
           </div>
           <div style="text-align:center; font-size:.75em; color:rgba(255,255,255,0.3);">
@@ -2158,6 +2159,7 @@ function fmtDuration(s) {
 
 var currentLogDate = '';
 var currentLogDateLabel = '';
+var currentDailyData = null;  // 缓存最近一次加载的 daily 数据，供删除时查 segment 详情
 
 async function loadLearningLog() {
   var date = currentLogDate;
@@ -2274,6 +2276,7 @@ function escHtmlReview(s) {
 }
 
 function renderLearningLog(daily, date) {
+  currentDailyData = daily;  // 缓存供批量删除查 segment 详情
   var container = document.getElementById('log-content');
   if (!daily || !daily.segments || !daily.segments.length) {
     container.innerHTML = '<div class="card" style="text-align:center;padding:32px;color:rgba(255,255,255,.35);"><div style="font-size:2em;margin-bottom:8px;">📋</div><div>' + date + ' 暂无学习记录</div></div>';
@@ -2727,7 +2730,7 @@ function autoCalcManualStats() {
     }
 }
 
-// ─── 提交精细化记录 ───
+// ─── 提交精细化记录（本地优先，后端异步）───
 async function submitDetailedManualRecord() {
     var dateVal = manDate || fmtLocalDate(new Date());
     var startVal = manStartTime;
@@ -2736,12 +2739,29 @@ async function submitDetailedManualRecord() {
     var isPomo = document.getElementById('man-is-pomo').checked;
     var actualMins = parseInt(document.getElementById('man-duration-min').value);
 
-    if (!startVal || !endVal) return alert("请填写完整的起止时间！");
-    if (isNaN(actualMins) || actualMins <= 0) return alert("实际有效学习时长必须大于 0！");
+    if (!startVal || !endVal) return setManStatus('请填写完整的起止时间', 'warn');
+    if (isNaN(actualMins) || actualMins <= 0) return setManStatus('实际有效学习时长必须大于 0', 'warn');
 
     var durationSeconds = actualMins * 60;
     var pomodorosCount = isPomo ? 1 : 0;
 
+    // ─── 1. 本地优先：立即更新日历 ───
+    if (!cal.dailyLog[dateVal]) cal.dailyLog[dateVal] = {studyTime: 0, pomodoros: 0};
+    cal.dailyLog[dateVal].studyTime += durationSeconds;
+    cal.dailyLog[dateVal].pomodoros += pomodorosCount;
+    calSave();
+    calRender();
+
+    // 清空时间输入框（保留日期和科目方便连续录入）
+    document.getElementById('man-start-input').value = '';
+    document.getElementById('man-end-input').value = '';
+    manStartTime = ''; manEndTime = '';
+    document.getElementById('man-duration-min').value = '';
+    document.getElementById('man-is-pomo').checked = false;
+
+    setManStatus('⏳ 正在同步到后台…', 'info');
+
+    // ─── 2. 异步写后端 ───
     var res = await apiCall('/api/stats/segment/manual', {
         method: 'POST',
         body: JSON.stringify({
@@ -2755,18 +2775,20 @@ async function submitDetailedManualRecord() {
     });
 
     if (res && res.ok) {
-        // 清空时间输入框（保留日期和科目方便连续录入）
-        document.getElementById('man-start-input').value = '';
-        document.getElementById('man-end-input').value = '';
-        manStartTime = ''; manEndTime = '';
-        document.getElementById('man-duration-min').value = '';
-        document.getElementById('man-is-pomo').checked = false;
         statsRefresh();
         if (currentLogDate === dateVal) loadLearningLog();
-        alert("✅ 数据已入库！\n" + actualMins + " 分钟已加进总时长\n增加了 " + pomodorosCount + " 个番茄钟");
+        setManStatus('✅ 已入库 ' + actualMins + ' 分钟' + (pomodorosCount ? '，+1 番茄' : ''), 'ok');
     } else {
-        alert("❌ 提交失败，请检查后台运行状态。");
+        setManStatus('⚠ 后台同步失败，数据已保存在本地', 'warn');
     }
+}
+
+function setManStatus(msg, type) {
+    var el = document.getElementById('man-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = type === 'ok' ? '#4ade80' : type === 'warn' ? '#fbbf24' : 'rgba(255,255,255,.5)';
+    if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
 }
 
 // ─── 学习记录页编辑模式（勾选批量删除）───
@@ -2787,23 +2809,47 @@ function onSegCheck(cb) {
 async function batchDeleteSegments() {
   var keys = Object.keys(checkedSegments);
   if (keys.length === 0) return alert('请先勾选要删除的记录！');
-  if (!confirm('确定要删除选中的 ' + keys.length + ' 条记录吗？后台总时长和番茄数也会随之扣除。')) return;
+  if (!confirm('确定要删除选中的 ' + keys.length + ' 条记录吗？')) return;
 
-  var indices = keys.map(Number).sort(function(a,b){ return b - a; });
+  var indices = keys.map(Number).sort(function(a,b){ return a - b; });  // 升序，用于查 segment
   var date = currentLogDate || fmtLocalDate(new Date());
+
+  // ─── 1. 本地优先：查 segment 详情，立即扣减日历 ───
+  var totalDur = 0, totalPomos = 0;
+  if (currentDailyData && currentDailyData.segments) {
+    for (var i = 0; i < indices.length; i++) {
+      var seg = currentDailyData.segments[indices[i]];
+      if (seg) {
+        var dur = seg.duration || 0;
+        totalDur += dur;
+        if (dur >= 1500) totalPomos++;  // ≥25分钟算1个番茄
+      }
+    }
+  }
+  if (totalDur > 0) {
+    if (!cal.dailyLog[date]) cal.dailyLog[date] = {studyTime: 0, pomodoros: 0};
+    cal.dailyLog[date].studyTime = Math.max(0, (cal.dailyLog[date].studyTime || 0) - totalDur);
+    cal.dailyLog[date].pomodoros = Math.max(0, (cal.dailyLog[date].pomodoros || 0) - totalPomos);
+    calSave();
+    calRender();
+  }
+
+  // ─── 2. 异步删后端（降序，避免索引偏移） ───
+  var delIndices = keys.map(Number).sort(function(a,b){ return b - a; });
   var allOk = true;
-  for (var i = 0; i < indices.length; i++) {
+  for (var j = 0; j < delIndices.length; j++) {
     var res = await apiCall('/api/stats/segment/delete', {
       method: 'POST',
-      body: JSON.stringify({ date: date, index: indices[i] })
+      body: JSON.stringify({ date: date, index: delIndices[j] })
     });
     if (!res || !res.ok) allOk = false;
   }
   editMode = false;
   checkedSegments = {};
+  currentDailyData = null;  // 清缓存，下次 loadLearningLog 会重新加载
   loadLearningLog();
   statsRefresh();
-  if (!allOk) alert('部分删除失败，请检查后台！');
+  if (!allOk) console.warn('部分删除后端同步失败，本地已更新');
 }
 
 // ═══════════ AI EVALUATE ═══════════
