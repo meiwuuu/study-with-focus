@@ -888,11 +888,12 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 <span style="font-size:.82em; color:#aaa;width:32px;flex-shrink:0;">科目</span>
                 <div class="cs-wrap" id="man-subject-wrap" style="flex:1;">
                   <div class="cs-trigger" onclick="toggleManSubjectDropdown(event)">
-                    <span class="cs-label" id="man-subject-label">数学一</span>
+                    <span class="cs-label" id="man-subject-label">不区分</span>
                     <span class="cs-arrow">▾</span>
                   </div>
                   <div class="cs-dropdown" id="man-subject-dropdown">
-                    <div class="cs-option selected" data-value="math" onclick="setManSubject('math',event)">数学一</div>
+                    <div class="cs-option selected" data-value="" onclick="setManSubject('',event)">不区分</div>
+                    <div class="cs-option" data-value="math" onclick="setManSubject('math',event)">数学一</div>
                     <div class="cs-option" data-value="cs" onclick="setManSubject('cs',event)">408综合</div>
                     <div class="cs-option" data-value="eng" onclick="setManSubject('eng',event)">英语一</div>
                     <div class="cs-option" data-value="pol" onclick="setManSubject('pol',event)">政治</div>
@@ -2613,8 +2614,8 @@ function closeManDateDropdown() {
 function setManSubject(subj, e) {
   if (e) { e.stopPropagation(); closeManSubjectDropdown(); }
   manSubject = subj;
-  var names = {math:'数学一', cs:'408综合', eng:'英语一', pol:'政治'};
-  document.getElementById('man-subject-label').textContent = names[subj] || '数学一';
+  var names = {'':'不区分', math:'数学一', cs:'408综合', eng:'英语一', pol:'政治'};
+  document.getElementById('man-subject-label').textContent = names[subj] || '不区分';
   var opts = document.querySelectorAll('#man-subject-dropdown .cs-option');
   opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === subj); });
 }
