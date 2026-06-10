@@ -1,8 +1,8 @@
 {
   "today": "2026-06-10",
-  "today_time": 6000,
+  "today_time": 7500,
   "today_pomodoros": 4,
-  "total_time": 280155,
+  "total_time": 281655,
   "total_pomodoros": 180,
   "sessions": [
     {
@@ -20116,9 +20116,15 @@
           "end": "15:30",
           "duration": 1500,
           "subject": "eng"
+        },
+        {
+          "start": "21:00",
+          "end": "22:00",
+          "duration": 1500,
+          "subject": "math"
         }
       ],
-      "total_time": 6000,
+      "total_time": 7500,
       "pomodoros": 4,
       "timeline": [
         {
