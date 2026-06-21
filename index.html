@@ -1012,6 +1012,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             <textarea id="ai-response-input" placeholder="2. 将 AI 的回复粘贴到这里…"
               style="width:100%;height:120px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);color:#fff;font-size:.82em;padding:10px;resize:vertical;font-family:var(--font);"></textarea>
             <button class="btn btn-accent" id="btn-parse-eval" onclick="parseAndSaveEval()" style="width:100%;margin-bottom:8px;">3. 提取分数并保存</button>
+            <button class="btn btn-red" id="btn-delete-eval" onclick="deleteCurrentAiReview()" style="width:100%;margin-bottom:8px;">🗑️ 清除该日AI评价</button>
             <div id="eval-result" style="font-size:.82em;text-align:center;min-height:1.5em;"></div>
           </div>
         </div>
@@ -2359,7 +2360,6 @@ function renderReview(review, date) {
     '<span style="font-weight:700;font-size:.88em;color:#a5b4fc;">考研教练点评 · ' + date + '</span>' +
     scoreHTML +
     '<span style="flex:1;"></span>' +
-    '<button onclick="deleteCurrentAiReview()" class="btn btn-red btn-sm" style="padding:3px 10px;font-size:.72em;" title="清除该日评价">清除</button>' +
     '<span style="font-size:.7em;color:rgba(255,255,255,.35);">' + (review.generatedAt||'') + '</span>' +
     '</div>' +
     '<div style="font-size:.85em;line-height:1.8;color:rgba(255,255,255,.85);white-space:pre-wrap;">' +
@@ -2373,21 +2373,26 @@ function escHtmlReview(s) {
 }
 
 async function deleteCurrentAiReview() {
-  if (!currentLogDate) {
+  var today = currentLogDate || fmtLocalDate(new Date());
+  if (!today) {
     alert("未找到有效日期");
     return;
   }
-  if (!confirm('确定要清除 ' + currentLogDate + ' 的AI评价和评分吗？此操作不可撤销。')) {
+  if (!confirm('确定要清除 ' + today + ' 的AI评价和评分吗？此操作不可撤销。')) {
     return;
   }
   var res = await apiCall('/api/stats/review', {
     method: 'POST',
-    body: JSON.stringify({ date: currentLogDate, delete: true })
+    body: JSON.stringify({ date: today, delete: true })
   });
   if (res && res.ok) {
+    document.getElementById('eval-result').innerHTML = '<span style="color:var(--red);">🗑️ 已成功清除 ' + today + ' 的评价</span>';
+    var textarea = document.getElementById('ai-response-input');
+    if (textarea) textarea.value = '';
+    // 刷新学习记录页面的评价卡片
     loadLearningLog();
   } else {
-    alert('清除失败，请检查后端是否运行');
+    document.getElementById('eval-result').innerHTML = '<span style="color:#f87171;">❌ 清除失败，请检查后端是否运行</span>';
   }
 }
 
