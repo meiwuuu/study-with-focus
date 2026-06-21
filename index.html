@@ -764,7 +764,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
         <div class="panel-tab" id="ptab-calendar">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:.68em;color:rgba(255,255,255,.45);" id="cal-stats-label">本月统计</span>
-            <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
+            <div style="display:flex;gap:4px;">
+              <button class="cal-toggle-btn" id="cal-stats-mode" onclick="toggleCalStatsSubject()" title="切换常规/学科统计">常规</button>
+              <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
+            </div>
           </div>
           <div class="cal-month-stats" id="cal-month-stats">
             <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl">活跃天数</div></div>
@@ -792,6 +795,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 <option value="default">默认</option><option value="math">数学</option>
                 <option value="cs">408</option><option value="eng">英语</option><option value="pol">政治</option>
               </select>
+              <input type="time" id="cal-plan-time" style="background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:2px 6px;font-family:var(--mono);font-size:.78em;width:96px;" title="计划时间">
+              <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:.72em;white-space:nowrap;">
+                <input type="checkbox" id="cal-plan-alarm" style="accent-color:var(--accent);"> 闹铃
+              </label>
               <button class="btn btn-green btn-sm" onclick="calAddPlan()">+</button>
             </div>
             <div id="cal-plan-list"></div>
@@ -1777,10 +1784,19 @@ function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); re
 function calHeat(s) { if(s<=0)return 0; if(s<3600)return 1; if(s<10800)return 2; if(s<21600)return 3; return 4; }
 
 var calStatsMode = 'month';
+var calStatsSubject = 'normal';
 function toggleCalStats() {
   calStatsMode = calStatsMode === 'month' ? 'all' : 'month';
   document.getElementById('cal-stats-label').textContent = calStatsMode === 'month' ? '本月统计' : '全部统计';
   document.getElementById('cal-stats-toggle').textContent = calStatsMode === 'month' ? '全部' : '本月';
+  calRender();
+}
+function toggleCalStatsSubject() {
+  calStatsSubject = calStatsSubject === 'normal' ? 'subject' : 'normal';
+  document.getElementById('cal-stats-label').textContent = calStatsSubject === 'normal' ?
+    (calStatsMode === 'month' ? '本月统计' : '全部统计') :
+    (calStatsMode === 'month' ? '本月学科' : '全部学科');
+  document.getElementById('cal-stats-mode').textContent = calStatsSubject === 'normal' ? '常规' : '学科';
   calRender();
 }
 
@@ -1803,7 +1819,45 @@ function calRender() {
     if (e.studyTime > 0) { allAd++; allTt += e.studyTime || 0; allTp += e.pomodoros || 0; }
   }
 
-  if (calStatsMode === 'all') {
+  if (calStatsSubject === 'subject') {
+    // ─── 学科统计模式：从服务器数据聚合科目时长 ───
+    var subjTimes = {math:0, cs:0, eng:0, pol:0};
+    if (typeof stats !== 'undefined' && stats.daily_logs) {
+      for (var dk in stats.daily_logs) {
+        var dl = stats.daily_logs[dk];
+        if (!dl || !dl.segments) continue;
+        // Filter by time range
+        if (calStatsMode === 'month') {
+          var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
+          if (dy !== calYear || dm !== calMonth) continue;
+        }
+        for (var si = 0; si < dl.segments.length; si++) {
+          var seg = dl.segments[si];
+          var subj = seg.subject || '';
+          var dur = seg.duration || 0;
+          if (subjTimes.hasOwnProperty(subj)) subjTimes[subj] += dur;
+        }
+      }
+    }
+    // Also add from localStorage calendar plans (fallback when server offline)
+    if (subjTimes.math + subjTimes.cs + subjTimes.eng + subjTimes.pol === 0) {
+      document.getElementById('cal-active-days').textContent = '…';
+      document.getElementById('cal-total-time').textContent = '需后端';
+      document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
+    } else {
+      var fmtH = function(s) { var h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h>0 ? h+'h'+m+'m' : m+'m'; };
+      var elAD = document.getElementById('cal-active-days');
+      var elTT = document.getElementById('cal-total-time');
+      var elTP = document.getElementById('cal-total-pomos');
+      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(subjTimes.math)+'</div>';
+      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(subjTimes.cs)+'</div>';
+      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(subjTimes.eng)+'</div>';
+      // Add政治 as a note if > 0
+      if (subjTimes.pol > 0) {
+        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(subjTimes.pol)+'</div>';
+      }
+    }
+  } else if (calStatsMode === 'all') {
     document.getElementById('cal-active-days').textContent = allAd;
     document.getElementById('cal-total-time').textContent = calFmtTime(allTt);
     document.getElementById('cal-total-pomos').textContent = allTp;
@@ -1880,6 +1934,12 @@ function calRenderDetail() {
     h+='<input type="checkbox" class="cal-plan-check"'+(pp.done?' checked':'')+' onchange="calTogglePlan(\''+pp.id+'\')">';
     h+='<span class="cal-plan-dot" style="background:'+(pc?pc.c:'rgba(255,255,255,.35)')+'"></span>';
     h+='<span class="cal-plan-text">'+escHtml(pp.text)+'</span>';
+    if(pp.time) {
+      h+='<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">['+escHtml(pp.time)+']</span>';
+      if(!pp.done) {
+        h+='<span onclick="event.stopPropagation();togglePlanAlarm(\''+calSelected+'\',\''+pp.id+'\')" style="cursor:pointer;font-size:.85em;flex-shrink:0;margin-right:4px;" title="切换闹铃">'+(pp.alarm?'🔔':'🔕')+'</span>';
+      }
+    }
     h+='<button class="cal-plan-del" onclick="calDeletePlan(\''+pp.id+'\')">&times;</button></div>';
   }
   document.getElementById('cal-plan-list').innerHTML = h;
@@ -1888,8 +1948,16 @@ function calAddPlan() {
   var t=document.getElementById('cal-plan-input').value.trim();
   if(!t||!calSelected)return;
   if(!cal.plans[calSelected])cal.plans[calSelected]=[];
-  cal.plans[calSelected].push({id:Date.now().toString(),text:t,done:false,color:document.getElementById('cal-plan-color').value});
+  cal.plans[calSelected].push({
+    id:Date.now().toString(),text:t,done:false,
+    color:document.getElementById('cal-plan-color').value,
+    time:document.getElementById('cal-plan-time').value,
+    alarm:document.getElementById('cal-plan-alarm').checked,
+    alarmTriggered:false
+  });
   document.getElementById('cal-plan-input').value='';
+  document.getElementById('cal-plan-time').value='';
+  document.getElementById('cal-plan-alarm').checked=false;
   calSave();calRenderDetail();
 }
 function calTogglePlan(id) {
@@ -1899,6 +1967,17 @@ function calTogglePlan(id) {
 }
 function calDeletePlan(id) {
   cal.plans[calSelected]=(cal.plans[calSelected]||[]).filter(function(p){return p.id!==id;});
+  calSave();calRenderDetail();
+}
+function togglePlanAlarm(date, planId) {
+  var pl=cal.plans[date]; if(!pl)return;
+  for(var i=0;i<pl.length;i++) {
+    if(pl[i].id===planId) {
+      pl[i].alarm=!pl[i].alarm;
+      if(pl[i].alarm) pl[i].alarmTriggered=false;
+      break;
+    }
+  }
   calSave();calRenderDetail();
 }
 function calAddStudyTime(s) {
@@ -1996,7 +2075,7 @@ function todoUpdateFloat() {
     if (cal.plans[_today]) {
       var plans = cal.plans[_today].filter(function(p){ return !p.done; });
       for (var j = 0; j < plans.length; j++) {
-        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: _today});
+        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: _today, time: plans[j].time, alarm: plans[j].alarm});
       }
     }
     if (!items.length) { el.classList.remove('show'); return; }
@@ -2013,6 +2092,10 @@ function todoUpdateFloat() {
       }
       h += '<span class="td-dot" style="background:'+dot+'"></span>';
       h += escHtml(it.text);
+      if (it.time) {
+        h += ' <span style="color:var(--yellow);font-size:.85em;">'+escHtml(it.time)+'</span>';
+        if (it.alarm) h += ' 🔔';
+      }
       h += '</div>';
     }
     lst.innerHTML = h;
@@ -2950,6 +3033,31 @@ function parseAndSaveEval() {
   });
 }
 
+// ═══════════ PLAN ALARM CHECK ═══════════
+function checkPlanAlarms() {
+  var now = new Date();
+  var currentTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  var _today = fmtLocalDate(now);
+  var plans = (cal.plans && cal.plans[_today]) ? cal.plans[_today] : [];
+  var needSave = false;
+
+  for (var i = 0; i < plans.length; i++) {
+    var pp = plans[i];
+    if (!pp.done && pp.time === currentTimeStr && pp.alarm && !pp.alarmTriggered) {
+      playBellSound();
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('⏰ 计划提醒', { body: pp.text, icon: 'file:///E:/恶魔飞鼠 ICON/随便设置5.ico' });
+      }
+      pp.alarmTriggered = true;
+      needSave = true;
+    }
+  }
+  if (needSave) {
+    try { localStorage.setItem('focus_calendar', JSON.stringify(cal)); } catch(e) {}
+    todoUpdateFloat();
+  }
+}
+
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();
@@ -2976,6 +3084,7 @@ blockRender();
 blockRefresh();
 statsRefresh();
 setInterval(statsRefresh,30000);
+setInterval(checkPlanAlarms,10000);
 </script>
 </body>
 </html>
