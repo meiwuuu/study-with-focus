@@ -770,9 +770,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             </div>
           </div>
           <div class="cal-month-stats" id="cal-month-stats">
-            <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl">活跃天数</div></div>
-            <div class="cal-stat"><div class="val" id="cal-total-time">0m</div><div class="lbl">总学习</div></div>
-            <div class="cal-stat"><div class="val" id="cal-total-pomos">0</div><div class="lbl">番茄数</div></div>
+            <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl" id="cal-lbl-0">活跃天数</div></div>
+            <div class="cal-stat"><div class="val" id="cal-total-time">0m</div><div class="lbl" id="cal-lbl-1">总学习</div></div>
+            <div class="cal-stat"><div class="val" id="cal-total-pomos">0</div><div class="lbl" id="cal-lbl-2">番茄数</div></div>
           </div>
           <div class="cal-hdr">
             <button class="cal-nav-btn" onclick="calPrevMonth()">&lt;</button>
@@ -1844,6 +1844,9 @@ function calRender() {
       document.getElementById('cal-active-days').textContent = '…';
       document.getElementById('cal-total-time').textContent = '需后端';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
+      document.getElementById('cal-lbl-0').textContent = '';
+      document.getElementById('cal-lbl-1').textContent = '';
+      document.getElementById('cal-lbl-2').textContent = '';
     } else {
       var fmtH = function(s) { var h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h>0 ? h+'h'+m+'m' : m+'m'; };
       var elAD = document.getElementById('cal-active-days');
@@ -1852,6 +1855,9 @@ function calRender() {
       elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(subjTimes.math)+'</div>';
       elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(subjTimes.cs)+'</div>';
       elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(subjTimes.eng)+'</div>';
+      document.getElementById('cal-lbl-0').textContent = '';
+      document.getElementById('cal-lbl-1').textContent = '';
+      document.getElementById('cal-lbl-2').textContent = '';
       // Add政治 as a note if > 0
       if (subjTimes.pol > 0) {
         elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(subjTimes.pol)+'</div>';
@@ -1861,10 +1867,16 @@ function calRender() {
     document.getElementById('cal-active-days').textContent = allAd;
     document.getElementById('cal-total-time').textContent = calFmtTime(allTt);
     document.getElementById('cal-total-pomos').textContent = allTp;
+    document.getElementById('cal-lbl-0').textContent = '活跃天数';
+    document.getElementById('cal-lbl-1').textContent = '总学习';
+    document.getElementById('cal-lbl-2').textContent = '番茄数';
   } else {
     document.getElementById('cal-active-days').textContent = ad;
     document.getElementById('cal-total-time').textContent = calFmtTime(tt);
     document.getElementById('cal-total-pomos').textContent = tp;
+    document.getElementById('cal-lbl-0').textContent = '活跃天数';
+    document.getElementById('cal-lbl-1').textContent = '总学习';
+    document.getElementById('cal-lbl-2').textContent = '番茄数';
   }
 
   // Sync from server if localStorage has no data
