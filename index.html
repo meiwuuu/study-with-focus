@@ -1008,7 +1008,17 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="card" style="margin-bottom:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">半手动 AI 评价</div>
             <p style="font-size:.78em;color:rgba(255,255,255,.4);margin-bottom:12px;">生成提示词 → 贴给 AI → 粘回结果 → 自动提取分数</p>
-            <button class="btn btn-accent" id="btn-gen-prompt" onclick="generateEvalPrompt()" style="width:100%;margin-bottom:10px;">📁 1. 一键下载今日 AI 评估报告 (.txt)</button>
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+              <button class="btn btn-accent" id="btn-gen-prompt" onclick="generateEvalPrompt()" style="flex:1;">📁 1. 一键下载今日 AI 评估报告 (.txt)</button>
+              
+              <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--input-border); border-radius:var(--radius-sm); padding:4px 12px;">
+                <span style="font-size:0.7em; color:rgba(255,255,255,0.6); margin-bottom:4px;" id="eval-plan-label">强制 A安排</span>
+                <label class="toggle" title="切换 A安排(全天) / B安排(半天)">
+                  <input type="checkbox" id="eval-plan-toggle" onchange="toggleEvalPlan()">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
             <textarea id="ai-response-input" placeholder="2. 将 AI 的回复粘贴到这里…"
               style="width:100%;height:120px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-sm);color:#fff;font-size:.82em;padding:10px;resize:vertical;font-family:var(--font);"></textarea>
             <button class="btn btn-accent" id="btn-parse-eval" onclick="parseAndSaveEval()" style="width:100%;margin-bottom:8px;">3. 提取分数并保存</button>
@@ -2995,13 +3005,34 @@ var EVALUATE_PROMPT = '';
 // evaluate_watchdog.py 读取该文件并注入 cron 评价上下文。
 // 下载 txt 通过服务器端点 /api/stats/evaluate/data 生成。
 
+// 处理 AB 计划开关的状态与本地保存
+function toggleEvalPlan() {
+  var isB = document.getElementById('eval-plan-toggle').checked;
+  document.getElementById('eval-plan-label').textContent = isB ? '强制 B安排' : '强制 A安排';
+  try { localStorage.setItem('focus_eval_plan', isB ? 'B' : 'A'); } catch(e){}
+}
+
+// 页面加载时恢复开关状态
+(function initEvalPlan() {
+  var savedPlan = 'A';
+  try { savedPlan = localStorage.getItem('focus_eval_plan') || 'A'; } catch(e){}
+  var tg = document.getElementById('eval-plan-toggle');
+  if(tg) {
+    tg.checked = (savedPlan === 'B');
+    toggleEvalPlan();
+  }
+})();
+
 async function generateEvalPrompt() {
   var today = currentLogDate || fmtLocalDate(new Date());
   var resultEl = document.getElementById('eval-result');
   resultEl.innerHTML = '<span style="color:#fbbf24;">⏳ 正在生成 ' + today + ' 的数据…</span>';
 
   try {
-    var resp = await fetch(API + '/api/stats/evaluate/data?date=' + today);
+    // 获取当前开关状态
+    var forcePlan = document.getElementById('eval-plan-toggle') && document.getElementById('eval-plan-toggle').checked ? 'B' : 'A';
+    // 发送带 plan 参数的请求
+    var resp = await fetch(API + '/api/stats/evaluate/data?date=' + today + '&plan=' + forcePlan);
     if (!resp.ok) {
       resultEl.innerHTML = '<span style="color:#f87171;">' + today + ' 暂无学习记录或服务器错误</span>';
       return;

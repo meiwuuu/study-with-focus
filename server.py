@@ -354,9 +354,11 @@ class FocusHandler(BaseHTTPRequestHandler):
             # 为指定日期生成/返回评价数据 txt（可下载）
             qs = parse_qs(urlparse(self.path).query)
             date = qs.get("date", [effective_date_str()])[0]
+            force_plan = qs.get("plan", [None])[0]
             # 先检查是否已有生成的 txt 文件
             txt_path = DATA_DIR / f"evaluate_{date}.txt"
-            if txt_path.exists():
+            # 只有当没有收到强制切换要求时，才读取缓存。有强制要求就一律重新生成
+            if txt_path.exists() and not force_plan:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.send_header("Content-Disposition",
@@ -412,6 +414,16 @@ class FocusHandler(BaseHTTPRequestHandler):
             schedule = _schedule_map.get(weekday, "无课")
             has_class = "无课" not in schedule
             mode = "B" if has_class else "A"
+            # ====== 手动强制切换 AB 安排 ======
+            if force_plan in ["A", "B"]:
+                mode = force_plan
+                if mode == "A":
+                    schedule = "无课，全天自主"
+                    has_class = False
+                elif mode == "B":
+                    schedule = "有特定安排或轻量日"
+                    has_class = True
+            # ===================================
             target_h = 6 if not has_class else 3
             target_p = 8 if not has_class else 4
 
