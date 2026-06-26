@@ -1012,7 +1012,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-accent" id="btn-gen-prompt" onclick="generateEvalPrompt()" style="flex:1;">📁 1. 一键下载今日 AI 评估报告 (.txt)</button>
               
               <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--input-bg); border:1px solid var(--input-border); border-radius:var(--radius-sm); padding:4px 12px;">
-                <span style="font-size:0.7em; color:rgba(255,255,255,0.6); margin-bottom:4px;" id="eval-plan-label">强制 A安排</span>
+                <span style="font-size:0.7em; color:rgba(255,255,255,0.6); margin-bottom:4px;" id="eval-plan-label">A安排</span>
                 <label class="toggle" title="切换 A安排(全天) / B安排(半天)">
                   <input type="checkbox" id="eval-plan-toggle" onchange="toggleEvalPlan()">
                   <span class="toggle-slider"></span>
@@ -3008,7 +3008,7 @@ var EVALUATE_PROMPT = '';
 // 处理 AB 计划开关的状态与本地保存
 function toggleEvalPlan() {
   var isB = document.getElementById('eval-plan-toggle').checked;
-  document.getElementById('eval-plan-label').textContent = isB ? '强制 B安排' : '强制 A安排';
+  document.getElementById('eval-plan-label').textContent = isB ? 'B安排' : 'A安排';
   try { localStorage.setItem('focus_eval_plan', isB ? 'B' : 'A'); } catch(e){}
 }
 
