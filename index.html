@@ -1001,6 +1001,18 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <span style="font-size:.78em;color:rgba(255,255,255,.55);min-width:36px;text-align:right;" id="panel-opacity-val">10%</span>
             </div>
           </div>
+          <!-- 数据备份与迁移 -->
+          <div class="card" style="margin-top:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">数据迁移 (浏览器同步)</div>
+            <p style="font-size:.78em;color:rgba(255,255,255,.4);margin-bottom:12px;">
+              更换浏览器或设备前，请先导出数据。包含待办、日程、偏好设置等全部状态。
+            </p>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <button class="btn btn-accent" onclick="exportLocalStorage()">一键导出配置</button>
+              <button class="btn" onclick="document.getElementById('import-file-input').click()">导入配置文件</button>
+              <input type="file" id="import-file-input" accept=".json" style="display:none;" onchange="importLocalStorage(event)">
+            </div>
+          </div>
         </div>
 
         <!-- ═══ AI Evaluate tab ═══ -->
@@ -3124,6 +3136,53 @@ function checkPlanAlarms() {
     try { localStorage.setItem('focus_calendar', JSON.stringify(cal)); } catch(e) {}
     todoUpdateFloat();
   }
+}
+
+// ═══════════ DATA MIGRATION ═══════════
+function exportLocalStorage() {
+  var dataObj = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var key = localStorage.key(i);
+    dataObj[key] = localStorage.getItem(key);
+  }
+  var dataStr = JSON.stringify(dataObj, null, 2);
+  var blob = new Blob([dataStr], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var dateStr = new Date().toISOString().split('T')[0];
+  a.download = 'FocusDataBackup_' + dateStr + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importLocalStorage(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var dataObj = JSON.parse(e.target.result);
+      if (!confirm('这将覆盖当前浏览器中的所有设置、待办和日程，确定继续？')) {
+        event.target.value = '';
+        return;
+      }
+      for (var key in dataObj) {
+        if (dataObj.hasOwnProperty(key)) {
+          localStorage.setItem(key, dataObj[key]);
+        }
+      }
+      alert('数据导入成功！页面即将刷新。');
+      location.reload();
+    } catch (err) {
+      alert('导入失败，请检查文件是否损坏。');
+      console.error('Import error:', err);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ═══════════ INIT ═══════════
