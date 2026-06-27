@@ -1370,29 +1370,23 @@ function saveTheme() {
 }
 
 /* ═══════════ Browser selector ═══════════ */
-async function loadBrowserSetting() {
+function loadBrowserSetting() {
   var sel = document.getElementById('browser-select');
   if (!sel) return;
-  try {
-    var resp = await fetch('http://localhost:8765/api/config');
-    var config = await resp.json();
-    var browser = config.browser || 'system';
-    sel.value = browser;
-  } catch(e) {
-    // Server not running, keep default
-  }
+  fetch('http://localhost:8765/api/config')
+    .then(function(r){ return r.json(); })
+    .then(function(cfg){ sel.value = cfg.browser || 'system'; })
+    .catch(function(){});
 }
 
-async function saveBrowser() {
+function saveBrowser() {
   var sel = document.getElementById('browser-select');
   if (!sel) return;
-  try {
-    await fetch('http://localhost:8765/api/config/browser', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({browser: sel.value})
-    });
-  } catch(e) {}
+  fetch('http://localhost:8765/api/config/browser', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({browser: sel.value})
+  }).catch(function(){});
 }
 
 function buildThemePresets() {
