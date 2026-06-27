@@ -223,7 +223,7 @@ body {
 .panel-nav {
   display: flex; flex-direction: column;
   min-width: 110px; border-right: 1px solid rgba(255,255,255,0.08);
-  padding: 10px 0; flex-shrink: 0; overflow-y: auto;
+  padding: 10px 0; flex-shrink: 0;
 }
 .panel-nav button {
   background: none; border: none; color: rgba(255,255,255,0.55);
@@ -337,22 +337,12 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .pomo-set-row { display: flex; gap: 16px; align-items: center; font-size:0.82em; }
 .pomo-set-row label { display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.6); }
 .pomo-set-row input[type="number"] { width: 50px; text-align: center; padding: 4px 6px; }
-/* Hide native spinners — use custom buttons for cross-browser hover consistency */
+/* Custom spin buttons — hide native, show ▲▼ on hover */
 .spin-wrap { position:relative; display:inline-flex; }
-.spin-wrap input[type="number"] {
-  -moz-appearance: textfield;
-}
+.spin-wrap input[type="number"] { -moz-appearance:textfield; }
 .spin-wrap input[type="number"]::-webkit-inner-spin-button,
-.spin-wrap input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none; margin: 0;
-}
-.spin-btn {
-  position:absolute; right:2px; width:16px; height:45%;
-  background:rgba(255,255,255,0.06); border:none; border-radius:2px;
-  color:rgba(255,255,255,0.4); font-size:8px; line-height:1;
-  cursor:pointer; opacity:0; transition:opacity .15s;
-  display:flex; align-items:center; justify-content:center;
-}
+.spin-wrap input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.spin-btn { position:absolute; right:2px; width:16px; height:45%; background:rgba(255,255,255,0.06); border:none; border-radius:2px; color:rgba(255,255,255,0.4); font-size:8px; line-height:1; cursor:pointer; opacity:0; transition:opacity .15s; display:flex; align-items:center; justify-content:center; }
 .spin-wrap:hover .spin-btn { opacity:1; }
 .spin-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
 .spin-btn.up { top:2px; }
@@ -967,9 +957,10 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                     <div style="font-size:.85em;">实际有效学习时长 (分钟)</div>
                     <div style="font-size:.7em; color:#888;">(计入后台统计的绝对专注时间)</div>
                   </div>
-              <div class="cs-trigger" style="width:90px;cursor:text;justify-content:center;position:relative;">
-                <span class="spin-wrap"><input type="number" id="man-duration-min" placeholder="分钟"
-                  style="background:none;border:none;color:var(--break);font-family:var(--mono);font-size:1em;font-weight:bold;outline:none;width:100%;text-align:center;padding:0;-moz-appearance:textfield;"><button class="spin-btn up" onclick="spinInc('man-duration-min')">▲</button><button class="spin-btn down" onclick="spinDec('man-duration-min')">▼</button></span>
+                  <div class="cs-trigger" style="width:90px;cursor:text;justify-content:center;">
+                    <span class="spin-wrap"><input type="number" id="man-duration-min" placeholder="分钟"
+                      style="background:none;border:none;color:var(--break);font-family:var(--mono);font-size:1em;font-weight:bold;outline:none;width:100%;text-align:center;padding:0;"><button class="spin-btn up" onclick="spinInc('man-duration-min')">▲</button><button class="spin-btn down" onclick="spinDec('man-duration-min')">▼</button></span>
+                  </div>
                 </div>
               </div>
               <button class="btn btn-accent" onclick="submitDetailedManualRecord()" style="justify-content:center; padding:10px; font-size:.9em;">💾 提交并入库</button>
@@ -1251,8 +1242,8 @@ function toggleFocusMode() {
   updateFocusBtn();
 }
 
-function spinInc(id) { var el=document.getElementById(id); el.value=(parseInt(el.value)||0)+1; el.dispatchEvent(new Event('change')); }
-function spinDec(id) { var el=document.getElementById(id); var v=parseInt(el.value)||0; if(v>1) el.value=v-1; el.dispatchEvent(new Event('change')); }
+function spinInc(id){var el=document.getElementById(id);el.value=(parseInt(el.value)||0)+1;el.dispatchEvent(new Event('change'));}
+function spinDec(id){var el=document.getElementById(id);var v=parseInt(el.value)||0;if(v>1)el.value=v-1;el.dispatchEvent(new Event('change'));}
 function updateFocusBtn() {
   var btn = document.getElementById('btn-focus-mode');
   if (!btn) return;
@@ -1370,23 +1361,29 @@ function saveTheme() {
 }
 
 /* ═══════════ Browser selector ═══════════ */
-function loadBrowserSetting() {
+async function loadBrowserSetting() {
   var sel = document.getElementById('browser-select');
   if (!sel) return;
-  fetch('http://localhost:8765/api/config')
-    .then(function(r){ return r.json(); })
-    .then(function(cfg){ sel.value = cfg.browser || 'system'; })
-    .catch(function(){});
+  try {
+    var resp = await fetch('http://localhost:8765/api/config');
+    var config = await resp.json();
+    var browser = config.browser || 'system';
+    sel.value = browser;
+  } catch(e) {
+    // Server not running, keep default
+  }
 }
 
-function saveBrowser() {
+async function saveBrowser() {
   var sel = document.getElementById('browser-select');
   if (!sel) return;
-  fetch('http://localhost:8765/api/config/browser', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({browser: sel.value})
-  }).catch(function(){});
+  try {
+    await fetch('http://localhost:8765/api/config/browser', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({browser: sel.value})
+    });
+  } catch(e) {}
 }
 
 function buildThemePresets() {
