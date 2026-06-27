@@ -1013,6 +1013,23 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <input type="file" id="import-file-input" accept=".json" style="display:none;" onchange="importLocalStorage(event)">
             </div>
           </div>
+          <!-- ═══ Browser selector ═══ -->
+          <div class="card" style="margin-top:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">🌐 默认打开浏览器</div>
+            <p style="font-size:.78em;color:rgba(255,255,255,.4);margin-bottom:12px;">
+              下次启动专注页面时使用。切换后需重启应用生效。
+            </p>
+            <select id="browser-select" onchange="saveBrowser()"
+              style="width:100%;padding:8px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:8px;background:rgba(255,255,255,0.06);color:#fff;font-family:inherit;font-size:.85em;">
+              <option value="system">跟随系统默认</option>
+              <option value="chrome">Chrome</option>
+              <option value="edge">Edge</option>
+              <option value="firefox">Firefox</option>
+              <option value="brave">Brave</option>
+              <option value="vivaldi">Vivaldi</option>
+              <option value="opera">Opera</option>
+            </select>
+          </div>
         </div>
 
         <!-- ═══ AI Evaluate tab ═══ -->
@@ -1331,6 +1348,32 @@ function saveTheme() {
   try { localStorage.setItem('focus_theme', hex); } catch(e) {}
 }
 
+/* ═══════════ Browser selector ═══════════ */
+async function loadBrowserSetting() {
+  var sel = document.getElementById('browser-select');
+  if (!sel) return;
+  try {
+    var resp = await fetch('http://localhost:8765/api/config');
+    var config = await resp.json();
+    var browser = config.browser || 'system';
+    sel.value = browser;
+  } catch(e) {
+    // Server not running, keep default
+  }
+}
+
+async function saveBrowser() {
+  var sel = document.getElementById('browser-select');
+  if (!sel) return;
+  try {
+    await fetch('http://localhost:8765/api/config/browser', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({browser: sel.value})
+    });
+  } catch(e) {}
+}
+
 function buildThemePresets() {
   var container = document.getElementById('theme-presets');
   var current = '#60a5fa';
@@ -1353,6 +1396,7 @@ function buildThemePresets() {
   var saved = '#60a5fa';
   try { saved = localStorage.getItem('focus_theme') || '#60a5fa'; } catch(e) {}
   applyTheme(saved);
+  loadBrowserSetting();
 })();
 
 // ═══════════ POMODORO ═══════════

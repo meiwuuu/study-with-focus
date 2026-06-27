@@ -314,6 +314,11 @@ class FocusHandler(BaseHTTPRequestHandler):
             sites = get_blocked_sites()
             self._send_json({"sites": sites})
 
+        elif path == "/api/config":
+            with config_lock:
+                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+            self._send_json(config)
+
         elif path == "/api/stats":
             with stats_lock:
                 stats = load_json(STATS_FILE, get_default_stats())
@@ -700,6 +705,14 @@ class FocusHandler(BaseHTTPRequestHandler):
 
                     save_json(STATS_FILE, stats)
                 self._send_json({"ok": True})
+
+        elif path == "/api/config/browser":
+            with config_lock:
+                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+                browser = body.get("browser", "system")
+                config["browser"] = browser
+                save_json(CONFIG_FILE, config)
+            self._send_json({"ok": True, "browser": browser})
 
         else:
             self._send_json({"error": "not found"}, 404)

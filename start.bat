@@ -27,7 +27,7 @@ timeout /t 1 /nobreak >nul
 curl -s http://localhost:8765/api/status >nul 2>&1
 if errorlevel 1 goto wait
 
-:: Open browser
+:: Open browser with user's preferred choice (reads config.json)
 echo Opening...
-start "" "file:///E:/code/hermes/focus/index.html"
+python launch_browser.py
 exit
