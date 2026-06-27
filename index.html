@@ -1472,14 +1472,23 @@ function setSubject(subj, e) {
   updateSubjectBadge();
 }
 
+function closeAllDropdowns() {
+  closeSubjectDropdown();
+  closeDateDropdown();
+  closeManDateDropdown();
+  closeManSubjectDropdown();
+  closeManStartDropdown();
+  closeManEndDropdown();
+}
+
 function toggleSubjectDropdown(e) {
   e.stopPropagation();
   var dd = document.getElementById('pomo-subject-dropdown');
   var tr = document.querySelector('.cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeSubjectDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
@@ -2395,9 +2404,9 @@ function toggleDateDropdown(e) {
   var dd = document.getElementById('log-date-dropdown');
   var tr = document.querySelector('#log-date-wrap .cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeDateDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
@@ -2792,9 +2801,9 @@ function toggleManDateDropdown(e) {
   var dd = document.getElementById('man-date-dropdown');
   var tr = document.querySelector('#man-date-wrap .cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeManDateDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
@@ -2824,9 +2833,9 @@ function toggleManSubjectDropdown(e) {
   var dd = document.getElementById('man-subject-dropdown');
   var tr = document.querySelector('#man-subject-wrap .cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeManSubjectDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
@@ -2863,9 +2872,9 @@ function toggleManStartDropdown(e) {
   var dd = document.getElementById('man-start-dropdown');
   var tr = document.querySelector('#man-start-wrap .cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeManStartDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
@@ -2894,9 +2903,9 @@ function toggleManEndDropdown(e) {
   var dd = document.getElementById('man-end-dropdown');
   var tr = document.querySelector('#man-end-wrap .cs-trigger');
   var pc = document.getElementById('panel-content');
-  var open = dd.classList.contains('show');
-  if (open) { closeManEndDropdown(); }
-  else {
+  var wasOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!wasOpen) {
     dd.classList.add('show'); tr.classList.add('open');
     if (pc) pc.style.overflowY = 'visible';
   }
