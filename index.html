@@ -2296,7 +2296,7 @@ function calRenderPlans(dateStr) {
     h += '<input type="checkbox" class="cal-plan-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">';
     h += '<span class="cal-plan-dot" style="background:' + dotColor + '"></span>';
     h += '<span class="cal-plan-text">' + escHtml(t.title) + '</span>';
-    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="event.stopPropagation();toggleTaskType(\'' + t.id + '\');calRenderDetail();" title="切换每日/一次性" style="flex-shrink:0;">📌</button>';
+    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="event.stopPropagation();toggleTaskType(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();" title="切换每日/一次性" style="flex-shrink:0;">📌</button>';
     if (t.time) {
       h += '<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">[' + escHtml(t.time) + ']</span>';
       if (!t.done) {
