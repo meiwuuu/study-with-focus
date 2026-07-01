@@ -2060,13 +2060,6 @@ function syncCalMonth() {
             if (!cal.dailyLog[dateStr]) cal.dailyLog[dateStr] = {studyTime: 0, pomodoros: 0};
             cal.dailyLog[dateStr].pomodoros = data.pomodoros;
             cal.dailyLog[dateStr].studyTime = data.total_time;
-          } else {
-            // Clear stale data — backend says zero, so zero it out
-            if (cal.dailyLog[dateStr]) { cal.dailyLog[dateStr].studyTime = 0; cal.dailyLog[dateStr].pomodoros = 0; }
-          }
-          // Clear stale entries with zero study time to keep cal.dailyLog clean
-          if (cal.dailyLog[dateStr] && cal.dailyLog[dateStr].studyTime === 0 && cal.dailyLog[dateStr].pomodoros === 0) {
-            delete cal.dailyLog[dateStr];
           }
           pending--;
           if (pending <= 0) {
