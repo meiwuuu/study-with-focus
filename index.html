@@ -1894,39 +1894,13 @@ function calRender() {
   var pd = new Date(calYear,calMonth,0).getDate();
   var today = calFmt(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
-  var ad=0,tt=0,tp=0;
-  for (var d=1;d<=dim;d++) {
-    var k=calFmt(calYear,calMonth,d),l=cal.dailyLog[k];
-    if(l&&l.studyTime>0){ad++;tt+=l.studyTime||0;tp+=l.pomodoros||0;}
-  }
-  // Compute all-time totals from localStorage (same source as monthly)
-  var allAd = 0, allTt = 0, allTp = 0;
-  for (var key in cal.dailyLog) {
-    var e = cal.dailyLog[key];
-    if (e.studyTime > 0) { allAd++; allTt += e.studyTime || 0; allTp += e.pomodoros || 0; }
-  }
+  var mKey = calYear + '-' + calMonth;
+  var ms = (cal._monthStats && cal._monthStats[mKey]) || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
+  var as = cal._allStats || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
 
   if (calStatsSubject === 'subject') {
-    // ─── 学科统计模式：从 cal._cachedStats 读取，按 calStatsMode 过滤 ───
-    var cs = cal._cachedStats;
-    var subjTimes = {math:0, cs:0, eng:0, pol:0};
-    if (cs && cs.daily_logs) {
-      for (var dk in cs.daily_logs) {
-        var dl = cs.daily_logs[dk];
-        if (!dl || !dl.segments) continue;
-        if (calStatsMode === 'month') {
-          var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
-          if (dy !== calYear || dm !== calMonth) continue;
-        }
-        for (var si = 0; si < dl.segments.length; si++) {
-          var seg = dl.segments[si];
-          var subj = seg.subject || '';
-          var dur = seg.duration || 0;
-          if (subjTimes.hasOwnProperty(subj)) subjTimes[subj] += dur;
-        }
-      }
-    }
-    if (subjTimes.math + subjTimes.cs + subjTimes.eng + subjTimes.pol === 0) {
+    var st = calStatsMode === 'month' ? ms.subj : as.subj;
+    if (st.math + st.cs + st.eng + st.pol === 0) {
       document.getElementById('cal-active-days').textContent = '…';
       document.getElementById('cal-total-time').textContent = '点击刷新';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
@@ -1938,34 +1912,34 @@ function calRender() {
       var elAD = document.getElementById('cal-active-days');
       var elTT = document.getElementById('cal-total-time');
       var elTP = document.getElementById('cal-total-pomos');
-      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(subjTimes.math)+'</div>';
-      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(subjTimes.cs)+'</div>';
-      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(subjTimes.eng)+'</div>';
+      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(st.math)+'</div>';
+      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(st.cs)+'</div>';
+      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(st.eng)+'</div>';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
       document.getElementById('cal-lbl-2').textContent = '';
-      if (subjTimes.pol > 0) {
-        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(subjTimes.pol)+'</div>';
+      if (st.pol > 0) {
+        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(st.pol)+'</div>';
       }
     }
   } else if (calStatsMode === 'all') {
-    document.getElementById('cal-active-days').textContent = allAd;
-    document.getElementById('cal-total-time').textContent = calFmtTime(allTt);
-    document.getElementById('cal-total-pomos').textContent = allTp;
+    document.getElementById('cal-active-days').textContent = as.ad;
+    document.getElementById('cal-total-time').textContent = calFmtTime(as.tt);
+    document.getElementById('cal-total-pomos').textContent = as.tp;
     document.getElementById('cal-lbl-0').textContent = '活跃天数';
     document.getElementById('cal-lbl-1').textContent = '总学习';
     document.getElementById('cal-lbl-2').textContent = '番茄数';
   } else {
-    document.getElementById('cal-active-days').textContent = ad;
-    document.getElementById('cal-total-time').textContent = calFmtTime(tt);
-    document.getElementById('cal-total-pomos').textContent = tp;
+    document.getElementById('cal-active-days').textContent = ms.ad;
+    document.getElementById('cal-total-time').textContent = calFmtTime(ms.tt);
+    document.getElementById('cal-total-pomos').textContent = ms.tp;
     document.getElementById('cal-lbl-0').textContent = '活跃天数';
     document.getElementById('cal-lbl-1').textContent = '总学习';
     document.getElementById('cal-lbl-2').textContent = '番茄数';
   }
 
   // Sync from server if localStorage has no data
-  if (ad === 0) {
+  if (ms.ad === 0) {
     fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
       if (s.total_time > 0) document.getElementById('cal-active-days').textContent = '…';
     }).catch(function(){});
@@ -2044,19 +2018,37 @@ function syncCalFromServer() {
     }).catch(function(){});
 }
 
-// ─── Full sync: fetch all stats from backend in one call ───
+// ─── Full sync: fetch all stats from backend, compute per-month caches ───
 function syncAllStats() {
   fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
     var dls = s.daily_logs || {};
-    // Populate cal.dailyLog for all dates
+    var monthStats = {};
+    var allAd = 0, allTt = 0, allTp = 0;
+    var allSubj = {math:0, cs:0, eng:0, pol:0};
     for (var dk in dls) {
       var dl = dls[dk];
+      // Populate cal.dailyLog
       if (!cal.dailyLog[dk]) cal.dailyLog[dk] = {studyTime: 0, pomodoros: 0};
       cal.dailyLog[dk].studyTime = dl.total_time || 0;
       cal.dailyLog[dk].pomodoros = dl.pomodoros || 0;
+      // All-time totals
+      if (dl.total_time > 0) { allAd++; allTt += dl.total_time || 0; allTp += dl.pomodoros || 0; }
+      // Per-month
+      var dp = dk.split('-'), mKey = dp[0] + '-' + (parseInt(dp[1])-1);
+      if (!monthStats[mKey]) monthStats[mKey] = {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
+      var ms = monthStats[mKey];
+      if (dl.total_time > 0) { ms.ad++; ms.tt += dl.total_time || 0; ms.tp += dl.pomodoros || 0; }
+      // Subject segments
+      var segs = dl.segments || [];
+      for (var si = 0; si < segs.length; si++) {
+        var subj = segs[si].subject || '';
+        var dur = segs[si].duration || 0;
+        if (ms.subj.hasOwnProperty(subj)) ms.subj[subj] += dur;
+        if (allSubj.hasOwnProperty(subj)) allSubj[subj] += dur;
+      }
     }
-    // Cache full stats for subject breakdown rendering
-    cal._cachedStats = s;
+    cal._monthStats = monthStats;
+    cal._allStats = {ad: allAd, tt: allTt, tp: allTp, subj: allSubj};
     calSave();
     calRender();
     if (calSelected) calRenderDetail();
