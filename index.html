@@ -2329,7 +2329,7 @@ function calRenderPlans(dateStr) {
         h += '<span onclick="event.stopPropagation();togglePlanAlarm(\'' + dateStr + '\',\'' + t.id + '\')" style="cursor:pointer;font-size:.85em;flex-shrink:0;margin-right:4px;" title="切换闹铃">' + (t.alarm ? '🔔' : '🔕') + '</span>';
       }
     }
-    h += '<button class="cal-plan-del" onclick="deleteTask(\'' + t.id + '\');calRenderDetail();">&times;</button></div>';
+    h += '<button class="cal-plan-del" onclick="deleteTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">&times;</button></div>';
   }
   container.innerHTML = h;
   calInitSortable();
