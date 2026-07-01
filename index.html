@@ -2060,6 +2060,10 @@ function syncCalMonth() {
             if (!cal.dailyLog[dateStr]) cal.dailyLog[dateStr] = {studyTime: 0, pomodoros: 0};
             cal.dailyLog[dateStr].pomodoros = data.pomodoros;
             cal.dailyLog[dateStr].studyTime = data.total_time;
+          } else if (data && cal.dailyLog[dateStr]) {
+            // Backend explicitly says zero — align frontend cache (does not touch stats.json)
+            cal.dailyLog[dateStr].studyTime = 0;
+            cal.dailyLog[dateStr].pomodoros = 0;
           }
           pending--;
           if (pending <= 0) {
