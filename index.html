@@ -780,7 +780,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:.68em;color:rgba(255,255,255,.45);" id="cal-stats-label">本月统计</span>
             <div style="display:flex;gap:4px;">
-              <button class="cal-toggle-btn" onclick="syncCalMonth()" title="从后端拉取本月全部日期数据">刷新当月</button>
+              <button class="cal-toggle-btn" onclick="syncAllStats()" title="从后端拉取全部历史数据">刷新</button>
               <button class="cal-toggle-btn" id="cal-stats-mode" onclick="toggleCalStatsSubject()" title="切换常规/学科统计">常规</button>
               <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
             </div>
@@ -1907,11 +1907,28 @@ function calRender() {
   }
 
   if (calStatsSubject === 'subject') {
-    // ─── 学科统计模式：从 cal.subjectBreakdown 读取（syncCalMonth 时计算并缓存）───
-    var sb = cal.subjectBreakdown || {math:0, cs:0, eng:0, pol:0};
-    if (sb.math + sb.cs + sb.eng + sb.pol === 0) {
+    // ─── 学科统计模式：从 cal._cachedStats 读取，按 calStatsMode 过滤 ───
+    var cs = cal._cachedStats;
+    var subjTimes = {math:0, cs:0, eng:0, pol:0};
+    if (cs && cs.daily_logs) {
+      for (var dk in cs.daily_logs) {
+        var dl = cs.daily_logs[dk];
+        if (!dl || !dl.segments) continue;
+        if (calStatsMode === 'month') {
+          var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
+          if (dy !== calYear || dm !== calMonth) continue;
+        }
+        for (var si = 0; si < dl.segments.length; si++) {
+          var seg = dl.segments[si];
+          var subj = seg.subject || '';
+          var dur = seg.duration || 0;
+          if (subjTimes.hasOwnProperty(subj)) subjTimes[subj] += dur;
+        }
+      }
+    }
+    if (subjTimes.math + subjTimes.cs + subjTimes.eng + subjTimes.pol === 0) {
       document.getElementById('cal-active-days').textContent = '…';
-      document.getElementById('cal-total-time').textContent = '需后端';
+      document.getElementById('cal-total-time').textContent = '点击刷新';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
@@ -1921,15 +1938,14 @@ function calRender() {
       var elAD = document.getElementById('cal-active-days');
       var elTT = document.getElementById('cal-total-time');
       var elTP = document.getElementById('cal-total-pomos');
-      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(sb.math)+'</div>';
-      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(sb.cs)+'</div>';
-      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(sb.eng)+'</div>';
+      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(subjTimes.math)+'</div>';
+      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(subjTimes.cs)+'</div>';
+      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(subjTimes.eng)+'</div>';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
       document.getElementById('cal-lbl-2').textContent = '';
-      // Add政治 as a note if > 0
-      if (sb.pol > 0) {
-        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(sb.pol)+'</div>';
+      if (subjTimes.pol > 0) {
+        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(subjTimes.pol)+'</div>';
       }
     }
   } else if (calStatsMode === 'all') {
@@ -2028,53 +2044,26 @@ function syncCalFromServer() {
     }).catch(function(){});
 }
 
-// ─── Bulk sync: fetch all days in current month from backend ───
-function syncCalMonth() {
-  var dim = new Date(calYear, calMonth + 1, 0).getDate();
-  var pending = dim;
-  for (var d = 1; d <= dim; d++) {
-    (function(day) {
-      var dateStr = calFmt(calYear, calMonth, day);
-      fetch(API + '/api/stats/daily?date=' + dateStr)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data && (data.pomodoros > 0 || data.total_time > 0)) {
-            if (!cal.dailyLog[dateStr]) cal.dailyLog[dateStr] = {studyTime: 0, pomodoros: 0};
-            cal.dailyLog[dateStr].pomodoros = data.pomodoros;
-            cal.dailyLog[dateStr].studyTime = data.total_time;
-          } else if (data && cal.dailyLog[dateStr]) {
-            // Backend explicitly says zero — align frontend cache (does not touch stats.json)
-            cal.dailyLog[dateStr].studyTime = 0;
-            cal.dailyLog[dateStr].pomodoros = 0;
-          }
-          pending--;
-          if (pending <= 0) {
-            calSave();
-            // Fetch full stats, calculate subject breakdown, store in cal
-            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
-              var sb = {math:0, cs:0, eng:0, pol:0};
-              var dls = s.daily_logs || {};
-              for (var dk in dls) {
-                var segs = dls[dk].segments || [];
-                for (var si = 0; si < segs.length; si++) {
-                  var subj = segs[si].subject || '';
-                  if (sb.hasOwnProperty(subj)) sb[subj] += segs[si].duration || 0;
-                }
-              }
-              cal.subjectBreakdown = sb; calSave();
-              calRender(); if (calSelected) calRenderDetail();
-            }).catch(function(){
-              calRender(); if (calSelected) calRenderDetail();
-            });
-          }
-        }).catch(function() {
-          pending--;
-          if (pending <= 0) {
-            calRender(); if (calSelected) calRenderDetail();
-          }
-        });
-    })(d);
-  }
+// ─── Full sync: fetch all stats from backend in one call ───
+function syncAllStats() {
+  fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
+    var dls = s.daily_logs || {};
+    // Populate cal.dailyLog for all dates
+    for (var dk in dls) {
+      var dl = dls[dk];
+      if (!cal.dailyLog[dk]) cal.dailyLog[dk] = {studyTime: 0, pomodoros: 0};
+      cal.dailyLog[dk].studyTime = dl.total_time || 0;
+      cal.dailyLog[dk].pomodoros = dl.pomodoros || 0;
+    }
+    // Cache full stats for subject breakdown rendering
+    cal._cachedStats = s;
+    calSave();
+    calRender();
+    if (calSelected) calRenderDetail();
+  }).catch(function(){
+    calRender();
+    if (calSelected) calRenderDetail();
+  });
 }
 
 // ═══════════ GLOBAL TASKS (unified data model) ═══════════
