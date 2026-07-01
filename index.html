@@ -2055,8 +2055,6 @@ function syncCalMonth() {
               var sb = {math:0, cs:0, eng:0, pol:0};
               var dls = s.daily_logs || {};
               for (var dk in dls) {
-                var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
-                if (dy !== calYear || dm !== calMonth) continue;
                 var segs = dls[dk].segments || [];
                 for (var si = 0; si < segs.length; si++) {
                   var subj = segs[si].subject || '';
