@@ -2143,9 +2143,11 @@ function reorderFilteredTasks(containerId) {
   var idOrder = {};
   ids.forEach(function(id, i) { idOrder[id] = i; });
   items.sort(function(a, b) { return idOrder[a.task.id] - idOrder[b.task.id]; });
-  // Put sorted items back at original indices
-  items.forEach(function(item, i) {
-    globalTasks[item.origIdx] = items[i].task;
+  // Collect original positions, sort ascending, then map DOM-ordered tasks back
+  var positions = items.map(function(it) { return it.origIdx; });
+  positions.sort(function(a, b) { return a - b; });
+  positions.forEach(function(pos, i) {
+    globalTasks[pos] = items[i].task;
   });
   saveGlobalTasks();
   todoUpdateFloat();
