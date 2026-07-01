@@ -2148,6 +2148,7 @@ function reorderFilteredTasks(containerId) {
     globalTasks[item.origIdx] = items[i].task;
   });
   saveGlobalTasks();
+  todoUpdateFloat();
 }
 
 // ─── SortableJS init for todo list ───
