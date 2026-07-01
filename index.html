@@ -1691,7 +1691,7 @@ function pomoComplete() {
   // 播放提示音
   playBellSound();
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('番茄钟', { body: (pomo.status==='focus'?'休息':'专注') + '时间到！' });
+    new Notification('番茄钟', { body: (pomo.status==='focus'?'休息结束！开始专注吧':'番茄钟完成！休息一下吧') });
   }
 }
 function pomoGetDuration() {
