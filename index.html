@@ -2070,6 +2070,8 @@ function syncCalMonth() {
             calSave();
             calRender();
             if (calSelected) calRenderDetail();
+            // Also fetch full stats for subject breakdown
+            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){stats=s;calRender();}).catch(function(){});
           }
         }).catch(function() {
           pending--;
@@ -2077,6 +2079,7 @@ function syncCalMonth() {
             calSave();
             calRender();
             if (calSelected) calRenderDetail();
+            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){stats=s;calRender();}).catch(function(){});
           }
         });
     })(d);
