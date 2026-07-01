@@ -714,7 +714,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
       <div class="panel-nav">
         <button class="active" data-tab="pomodoro" onclick="switchPanelTab('pomodoro')">🍅 番茄钟</button>
         <button data-tab="calendar" onclick="switchPanelTab('calendar')">📅 学习日历</button>
-        <button data-tab="todos" onclick="switchPanelTab('todos')">✅ 待办列表</button>
         <button data-tab="block" onclick="switchPanelTab('block')">🛡️ 网络屏蔽</button>
         <button data-tab="log" onclick="switchPanelTab('log')">📋 学习记录</button>
         <button data-tab="manual" onclick="switchPanelTab('manual')">⏳ 数据修正</button>
@@ -781,6 +780,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:.68em;color:rgba(255,255,255,.45);" id="cal-stats-label">本月统计</span>
             <div style="display:flex;gap:4px;">
+              <button class="cal-toggle-btn" onclick="syncCalMonth()" title="从后端拉取本月全部日期数据">刷新当月</button>
               <button class="cal-toggle-btn" id="cal-stats-mode" onclick="toggleCalStatsSubject()" title="切换常规/学科统计">常规</button>
               <button class="cal-toggle-btn" id="cal-stats-toggle" onclick="toggleCalStats()">全部</button>
             </div>
@@ -820,16 +820,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             <div id="cal-plan-list"></div>
             <div class="cal-plan-empty" id="cal-plan-empty">暂无学习计划</div>
           </div>
-        </div>
-
-        <!-- ═══ Todos tab ═══ -->
-        <div class="panel-tab" id="ptab-todos">
-          <div class="todo-row">
-            <input type="text" id="todo-input" placeholder="添加待办..." onkeydown="if(event.key==='Enter')todoAdd()">
-            <button class="btn btn-green" onclick="todoAdd()">添加</button>
-          </div>
-          <div id="todo-list"></div>
-          <div class="todo-empty" id="todo-empty">暂无待办事项</div>
         </div>
 
         <!-- ═══ Block tab ═══ -->
@@ -2056,6 +2046,46 @@ function syncCalFromServer() {
     }).catch(function(){});
 }
 
+// ─── Bulk sync: fetch all days in current month from backend ───
+function syncCalMonth() {
+  var dim = new Date(calYear, calMonth + 1, 0).getDate();
+  var pending = dim;
+  for (var d = 1; d <= dim; d++) {
+    (function(day) {
+      var dateStr = calFmt(calYear, calMonth, day);
+      fetch(API + '/api/stats/daily?date=' + dateStr)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && (data.pomodoros > 0 || data.total_time > 0)) {
+            if (!cal.dailyLog[dateStr]) cal.dailyLog[dateStr] = {studyTime: 0, pomodoros: 0};
+            cal.dailyLog[dateStr].pomodoros = data.pomodoros;
+            cal.dailyLog[dateStr].studyTime = data.total_time;
+          } else {
+            // Clear stale data — backend says zero, so zero it out
+            if (cal.dailyLog[dateStr]) { cal.dailyLog[dateStr].studyTime = 0; cal.dailyLog[dateStr].pomodoros = 0; }
+          }
+          // Clear stale entries with zero study time to keep cal.dailyLog clean
+          if (cal.dailyLog[dateStr] && cal.dailyLog[dateStr].studyTime === 0 && cal.dailyLog[dateStr].pomodoros === 0) {
+            delete cal.dailyLog[dateStr];
+          }
+          pending--;
+          if (pending <= 0) {
+            calSave();
+            calRender();
+            if (calSelected) calRenderDetail();
+          }
+        }).catch(function() {
+          pending--;
+          if (pending <= 0) {
+            calSave();
+            calRender();
+            if (calSelected) calRenderDetail();
+          }
+        });
+    })(d);
+  }
+}
+
 // ═══════════ GLOBAL TASKS (unified data model) ═══════════
 var globalTasks = [];
 var showTodo = true, showMultiTodo = false;
@@ -2184,8 +2214,9 @@ function calInitSortable() {
 
 // ─── Rendering ───
 function renderTodosForDate(dateStr) {
-  var tasks = getTasksForDate(dateStr);
   var l = document.getElementById('todo-list'), e = document.getElementById('todo-empty');
+  if (!l) return; // Tab removed — no DOM target
+  var tasks = getTasksForDate(dateStr);
   if (!tasks.length) { l.innerHTML = ''; e.style.display = 'block'; todoInitSortable(); return; }
   e.style.display = 'none'; var h = '';
   for (var i = 0; i < tasks.length; i++) {
@@ -2218,10 +2249,12 @@ function todoLoad() {
 }
 function todoSave() { saveGlobalTasks(); todoUpdateFloat(); }
 function todoAdd() {
-  var t = document.getElementById('todo-input').value.trim();
+  var inp = document.getElementById('todo-input');
+  if (!inp) return; // Tab removed
+  var t = inp.value.trim();
   if (!t) return;
   addTask(t, 'daily', null, { pinned: false });
-  document.getElementById('todo-input').value = '';
+  inp.value = '';
   renderTodosForDate(fmtLocalDate(new Date()));
   todoUpdateFloat();
 }
