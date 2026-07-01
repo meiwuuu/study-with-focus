@@ -2019,74 +2019,7 @@ function calRenderDetail() {
   if(l.studyTime>0)sh+='<span class="cal-detail-stat">'+calFmtTime(l.studyTime)+'</span>';
   if(l.pomodoros>0)sh+='<span class="cal-detail-stat">'+l.pomodoros+'个番茄</span>';
   document.getElementById('cal-detail-stats').innerHTML=sh;
-  var pl=cal.plans[calSelected]||[];
-  var permTodos = (typeof todos !== 'undefined' ? todos : []).filter(function(t){ return !t.completed; });
-  if(!pl.length && !permTodos.length) { document.getElementById('cal-plan-list').innerHTML=''; document.getElementById('cal-plan-empty').style.display='block'; document.getElementById('cal-plan-empty').textContent = '添加今天的学习计划，或在下方的永久待办中添加'; return; }
-  document.getElementById('cal-plan-empty').style.display='none';
-  var h='';
-
-  // Permanent todos first (from todo list)
-  for (var i=0;i<permTodos.length;i++) {
-    var t=permTodos[i];
-    h+='<div class="cal-plan-item perm">';
-    h+='<input type="checkbox" class="cal-plan-check" onchange="todoToggle('+t.id+');calRenderDetail();">';
-    h+='<span class="cal-plan-dot" style="background:var(--yellow)"></span>';
-    h+='<span class="cal-plan-text">📌 '+escHtml(t.text)+'</span>';
-    h+='<span style="font-size:.65em;color:rgba(255,255,255,.25);flex-shrink:0;">永久</span></div>';
-  }
-
-  // Date-specific plans
-  for (var i=0;i<pl.length;i++) {
-    var pp=pl[i],pc=PLAN_COLORS.find(function(c){return c.v===pp.color;});
-    h+='<div class="cal-plan-item'+(pp.done?' done':'')+'">';
-    h+='<input type="checkbox" class="cal-plan-check"'+(pp.done?' checked':'')+' onchange="calTogglePlan(\''+pp.id+'\')">';
-    h+='<span class="cal-plan-dot" style="background:'+(pc?pc.c:'rgba(255,255,255,.35)')+'"></span>';
-    h+='<span class="cal-plan-text">'+escHtml(pp.text)+'</span>';
-    if(pp.time) {
-      h+='<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">['+escHtml(pp.time)+']</span>';
-      if(!pp.done) {
-        h+='<span onclick="event.stopPropagation();togglePlanAlarm(\''+calSelected+'\',\''+pp.id+'\')" style="cursor:pointer;font-size:.85em;flex-shrink:0;margin-right:4px;" title="切换闹铃">'+(pp.alarm?'🔔':'🔕')+'</span>';
-      }
-    }
-    h+='<button class="cal-plan-del" onclick="calDeletePlan(\''+pp.id+'\')">&times;</button></div>';
-  }
-  document.getElementById('cal-plan-list').innerHTML = h;
-}
-function calAddPlan() {
-  var t=document.getElementById('cal-plan-input').value.trim();
-  if(!t||!calSelected)return;
-  if(!cal.plans[calSelected])cal.plans[calSelected]=[];
-  cal.plans[calSelected].push({
-    id:Date.now().toString(),text:t,done:false,
-    color:document.getElementById('cal-plan-color').value,
-    time:document.getElementById('cal-plan-time').value,
-    alarm:document.getElementById('cal-plan-alarm').checked,
-    alarmTriggered:false
-  });
-  document.getElementById('cal-plan-input').value='';
-  document.getElementById('cal-plan-time').value='';
-  document.getElementById('cal-plan-alarm').checked=false;
-  calSave();calRenderDetail();
-}
-function calTogglePlan(id) {
-  var pl=cal.plans[calSelected]; if(!pl)return;
-  for(var i=0;i<pl.length;i++)if(pl[i].id===id){pl[i].done=!pl[i].done;break;}
-  calSave();calRenderDetail();todoUpdateFloat();
-}
-function calDeletePlan(id) {
-  cal.plans[calSelected]=(cal.plans[calSelected]||[]).filter(function(p){return p.id!==id;});
-  calSave();calRenderDetail();
-}
-function togglePlanAlarm(date, planId) {
-  var pl=cal.plans[date]; if(!pl)return;
-  for(var i=0;i<pl.length;i++) {
-    if(pl[i].id===planId) {
-      pl[i].alarm=!pl[i].alarm;
-      if(pl[i].alarm) pl[i].alarmTriggered=false;
-      break;
-    }
-  }
-  calSave();calRenderDetail();
+  calRenderPlans(calSelected);
 }
 function calAddStudyTime(s) {
   var d = new Date();
@@ -2122,15 +2055,73 @@ function syncCalFromServer() {
     }).catch(function(){});
 }
 
-// ═══════════ TODOS ═══════════
-var todos=[],showTodo=true,showMultiTodo=false;
-function todoLoad(){try{var s=localStorage.getItem('focus_todos');if(s)todos=JSON.parse(s);}catch(e){todos=[];}try{showTodo=localStorage.getItem('focus_todo_show')!=='false';}catch(e){showTodo=true;}try{showMultiTodo=localStorage.getItem('focus_todo_multi')==='true';}catch(e){showMultiTodo=false;}
-  // Reset daily todos on new day
-  var today=fmtLocalDate(new Date());
-  var lastDate=localStorage.getItem('focus_todo_last_date')||'';
-  if(lastDate!==today){for(var i=0;i<todos.length;i++){if(todos[i].daily&&todos[i].completed){todos[i].completed=false;}}localStorage.setItem('focus_todo_last_date',today);todoSave();}
-  document.getElementById('todo-show').checked=showTodo;var mc=document.getElementById('todo-show-multi');if(mc)mc.checked=showMultiTodo;todoRender();todoUpdateFloat();}
+// ═══════════ GLOBAL TASKS (unified data model) ═══════════
+var globalTasks = [];
+var showTodo = true, showMultiTodo = false;
 var _sortableInst = null;
+
+function loadGlobalTasks() {
+  try { var s = localStorage.getItem('global_tasks'); if (s) { globalTasks = JSON.parse(s); return true; } } catch(e) {}
+  return false;
+}
+function saveGlobalTasks() { localStorage.setItem('global_tasks', JSON.stringify(globalTasks)); }
+
+function getTasksForDate(dateStr) {
+  return globalTasks.filter(function(t) {
+    return t.type === 'daily' || (t.type === 'specific' && t.date === dateStr);
+  });
+}
+
+// ─── Migration: converts old focus_todos + focus_calendar.plans → global_tasks ───
+function migrateToGlobalTasks() {
+  var oldTodos = [], oldCal = {};
+  try { oldTodos = JSON.parse(localStorage.getItem('focus_todos') || '[]'); } catch(e) {}
+  try { oldCal = JSON.parse(localStorage.getItem('focus_calendar') || '{}'); } catch(e) {}
+  localStorage.setItem('backup_focus_todos', JSON.stringify(oldTodos));
+  localStorage.setItem('backup_focus_calendar', JSON.stringify(oldCal));
+  var tasks = [], idBase = Date.now();
+  oldTodos.forEach(function(t, i) {
+    tasks.push({ id: String(idBase + i), title: t.text, type: 'daily', done: false, pinned: t.pinned || false, color: 'default' });
+  });
+  var plans = oldCal.plans || {};
+  Object.keys(plans).forEach(function(date) {
+    plans[date].forEach(function(p) {
+      tasks.push({ id: p.id, title: p.text, type: 'specific', date: date, done: p.done || false, color: p.color || 'default', time: p.time || '', alarm: p.alarm || false, alarmTriggered: p.alarmTriggered || false });
+    });
+  });
+  globalTasks = tasks; saveGlobalTasks();
+  // Clear old plan data from calendar object so calSave stops persisting them
+  if (typeof cal !== 'undefined') { cal.plans = {}; calSave(); }
+  return tasks.length;
+}
+
+// ─── Unified CRUD ───
+function addTask(title, type, date, extra) {
+  extra = extra || {};
+  globalTasks.push({ id: String(Date.now()), title: title, type: type, date: type === 'specific' ? date : undefined, done: false, pinned: extra.pinned || false, color: extra.color || 'default', time: extra.time || '', alarm: extra.alarm || false, alarmTriggered: false });
+  saveGlobalTasks();
+}
+function toggleTask(id) {
+  var t = globalTasks.find(function(x) { return x.id === id; });
+  if (t) { t.done = !t.done; saveGlobalTasks(); }
+}
+function deleteTask(id) {
+  globalTasks = globalTasks.filter(function(x) { return x.id !== id; });
+  saveGlobalTasks();
+}
+function pinTask(id) {
+  globalTasks.forEach(function(x) { x.pinned = (x.id === id ? !x.pinned : false); });
+  saveGlobalTasks();
+}
+function toggleTaskType(id) {
+  var t = globalTasks.find(function(x) { return x.id === id; });
+  if (!t) return;
+  if (t.type === 'daily') { t.type = 'specific'; t.date = fmtLocalDate(new Date()); }
+  else { t.type = 'daily'; delete t.date; t.done = false; }
+  saveGlobalTasks();
+}
+
+// ─── SortableJS (drag-to-reorder) ───
 function todoInitSortable() {
   var container = document.getElementById('todo-list');
   if (!container || !container.children.length) { if (_sortableInst) { _sortableInst.destroy(); _sortableInst = null; } return; }
@@ -2140,86 +2131,100 @@ function todoInitSortable() {
     animation: 150,
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
-    onEnd: function(evt) {
-      var moved = todos.splice(evt.oldIndex, 1)[0];
-      todos.splice(evt.newIndex, 0, moved);
-      todoSave();
+    onEnd: function() {
+      var ids = []; var children = container.children;
+      for (var i = 0; i < children.length; i++) {
+        var did = children[i].getAttribute('data-id');
+        if (did) ids.push(did);
+      }
+      var reordered = [];
+      ids.forEach(function(id) {
+        var t = globalTasks.find(function(x) { return x.id === id; });
+        if (t) reordered.push(t);
+      });
+      reordered.forEach(function(t, idx) {
+        var pos = globalTasks.indexOf(t);
+        if (pos >= 0) { globalTasks.splice(pos, 1); globalTasks.splice(idx, 0, t); }
+      });
+      saveGlobalTasks();
     }
   });
 }
-function todoSaveMulti(){showMultiTodo=document.getElementById('todo-show-multi').checked;localStorage.setItem('focus_todo_multi',showMultiTodo.toString());todoUpdateFloat();}
-function todoSave(){localStorage.setItem('focus_todos',JSON.stringify(todos));todoUpdateFloat();}
-function todoSaveShow(){showTodo=document.getElementById('todo-show').checked;localStorage.setItem('focus_todo_show',showTodo.toString());todoUpdateFloat();}
-function todoAdd(){var t=document.getElementById('todo-input').value.trim();if(!t)return;todos.unshift({id:Date.now(),text:t,completed:false,pinned:false,daily:false});document.getElementById('todo-input').value='';todoSave();todoRender();}
-function todoToggle(id){var t=todos.find(function(x){return x.id===id;});if(t){t.completed=!t.completed;}todoSave();todoRender();todoUpdateFloat();}
-function todoPin(id){todos.forEach(function(x){x.pinned=x.id===id?!x.pinned:false;});todoSave();todoRender();}
-function todoDaily(id){var t=todos.find(function(x){return x.id===id;});if(t){t.daily=!t.daily;}todoSave();todoRender();}
-function todoDelete(id){todos=todos.filter(function(x){return x.id!==id;});todoSave();todoRender();}
-function todoRender(){
-  var l=document.getElementById('todo-list'),e=document.getElementById('todo-empty');
-  if(!todos.length){l.innerHTML='';e.style.display='block';todoInitSortable();return;}
-  e.style.display='none';var h='';
-  for(var i=0;i<todos.length;i++){
-    var t=todos[i];
-    h+='<div class="todo-item'+(t.completed?' completed':'')+(t.pinned?' pinned':'')+(t.daily?' daily':'')+'">';
-    h+='<input type="checkbox" class="todo-check"'+(t.completed?' checked':'')+' onchange="todoToggle('+t.id+')">';
-    h+='<span class="todo-text">'+escHtml(t.text)+(t.daily?' <span class="todo-daily-badge">每日</span>':'')+'</span>';
-    h+='<button class="todo-daily-btn'+(t.daily?' active':'')+'" onclick="todoDaily('+t.id+')" title="每日刷新">🔄</button>';
-    h+='<button class="todo-pin'+(t.pinned?' pinned':'')+'" onclick="todoPin('+t.id+')">📌</button>';
-    h+='<button class="todo-del" onclick="todoDelete('+t.id+')">&times;</button></div>';
+
+// ─── Rendering ───
+function renderTodosForDate(dateStr) {
+  var tasks = getTasksForDate(dateStr);
+  var l = document.getElementById('todo-list'), e = document.getElementById('todo-empty');
+  if (!tasks.length) { l.innerHTML = ''; e.style.display = 'block'; todoInitSortable(); return; }
+  e.style.display = 'none'; var h = '';
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    h += '<div class="todo-item' + (t.done ? ' completed' : '') + (t.pinned ? ' pinned' : '') + (t.type === 'daily' ? ' daily' : '') + '" data-id="' + t.id + '">';
+    h += '<input type="checkbox" class="todo-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');todoUpdateFloat();">';
+    h += '<span class="todo-text">' + escHtml(t.title) + (t.type === 'daily' ? ' <span class="todo-daily-badge">每日</span>' : '') + '</span>';
+    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="toggleTaskType(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');" title="切换每日/一次性">🔄</button>';
+    h += '<button class="todo-pin' + (t.pinned ? ' pinned' : '') + '" onclick="pinTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');">📌</button>';
+    h += '<button class="todo-del" onclick="deleteTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');todoUpdateFloat();">&times;</button></div>';
   }
-  l.innerHTML=h;
+  l.innerHTML = h;
   todoInitSortable();
 }
-// 在浮窗中直接勾选日历计划
-function calTogglePlanFromFloat(date, id) {
-    var pl = cal.plans[date];
-    if (!pl) return;
-    for (var i = 0; i < pl.length; i++) {
-        if (pl[i].id === id) {
-            pl[i].done = !pl[i].done;
-            break;
-        }
-    }
-    calSave();
-    if (calSelected === date) calRenderDetail();
-    todoUpdateFloat();
-}
 
+// ─── Todo tab lifecycle ───
+function todoLoad() {
+  if (!loadGlobalTasks()) {
+    var migrated = migrateToGlobalTasks();
+    if (!migrated) { globalTasks = []; }
+  }
+  // Ensure cal.plans is emptied (one-time cleanup after migration)
+  if (typeof cal !== 'undefined' && cal.plans && Object.keys(cal.plans).length > 0) { cal.plans = {}; calSave(); }
+  try { showTodo = localStorage.getItem('focus_todo_show') !== 'false'; } catch(e) { showTodo = true; }
+  try { showMultiTodo = localStorage.getItem('focus_todo_multi') === 'true'; } catch(e) { showMultiTodo = false; }
+  document.getElementById('todo-show').checked = showTodo;
+  var mc = document.getElementById('todo-show-multi'); if (mc) mc.checked = showMultiTodo;
+  renderTodosForDate(fmtLocalDate(new Date()));
+  todoUpdateFloat();
+}
+function todoSave() { saveGlobalTasks(); todoUpdateFloat(); }
+function todoAdd() {
+  var t = document.getElementById('todo-input').value.trim();
+  if (!t) return;
+  addTask(t, 'daily', null, { pinned: false });
+  document.getElementById('todo-input').value = '';
+  renderTodosForDate(fmtLocalDate(new Date()));
+  todoUpdateFloat();
+}
+function todoSaveShow() { showTodo = document.getElementById('todo-show').checked; localStorage.setItem('focus_todo_show', showTodo.toString()); todoUpdateFloat(); }
+function todoSaveMulti() { showMultiTodo = document.getElementById('todo-show-multi').checked; localStorage.setItem('focus_todo_multi', showMultiTodo.toString()); todoUpdateFloat(); }
+
+// Backward-compat wrappers
+function todoToggle(id) { toggleTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); todoUpdateFloat(); }
+function todoPin(id) { pinTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); }
+function todoDaily(id) { toggleTaskType(String(id)); renderTodosForDate(fmtLocalDate(new Date())); }
+function todoDelete(id) { deleteTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); todoUpdateFloat(); }
+
+// ─── Floating todo display (on main Pomodoro screen) ───
 function todoUpdateFloat() {
   var el = document.getElementById('pomo-float-todo');
   var lst = document.getElementById('pomo-float-todo-list');
   if (!el || !lst) return;
   if (!showTodo) { el.classList.remove('show'); return; }
+  var today = fmtLocalDate(new Date());
+  var todayTasks = getTasksForDate(today).filter(function(t) { return !t.done; });
 
   if (showMultiTodo) {
-    var items = [];
-    for (var i = 0; i < todos.length; i++) {
-      if (!todos[i].completed) items.push({text: todos[i].text, source: 'todo', id: todos[i].id, pinned: todos[i].pinned});
-    }
-    var _today = fmtLocalDate(new Date());
-    if (cal.plans[_today]) {
-      var plans = cal.plans[_today].filter(function(p){ return !p.done; });
-      for (var j = 0; j < plans.length; j++) {
-        items.push({text: plans[j].text, source: 'plan', color: plans[j].color, id: plans[j].id, date: _today, time: plans[j].time, alarm: plans[j].alarm});
-      }
-    }
-    if (!items.length) { el.classList.remove('show'); return; }
-
+    if (!todayTasks.length) { el.classList.remove('show'); return; }
     var h = '';
-    for (var k = 0; k < items.length; k++) {
-      var it = items[k];
-      var dot = it.source === 'todo' ? 'var(--yellow)' : (PLAN_COLORS.find(function(c){return c.v===it.color;})||{c:'rgba(255,255,255,.35)'}).c;
+    for (var k = 0; k < todayTasks.length; k++) {
+      var it = todayTasks[k];
+      var pc = PLAN_COLORS.find(function(c) { return c.v === it.color; });
+      var dot = pc ? pc.c : (it.type === 'daily' ? 'var(--yellow)' : 'rgba(255,255,255,.35)');
       h += '<div class="pomo-float-task">';
-      if (it.source === 'todo') {
-        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();todoToggle('+it.id+')">';
-      } else if (it.source === 'plan') {
-        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();calTogglePlanFromFloat(\''+it.date+'\', \''+it.id+'\')">';
-      }
-      h += '<span class="td-dot" style="background:'+dot+'"></span>';
-      h += escHtml(it.text);
+      h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===\"function\")calRenderDetail();">';
+      h += '<span class="td-dot" style="background:' + dot + '"></span>';
+      h += escHtml(it.title);
       if (it.time) {
-        h += ' <span style="color:var(--yellow);font-size:.85em;">'+escHtml(it.time)+'</span>';
+        h += ' <span style="color:var(--yellow);font-size:.85em;">' + escHtml(it.time) + '</span>';
         if (it.alarm) h += ' 🔔';
       }
       h += '</div>';
@@ -2227,30 +2232,70 @@ function todoUpdateFloat() {
     lst.innerHTML = h;
     el.classList.add('show');
   } else {
-    var pinned = todos.find(function(t){return !t.completed && t.pinned;});
-    var active = pinned || todos.filter(function(t){return !t.completed;}).pop();
-    var isPlan = false;
-    var activeDate = null;
-    var _today2 = fmtLocalDate(new Date());
-    if (!active && cal.plans[_today2]) {
-      active = cal.plans[_today2].filter(function(p){return !p.done;}).pop();
-      if (active) { isPlan = true; activeDate = _today2; }
-    }
-    
+    var pinned = todayTasks.find(function(t) { return t.pinned; });
+    var active = pinned || todayTasks[todayTasks.length - 1];
     if (active) {
       var h = '<div class="pomo-float-task">';
-      if (isPlan) {
-        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();calTogglePlanFromFloat(\''+activeDate+'\', \''+active.id+'\')">';
-      } else if (active.id) {
-        h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();todoToggle('+active.id+')">';
-      }
-      h += '<span class="td-label">当前:</span>'+escHtml(active.text)+'</div>';
+      h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + active.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===\"function\")calRenderDetail();">';
+      h += '<span class="td-label">当前:</span>' + escHtml(active.title) + '</div>';
       lst.innerHTML = h;
       el.classList.add('show');
     } else {
       el.classList.remove('show');
     }
   }
+}
+
+// ─── Calendar plan rendering (uses global_tasks) ───
+function calRenderPlans(dateStr) {
+  var tasks = getTasksForDate(dateStr);
+  var container = document.getElementById('cal-plan-list');
+  var emptyEl = document.getElementById('cal-plan-empty');
+  if (!tasks.length) { container.innerHTML = ''; emptyEl.style.display = 'block'; emptyEl.textContent = '暂无学习计划'; return; }
+  emptyEl.style.display = 'none'; var h = '';
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    var pc = PLAN_COLORS.find(function(c) { return c.v === t.color; });
+    var dotColor = pc ? pc.c : (t.type === 'daily' ? 'var(--yellow)' : 'rgba(255,255,255,.35)');
+    h += '<div class="cal-plan-item' + (t.done ? ' done' : '') + (t.type === 'daily' ? ' perm' : '') + '">';
+    h += '<input type="checkbox" class="cal-plan-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">';
+    h += '<span class="cal-plan-dot" style="background:' + dotColor + '"></span>';
+    h += '<span class="cal-plan-text">' + (t.type === 'daily' ? '📌 ' : '') + escHtml(t.title) + '</span>';
+    if (t.type === 'daily') {
+      h += '<span style="font-size:.65em;color:rgba(255,255,255,.25);flex-shrink:0;">每日</span>';
+    }
+    if (t.time) {
+      h += '<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">[' + escHtml(t.time) + ']</span>';
+      if (!t.done) {
+        h += '<span onclick="event.stopPropagation();togglePlanAlarm(\'' + dateStr + '\',\'' + t.id + '\')" style="cursor:pointer;font-size:.85em;flex-shrink:0;margin-right:4px;" title="切换闹铃">' + (t.alarm ? '🔔' : '🔕') + '</span>';
+      }
+    }
+    h += '<button class="cal-plan-del" onclick="deleteTask(\'' + t.id + '\');calRenderDetail();">&times;</button></div>';
+  }
+  container.innerHTML = h;
+}
+
+// ─── Calendar plan CRUD wrappers ───
+function calAddPlan() {
+  var t = document.getElementById('cal-plan-input').value.trim();
+  if (!t || !calSelected) return;
+  addTask(t, 'specific', calSelected, {
+    color: document.getElementById('cal-plan-color').value,
+    time: document.getElementById('cal-plan-time').value,
+    alarm: document.getElementById('cal-plan-alarm').checked
+  });
+  document.getElementById('cal-plan-input').value = '';
+  document.getElementById('cal-plan-time').value = '';
+  document.getElementById('cal-plan-alarm').checked = false;
+  calSave(); calRenderDetail();
+}
+function calTogglePlan(id) { toggleTask(id); calSave(); calRenderDetail(); todoUpdateFloat(); }
+function calDeletePlan(id) { deleteTask(id); calSave(); calRenderDetail(); }
+function calTogglePlanFromFloat(date, id) { toggleTask(id); calSave(); if (calSelected === date) calRenderDetail(); todoUpdateFloat(); }
+function togglePlanAlarm(date, planId) {
+  var t = globalTasks.find(function(x) { return x.id === planId; });
+  if (t) { t.alarm = !t.alarm; if (t.alarm) t.alarmTriggered = false; }
+  calSave(); calRenderDetail();
 }
 
 // ═══════════ BLOCK ═══════════
