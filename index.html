@@ -2287,14 +2287,13 @@ function calRenderPlans(dateStr) {
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     var pc = PLAN_COLORS.find(function(c) { return c.v === t.color; });
-    var dotColor = pc ? pc.c : (t.type === 'daily' ? 'var(--yellow)' : 'rgba(255,255,255,.35)');
+    // Daily tasks always gold dot, specific tasks use subject color or default grey
+    var dotColor = t.type === 'daily' ? 'var(--yellow)' : (pc ? pc.c : 'rgba(255,255,255,.35)');
     h += '<div class="cal-plan-item' + (t.done ? ' done' : '') + (t.type === 'daily' ? ' perm' : '') + '" data-id="' + t.id + '">';
     h += '<input type="checkbox" class="cal-plan-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">';
     h += '<span class="cal-plan-dot" style="background:' + dotColor + '"></span>';
     h += '<span class="cal-plan-text">' + (t.type === 'daily' ? '📌 ' : '') + escHtml(t.title) + '</span>';
-    if (t.type === 'daily') {
-      h += '<span style="font-size:.65em;color:rgba(255,255,255,.25);flex-shrink:0;">每日</span>';
-    }
+    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="event.stopPropagation();toggleTaskType(\'' + t.id + '\');calRenderDetail();" title="切换每日/一次性" style="flex-shrink:0;">🔄</button>';
     if (t.time) {
       h += '<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">[' + escHtml(t.time) + ']</span>';
       if (!t.done) {
