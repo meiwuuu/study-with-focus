@@ -2256,7 +2256,7 @@ function todoUpdateFloat() {
       var pc = PLAN_COLORS.find(function(c) { return c.v === it.color; });
       var dot = it.type === 'daily' ? 'var(--yellow)' : (pc ? pc.c : 'rgba(255,255,255,.35)');
       h += '<div class="pomo-float-task">';
-      h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===\"function\")calRenderDetail();">';
+      h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail==="function")calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot + '"></span>';
       h += escHtml(it.title);
       if (it.time) {
