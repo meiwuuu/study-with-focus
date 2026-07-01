@@ -1907,27 +1907,9 @@ function calRender() {
   }
 
   if (calStatsSubject === 'subject') {
-    // ─── 学科统计模式：从服务器数据聚合科目时长 ───
-    var subjTimes = {math:0, cs:0, eng:0, pol:0};
-    if (typeof stats !== 'undefined' && stats.daily_logs) {
-      for (var dk in stats.daily_logs) {
-        var dl = stats.daily_logs[dk];
-        if (!dl || !dl.segments) continue;
-        // Filter by time range
-        if (calStatsMode === 'month') {
-          var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
-          if (dy !== calYear || dm !== calMonth) continue;
-        }
-        for (var si = 0; si < dl.segments.length; si++) {
-          var seg = dl.segments[si];
-          var subj = seg.subject || '';
-          var dur = seg.duration || 0;
-          if (subjTimes.hasOwnProperty(subj)) subjTimes[subj] += dur;
-        }
-      }
-    }
-    // Also add from localStorage calendar plans (fallback when server offline)
-    if (subjTimes.math + subjTimes.cs + subjTimes.eng + subjTimes.pol === 0) {
+    // ─── 学科统计模式：从 cal.subjectBreakdown 读取（syncCalMonth 时计算并缓存）───
+    var sb = cal.subjectBreakdown || {math:0, cs:0, eng:0, pol:0};
+    if (sb.math + sb.cs + sb.eng + sb.pol === 0) {
       document.getElementById('cal-active-days').textContent = '…';
       document.getElementById('cal-total-time').textContent = '需后端';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
@@ -1939,15 +1921,15 @@ function calRender() {
       var elAD = document.getElementById('cal-active-days');
       var elTT = document.getElementById('cal-total-time');
       var elTP = document.getElementById('cal-total-pomos');
-      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(subjTimes.math)+'</div>';
-      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(subjTimes.cs)+'</div>';
-      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(subjTimes.eng)+'</div>';
+      elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(sb.math)+'</div>';
+      elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(sb.cs)+'</div>';
+      elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(sb.eng)+'</div>';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
       document.getElementById('cal-lbl-2').textContent = '';
       // Add政治 as a note if > 0
-      if (subjTimes.pol > 0) {
-        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(subjTimes.pol)+'</div>';
+      if (sb.pol > 0) {
+        elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(sb.pol)+'</div>';
       }
     }
   } else if (calStatsMode === 'all') {
@@ -2068,18 +2050,29 @@ function syncCalMonth() {
           pending--;
           if (pending <= 0) {
             calSave();
-            calRender();
-            if (calSelected) calRenderDetail();
-            // Also fetch full stats for subject breakdown
-            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){stats=s;calRender();}).catch(function(){});
+            // Fetch full stats, calculate subject breakdown, store in cal
+            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){
+              var sb = {math:0, cs:0, eng:0, pol:0};
+              var dls = s.daily_logs || {};
+              for (var dk in dls) {
+                var dp = dk.split('-'), dy = parseInt(dp[0]), dm = parseInt(dp[1])-1;
+                if (dy !== calYear || dm !== calMonth) continue;
+                var segs = dls[dk].segments || [];
+                for (var si = 0; si < segs.length; si++) {
+                  var subj = segs[si].subject || '';
+                  if (sb.hasOwnProperty(subj)) sb[subj] += segs[si].duration || 0;
+                }
+              }
+              cal.subjectBreakdown = sb; calSave();
+              calRender(); if (calSelected) calRenderDetail();
+            }).catch(function(){
+              calRender(); if (calSelected) calRenderDetail();
+            });
           }
         }).catch(function() {
           pending--;
           if (pending <= 0) {
-            calSave();
-            calRender();
-            if (calSelected) calRenderDetail();
-            fetch(API + '/api/stats').then(function(r){return r.json();}).then(function(s){stats=s;calRender();}).catch(function(){});
+            calRender(); if (calSelected) calRenderDetail();
           }
         });
     })(d);
