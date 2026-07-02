@@ -2601,8 +2601,8 @@ function updateStatusBar() {
 }
 
 // ═══════════ LEARNING LOG ═══════════
-var SUBJECT_NAMES = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
-var SUBJECT_COLORS = {math:'#60a5fa', cs:'#a78bfa', eng:'#fb923c', pol:'#f87171'};
+var SUBJECT_NAMES = {math:'数学', cs:'408', eng:'英语', pol:'政治', sport:'运动'};
+var SUBJECT_COLORS = {math:'#60a5fa', cs:'#a78bfa', eng:'#fb923c', pol:'#f87171', sport:'#4ade80'};
 
 function fmtDuration(s) {
   var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s % 60;
@@ -3092,7 +3092,7 @@ function closeManDateDropdown() {
 function setManSubject(subj, e) {
   if (e) { e.stopPropagation(); closeManSubjectDropdown(); }
   manSubject = subj;
-  var names = {'':'不区分', math:'数学一', cs:'408综合', eng:'英语一', pol:'政治'};
+  var names = {'':'不区分', math:'数学一', cs:'408综合', eng:'英语一', pol:'政治', sport:'运动'};
   document.getElementById('man-subject-label').textContent = names[subj] || '不区分';
   var opts = document.querySelectorAll('#man-subject-dropdown .cs-option');
   opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === subj); });
