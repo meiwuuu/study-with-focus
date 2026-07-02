@@ -504,6 +504,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .cal-plan-item.done { opacity:.4; }
 .cal-plan-item.done .cal-plan-text { text-decoration:line-through; }
 .cal-plan-item.perm { border-color:rgba(255,193,7,.15); }
+.cal-plan-item.persist { border-color:rgba(168,85,247,.18); }
 .cal-plan-check { width:16px;height:16px;cursor:pointer;accent-color:var(--break);flex-shrink:0; }
 .cal-plan-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
 .cal-plan-text { flex:1;font-size:.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
@@ -533,9 +534,13 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .todo-check { width:17px;height:17px;cursor:pointer;accent-color:var(--break);flex-shrink:0; }
 .todo-text { flex:1;font-size:.85em; }
 .todo-daily-badge { font-size:.65em;background:rgba(59,130,246,.15);color:#60a5fa;padding:1px 6px;border-radius:8px;margin-left:4px; }
+.todo-persist-badge { font-size:.65em;background:rgba(168,85,247,.15);color:#c084fc;padding:1px 6px;border-radius:8px;margin-left:4px; }
 .todo-daily-btn { background:none;border:1px solid transparent;color:rgba(255,255,255,.20);cursor:pointer;font-size:.8em;padding:2px 6px;border-radius:6px;transition:all .2s; }
 .todo-daily-btn:hover { background:rgba(59,130,246,.15);color:#60a5fa; }
 .todo-daily-btn.active { background:rgba(59,130,246,.20);color:#60a5fa;border-color:rgba(59,130,246,.30); }
+.todo-persist-btn { background:none;border:1px solid transparent;color:rgba(255,255,255,.20);cursor:pointer;font-size:.8em;padding:2px 6px;border-radius:6px;transition:all .2s; }
+.todo-persist-btn:hover { background:rgba(168,85,247,.15);color:#c084fc; }
+.todo-persist-btn.active { background:rgba(168,85,247,.20);color:#c084fc;border-color:rgba(168,85,247,.30); }
 .todo-pin {
   width:28px;height:28px;border-radius:50%;background:rgba(255,193,7,.10);
   border:1px solid rgba(255,193,7,.20);color:rgba(255,193,7,.55);
@@ -2071,7 +2076,7 @@ function saveGlobalTasks() { localStorage.setItem('global_tasks', JSON.stringify
 
 function getTasksForDate(dateStr) {
   return globalTasks.filter(function(t) {
-    return t.type === 'daily' || (t.type === 'specific' && t.date === dateStr);
+    return t.type === 'daily' || t.type === 'persistent' || (t.type === 'specific' && t.date === dateStr);
   });
 }
 
@@ -2121,6 +2126,13 @@ function toggleTaskType(id) {
   if (!t) return;
   if (t.type === 'daily') { t.type = 'specific'; t.date = fmtLocalDate(new Date()); }
   else { t.type = 'daily'; delete t.date; t.done = false; }
+  saveGlobalTasks();
+}
+function setTaskPersistent(id) {
+  var t = globalTasks.find(function(x) { return x.id === id; });
+  if (!t) return;
+  if (t.type === 'persistent') { t.type = 'daily'; delete t.date; }
+  else { t.type = 'persistent'; delete t.date; }
   saveGlobalTasks();
 }
 
@@ -2193,10 +2205,11 @@ function renderTodosForDate(dateStr) {
   e.style.display = 'none'; var h = '';
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
-    h += '<div class="todo-item' + (t.done ? ' completed' : '') + (t.pinned ? ' pinned' : '') + (t.type === 'daily' ? ' daily' : '') + '" data-id="' + t.id + '">';
+    h += '<div class="todo-item' + (t.done ? ' completed' : '') + (t.pinned ? ' pinned' : '') + (t.type === 'daily' ? ' daily' : '') + (t.type === 'persistent' ? ' persist' : '') + '" data-id="' + t.id + '">';
     h += '<input type="checkbox" class="todo-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');todoUpdateFloat();">';
-    h += '<span class="todo-text">' + escHtml(t.title) + (t.type === 'daily' ? ' <span class="todo-daily-badge">每日</span>' : '') + '</span>';
-    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="toggleTaskType(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');" title="切换每日/一次性">🔄</button>';
+    h += '<span class="todo-text">' + escHtml(t.title) + (t.type === 'daily' ? ' <span class="todo-daily-badge">每日</span>' : '') + (t.type === 'persistent' ? ' <span class="todo-persist-badge">常驻</span>' : '') + '</span>';
+    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="toggleTaskType(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');" title="切换每日/一次性">🔁</button>';
+    h += '<button class="todo-persist-btn' + (t.type === 'persistent' ? ' active' : '') + '" onclick="setTaskPersistent(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');" title="设为常驻">📌</button>';
     h += '<button class="todo-pin' + (t.pinned ? ' pinned' : '') + '" onclick="pinTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');">📌</button>';
     h += '<button class="todo-del" onclick="deleteTask(\'' + t.id + '\');renderTodosForDate(\'' + dateStr + '\');todoUpdateFloat();">&times;</button></div>';
   }
@@ -2268,7 +2281,7 @@ function todoUpdateFloat() {
     for (var k = 0; k < todayTasks.length; k++) {
       var it = todayTasks[k];
       var pc = PLAN_COLORS.find(function(c) { return c.v === it.color; });
-      var dot = it.type === 'daily' ? 'var(--yellow)' : (pc ? pc.c : 'rgba(255,255,255,.35)');
+      var dot = it.type === 'daily' ? 'var(--yellow)' : it.type === 'persistent' ? '#c084fc' : (pc ? pc.c : 'rgba(255,255,255,.35)');
       h += '<div class="pomo-float-task">';
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot + '"></span>';
@@ -2286,7 +2299,7 @@ function todoUpdateFloat() {
     var active = pinned || todayTasks[todayTasks.length - 1];
     if (active) {
       var pc2 = PLAN_COLORS.find(function(c) { return c.v === active.color; });
-      var dot2 = active.type === 'daily' ? 'var(--yellow)' : (pc2 ? pc2.c : 'rgba(255,255,255,.35)');
+      var dot2 = active.type === 'daily' ? 'var(--yellow)' : active.type === 'persistent' ? '#c084fc' : (pc2 ? pc2.c : 'rgba(255,255,255,.35)');
       var h = '<div class="pomo-float-task">';
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + active.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot2 + '"></span>';
@@ -2309,13 +2322,15 @@ function calRenderPlans(dateStr) {
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     var pc = PLAN_COLORS.find(function(c) { return c.v === t.color; });
-    // Daily tasks always gold dot, specific tasks use subject color or default grey
-    var dotColor = t.type === 'daily' ? 'var(--yellow)' : (pc ? pc.c : 'rgba(255,255,255,.35)');
-    h += '<div class="cal-plan-item' + (t.done ? ' done' : '') + (t.type === 'daily' ? ' perm' : '') + '" data-id="' + t.id + '">';
+    // Daily=gold dot, persistent=purple, specific=subject color
+    var dotColor = t.type === 'daily' ? 'var(--yellow)' : t.type === 'persistent' ? '#c084fc' : (pc ? pc.c : 'rgba(255,255,255,.35)');
+    var typeCls = t.type === 'daily' ? ' perm' : t.type === 'persistent' ? ' persist' : '';
+    h += '<div class="cal-plan-item' + (t.done ? ' done' : '') + typeCls + '" data-id="' + t.id + '">';
     h += '<input type="checkbox" class="cal-plan-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">';
     h += '<span class="cal-plan-dot" style="background:' + dotColor + '"></span>';
     h += '<span class="cal-plan-text">' + escHtml(t.title) + '</span>';
-    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="event.stopPropagation();toggleTaskType(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();" title="切换每日/一次性" style="flex-shrink:0;">📌</button>';
+    h += '<button class="todo-daily-btn' + (t.type === 'daily' ? ' active' : '') + '" onclick="event.stopPropagation();toggleTaskType(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();" title="切换每日/一次性" style="flex-shrink:0;">🔁</button>';
+    h += '<button class="todo-persist-btn' + (t.type === 'persistent' ? ' active' : '') + '" onclick="event.stopPropagation();setTaskPersistent(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();" title="设为常驻" style="flex-shrink:0;">📌</button>';
     if (t.time) {
       h += '<span style="color:var(--accent);font-size:.72em;flex-shrink:0;margin-left:auto;margin-right:4px;">[' + escHtml(t.time) + ']</span>';
       if (!t.done) {
