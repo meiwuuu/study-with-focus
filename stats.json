@@ -1,9 +1,9 @@
 {
   "today": "2026-07-01",
-  "today_time": 1500,
-  "today_pomodoros": 1,
-  "total_time": 403935,
-  "total_pomodoros": 259,
+  "today_time": 3000,
+  "today_pomodoros": 2,
+  "total_time": 405435,
+  "total_pomodoros": 260,
   "sessions": [
     {
       "date": "2026-06-01 11:29",
@@ -9934,6 +9934,56 @@
           "pomodoroNum": 1,
           "totalSec": 1500,
           "ts": "2026-07-01T06:56:34.170Z",
+          "action": "complete"
+        }
+      ]
+    },
+    {
+      "date": "2026-07-01 15:45",
+      "duration": 1500,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "subject": "eng",
+          "accSeconds": 4,
+          "ts": "2026-07-01T07:01:38.522Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:04:52.366Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 503,
+          "ts": "2026-07-01T07:13:16.457Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:26:37.689Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 1469,
+          "ts": "2026-07-01T07:42:44.522Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:45:12.060Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 2,
+          "totalSec": 1496,
+          "ts": "2026-07-01T07:45:39.079Z",
           "action": "complete"
         }
       ]
@@ -20518,10 +20568,16 @@
           "end": "14:56",
           "duration": 1500,
           "subject": "eng"
+        },
+        {
+          "start": "15:04",
+          "end": "15:45",
+          "duration": 1500,
+          "subject": "eng"
         }
       ],
-      "total_time": 1500,
-      "pomodoros": 1,
+      "total_time": 3000,
+      "pomodoros": 2,
       "timeline": [
         {
           "from": "",
@@ -20643,6 +20699,49 @@
           "pomodoroNum": 1,
           "totalSec": 1500,
           "ts": "2026-07-01T06:56:34.170Z",
+          "action": "complete"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 4,
+          "ts": "2026-07-01T07:01:38.522Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:04:52.366Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 503,
+          "ts": "2026-07-01T07:13:16.457Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:26:37.689Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "accSeconds": 1469,
+          "ts": "2026-07-01T07:42:44.522Z",
+          "action": "pause"
+        },
+        {
+          "subject": "eng",
+          "running": true,
+          "ts": "2026-07-01T07:45:12.060Z",
+          "action": "start"
+        },
+        {
+          "subject": "eng",
+          "pomodoroNum": 2,
+          "totalSec": 1496,
+          "ts": "2026-07-01T07:45:39.079Z",
           "action": "complete"
         }
       ]
