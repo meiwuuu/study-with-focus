@@ -975,6 +975,35 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-sm btn-accent" onclick="saveTheme()">保存</button>
             </div>
           </div>
+          <div class="card" style="margin-bottom:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">任务圆点颜色</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="theme-custom-row">
+                <span style="font-size:.78em;width:70px;">每日</span>
+                <span class="dot-preview" id="dot-daily-preview" style="width:12px;height:12px;border-radius:50%;background:#ffc107;flex-shrink:0;"></span>
+                <input type="color" id="dot-daily" value="#ffc107" onchange="saveDotColors()" style="width:36px;height:28px;">
+                <input type="text" id="dot-daily-hex" value="#ffc107" placeholder="#ffc107"
+                  onchange="saveDotColors()" style="width:80px;">
+                <button class="btn btn-sm" onclick="resetDotColor('daily')" style="font-size:.7em;">默认</button>
+              </div>
+              <div class="theme-custom-row">
+                <span style="font-size:.78em;width:70px;">常驻</span>
+                <span class="dot-preview" id="dot-persist-preview" style="width:12px;height:12px;border-radius:50%;background:#c084fc;flex-shrink:0;"></span>
+                <input type="color" id="dot-persist" value="#c084fc" onchange="saveDotColors()" style="width:36px;height:28px;">
+                <input type="text" id="dot-persist-hex" value="#c084fc" placeholder="#c084fc"
+                  onchange="saveDotColors()" style="width:80px;">
+                <button class="btn btn-sm" onclick="resetDotColor('persist')" style="font-size:.7em;">默认</button>
+              </div>
+              <div class="theme-custom-row">
+                <span style="font-size:.78em;width:70px;">默认</span>
+                <span class="dot-preview" id="dot-default-preview" style="width:12px;height:12px;border-radius:50%;background:#999;flex-shrink:0;"></span>
+                <input type="color" id="dot-default" value="#999999" onchange="saveDotColors()" style="width:36px;height:28px;">
+                <input type="text" id="dot-default-hex" value="#999999" placeholder="#999999"
+                  onchange="saveDotColors()" style="width:80px;">
+                <button class="btn btn-sm" onclick="resetDotColor('default')" style="font-size:.7em;">默认</button>
+              </div>
+            </div>
+          </div>
           <div class="card">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">预览</div>
             <div class="theme-preview" id="theme-preview">
@@ -1406,6 +1435,10 @@ function buildThemePresets() {
   container.innerHTML = html;
 }
 
+// ═══════════ Dot Colors ═══════════
+var dotColors = { daily: '#ffc107', persist: '#c084fc', default: '#999999' };
+var DOT_DEFAULTS = { daily: '#ffc107', persist: '#c084fc', default: '#999999' };
+
 // Load saved theme on init
 (function() {
   buildThemePresets();
@@ -1413,7 +1446,58 @@ function buildThemePresets() {
   try { saved = localStorage.getItem('focus_theme') || '#60a5fa'; } catch(e) {}
   applyTheme(saved);
   loadBrowserSetting();
+  loadDotColors();
 })();
+
+function loadDotColors() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('focus_dot_colors'));
+    if (saved && saved.daily) dotColors.daily = saved.daily;
+    if (saved && saved.persist) dotColors.persist = saved.persist;
+    if (saved && saved.default) dotColors.default = saved.default;
+  } catch(e) {}
+  syncDotInputs();
+}
+
+function saveDotColors() {
+  dotColors.daily = readDotInput('daily');
+  dotColors.persist = readDotInput('persist');
+  dotColors.default = readDotInput('default');
+  try { localStorage.setItem('focus_dot_colors', JSON.stringify(dotColors)); } catch(e) {}
+  syncDotInputs();
+  // Re-render current views
+  if (typeof calSelected !== 'undefined' && calSelected) calRenderDetail();
+  renderTodosForDate(fmtLocalDate(new Date()));
+  todoUpdateFloat();
+}
+
+function readDotInput(type) {
+  var hexEl = document.getElementById('dot-' + type + '-hex');
+  if (hexEl && /^#[0-9a-fA-F]{6}$/.test(hexEl.value)) return hexEl.value;
+  var colEl = document.getElementById('dot-' + type);
+  if (colEl && /^#[0-9a-fA-F]{6}$/.test(colEl.value)) return colEl.value;
+  return DOT_DEFAULTS[type];
+}
+
+function syncDotInputs() {
+  ['daily','persist','default'].forEach(function(type) {
+    var colEl = document.getElementById('dot-' + type);
+    var hexEl = document.getElementById('dot-' + type + '-hex');
+    var prevEl = document.getElementById('dot-' + type + '-preview');
+    if (colEl) colEl.value = dotColors[type];
+    if (hexEl) hexEl.value = dotColors[type];
+    if (prevEl) prevEl.style.background = dotColors[type];
+  });
+}
+
+function resetDotColor(type) {
+  dotColors[type] = DOT_DEFAULTS[type];
+  try { localStorage.setItem('focus_dot_colors', JSON.stringify(dotColors)); } catch(e) {}
+  syncDotInputs();
+  if (typeof calSelected !== 'undefined' && calSelected) calRenderDetail();
+  renderTodosForDate(fmtLocalDate(new Date()));
+  todoUpdateFloat();
+}
 
 // ═══════════ POMODORO ═══════════
 var pomo = {
@@ -2290,7 +2374,7 @@ function todoUpdateFloat() {
     for (var k = 0; k < todayTasks.length; k++) {
       var it = todayTasks[k];
       var pc = PLAN_COLORS.find(function(c) { return c.v === it.color; });
-      var dot = it.type === 'daily' ? 'var(--yellow)' : it.type === 'persistent' ? '#c084fc' : (pc ? pc.c : 'rgba(255,255,255,.35)');
+      var dot = it.type === 'daily' ? dotColors.daily : it.type === 'persistent' ? dotColors.persist : (pc ? pc.c : dotColors.default);
       h += '<div class="pomo-float-task">';
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot + '"></span>';
@@ -2308,7 +2392,7 @@ function todoUpdateFloat() {
     var active = pinned || todayTasks[todayTasks.length - 1];
     if (active) {
       var pc2 = PLAN_COLORS.find(function(c) { return c.v === active.color; });
-      var dot2 = active.type === 'daily' ? 'var(--yellow)' : active.type === 'persistent' ? '#c084fc' : (pc2 ? pc2.c : 'rgba(255,255,255,.35)');
+      var dot2 = active.type === 'daily' ? dotColors.daily : active.type === 'persistent' ? dotColors.persist : (pc2 ? pc2.c : dotColors.default);
       var h = '<div class="pomo-float-task">';
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + active.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot2 + '"></span>';
@@ -2332,7 +2416,7 @@ function calRenderPlans(dateStr) {
     var t = tasks[i];
     var pc = PLAN_COLORS.find(function(c) { return c.v === t.color; });
     // Daily=gold dot, persistent=purple, specific=subject color
-    var dotColor = t.type === 'daily' ? 'var(--yellow)' : t.type === 'persistent' ? '#c084fc' : (pc ? pc.c : 'rgba(255,255,255,.35)');
+    var dotColor = t.type === 'daily' ? dotColors.daily : t.type === 'persistent' ? dotColors.persist : (pc ? pc.c : dotColors.default);
     var typeCls = t.type === 'daily' ? ' perm' : t.type === 'persistent' ? ' persist' : '';
     h += '<div class="cal-plan-item' + (t.done ? ' done' : '') + typeCls + '" data-id="' + t.id + '">';
     h += '<input type="checkbox" class="cal-plan-check"' + (t.done ? ' checked' : '') + ' onchange="toggleTask(\'' + t.id + '\');calRenderDetail();todoUpdateFloat();">';
