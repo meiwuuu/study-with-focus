@@ -1472,10 +1472,13 @@ function saveDotColors() {
 }
 
 function readDotInput(type) {
-  var hexEl = document.getElementById('dot-' + type + '-hex');
-  if (hexEl && /^#[0-9a-fA-F]{6}$/.test(hexEl.value)) return hexEl.value;
   var colEl = document.getElementById('dot-' + type);
+  var hexEl = document.getElementById('dot-' + type + '-hex');
+  // If user is typing in hex field, trust hex first
+  if (hexEl && document.activeElement === hexEl && /^#[0-9a-fA-F]{6}$/.test(hexEl.value)) return hexEl.value;
+  // Otherwise trust color picker (always accurate)
   if (colEl && /^#[0-9a-fA-F]{6}$/.test(colEl.value)) return colEl.value;
+  if (hexEl && /^#[0-9a-fA-F]{6}$/.test(hexEl.value)) return hexEl.value;
   return DOT_DEFAULTS[type];
 }
 
