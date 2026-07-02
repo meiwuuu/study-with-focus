@@ -3401,6 +3401,13 @@ blockRefresh();
 statsRefresh();
 setInterval(statsRefresh,30000);
 setInterval(checkPlanAlarms,10000);
+// Page Visibility: pause background video when tab is hidden (saves GPU/CPU)
+document.addEventListener("visibilitychange", function() {
+  var v = document.getElementById("bg-video");
+  if (!v) return;
+  if (document.hidden) { v.pause(); }
+  else { v.play().catch(function(){}); }
+});
 </script>
 </body>
 </html>

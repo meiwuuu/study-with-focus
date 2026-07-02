@@ -49,18 +49,43 @@ def load_json(path, default):
     return default
 
 def save_json(path, data):
-    """原子写入：先写 .tmp 再 os.replace"""
+    """原子写入：先写 .tmp 再 os.replace，带重试退避"""
     tmp = path.with_suffix(".tmp")
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
+        # Windows 偶发 PermissionError，重试 3 次
+        for _ in range(3):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                time.sleep(0.1)
     except Exception:
         if tmp.exists():
             try:
                 tmp.unlink()
             except Exception:
                 pass
+
+# --- Stats cache (avoid disk I/O on repeated reads) ---
+_stats_cache = {"data": None, "mtime": 0}
+
+def get_stats_cached():
+    """Return cached stats if file mtime unchanged, else reload."""
+    try:
+        mtime = STATS_FILE.stat().st_mtime
+    except FileNotFoundError:
+        return get_default_stats()
+    if mtime == _stats_cache["mtime"] and _stats_cache["data"] is not None:
+        return _stats_cache["data"]
+    data = load_json(STATS_FILE, get_default_stats())
+    _stats_cache["data"] = data
+    _stats_cache["mtime"] = mtime
+    return data
+
+def invalidate_stats_cache():
+    _stats_cache["mtime"] = 0
 
 def read_hosts():
     try:
@@ -256,6 +281,8 @@ def rollover_if_new_day(stats):
         stats["today_time"] = 0
         stats["today_pomodoros"] = 0
         archive_old_data(stats, keep_days=30)
+        save_json(STATS_FILE, stats)
+        invalidate_stats_cache()
 
 # --- HTTP server ---
 
@@ -304,7 +331,7 @@ class FocusHandler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 rollover_if_new_day(stats)
             sites = get_blocked_sites()
             active = is_blocking_active()
@@ -326,7 +353,7 @@ class FocusHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/stats":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 rollover_if_new_day(stats)
             self._send_json(stats)
 
@@ -334,7 +361,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             date = qs.get("date", [effective_date_str()])[0]
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 daily = stats.get("daily_logs", {}).get(date, {
                     "date": date,
                     "segments": [],
@@ -353,7 +380,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             date = qs.get("date", [""])[0]
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
             review = stats.get("reviews", {}).get(date)
             if review:
                 self._send_json(review)
@@ -381,7 +408,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                 return
             # 没文件则实时生成
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
             # 内联计算 per-date stats（避免动态导入 evaluate_watchdog.py 的跨进程问题）
             daily_logs = stats.get("daily_logs", {})
             sessions = stats.get("sessions", [])
@@ -542,7 +569,7 @@ class FocusHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/stats/session":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 rollover_if_new_day(stats)
                 duration = body.get("duration", 0)
                 pomodoros = body.get("pomodoros", 0)
@@ -570,11 +597,12 @@ class FocusHandler(BaseHTTPRequestHandler):
                     dl.setdefault("timeline", []).extend(timeline)
                 stats["sessions"].append(session_entry)
                 save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
             self._send_json({"ok": True, "stats": stats})
 
         elif path == "/api/stats/segment":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 rollover_if_new_day(stats)
                 today = effective_date_str()
                 subject = body.get("subject", "")
@@ -601,11 +629,12 @@ class FocusHandler(BaseHTTPRequestHandler):
                 daily["total_time"] += duration
                 daily["pomodoros"] += pomodoros
                 save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
             self._send_json({"ok": True, "daily": daily})
 
         elif path == "/api/stats/review":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 date = body.get("date", effective_date_str())
                 is_delete = body.get("delete", False)
 
@@ -614,6 +643,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     if "reviews" in stats and date in stats["reviews"]:
                         del stats["reviews"][date]
                         save_json(STATS_FILE, stats)
+                        invalidate_stats_cache()
                     self._send_json({"ok": True, "date": date, "deleted": True})
                 else:
                     text = body.get("text", "")
@@ -628,6 +658,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                         "source": body.get("source", old.get("source", "")),
                     }
                     save_json(STATS_FILE, stats)
+                    invalidate_stats_cache()
                     self._send_json({"ok": True, "date": date})
 
 
@@ -649,7 +680,7 @@ class FocusHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/stats/segment/manual":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 date = body.get("date")
                 start_time = body.get("start_time")
                 end_time = body.get("end_time")
@@ -683,11 +714,12 @@ class FocusHandler(BaseHTTPRequestHandler):
                 stats["total_pomodoros"] += pomodoros
 
                 save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
             self._send_json({"ok": True})
 
         elif path == "/api/stats/segment/delete":
             with stats_lock:
-                stats = load_json(STATS_FILE, get_default_stats())
+                stats = get_stats_cached()
                 date = body.get("date")
                 index = body.get("index")
 
@@ -709,6 +741,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     stats["total_pomodoros"] = max(0, stats.get("total_pomodoros", 0) - pomos)
 
                     save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
                 self._send_json({"ok": True})
 
         elif path == "/api/config/browser":
