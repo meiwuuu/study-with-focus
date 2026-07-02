@@ -2131,8 +2131,17 @@ function toggleTaskType(id) {
 function setTaskPersistent(id) {
   var t = globalTasks.find(function(x) { return x.id === id; });
   if (!t) return;
-  if (t.type === 'persistent') { t.type = 'daily'; delete t.date; }
-  else { t.type = 'persistent'; delete t.date; }
+  if (t.type === 'persistent') {
+    // 恢复之前的类型
+    t.type = t._prevType || 'daily';
+    if (t._prevDate) t.date = t._prevDate; else delete t.date;
+    delete t._prevType; delete t._prevDate;
+  } else {
+    // 记住原始类型，切换为常驻
+    t._prevType = t.type;
+    if (t.date) t._prevDate = t.date;
+    t.type = 'persistent'; delete t.date;
+  }
   saveGlobalTasks();
 }
 
