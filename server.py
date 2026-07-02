@@ -231,6 +231,7 @@ def get_default_stats():
         "total_pomodoros": 0,
         "sessions": [],
         "daily_logs": {},
+        "weight_logs": {},
     }
 
 def archive_old_data(stats, keep_days=30):
@@ -427,7 +428,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             date_minutes = round(date_total_seconds / 60)
             date_hours = round(date_minutes / 60, 1)
 
-            _subj_names = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治"}
+            _subj_names = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治", "sport": "运动"}
             subject_breakdown = {}
             for seg in segments:
                 subj = seg.get("subject", "other")
@@ -483,13 +484,13 @@ class FocusHandler(BaseHTTPRequestHandler):
             lines.append(f"  - 权威总学习时长：{date_minutes} 分钟（{date_total_seconds} 秒）")
             lines.append("")
             lines.append("【科目分布】")
-            for subj in ["math", "cs", "eng", "pol"]:
+            for subj in ["math", "cs", "eng", "pol", "sport"]:
                 if subj in subject_breakdown:
                     info = subject_breakdown[subj]
                     name = _subj_names.get(subj, subj)
                     mins = round(info["seconds"] / 60)
                     lines.append(f"  {name}：{info['segments']}段，{mins}分钟")
-            other_subjs = [k for k in subject_breakdown if k not in ["math", "cs", "eng", "pol"]]
+            other_subjs = [k for k in subject_breakdown if k not in ["math", "cs", "eng", "pol", "sport"]]
             for subj in other_subjs:
                 info = subject_breakdown[subj]
                 name = _subj_names.get(subj, subj)
@@ -528,6 +529,20 @@ class FocusHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(txt.encode("utf-8"))
             return
+
+        elif path == "/api/stats/weights":
+            with stats_lock:
+                stats = get_stats_cached()
+            self._send_json(stats.get("weight_logs", {}))
+
+        elif path == "/api/stats/weight":
+            qs = parse_qs(urlparse(self.path).query)
+            date = qs.get("date", [effective_date_str()])[0]
+            with stats_lock:
+                stats = get_stats_cached()
+                wl = stats.get("weight_logs", {})
+                weight = wl.get(date)
+            self._send_json({"date": date, "weight": weight})
 
         else:
             self._send_json({"error": "not found"}, 404)
@@ -751,6 +766,20 @@ class FocusHandler(BaseHTTPRequestHandler):
                 config["browser"] = browser
                 save_json(CONFIG_FILE, config)
             self._send_json({"ok": True, "browser": browser})
+
+        elif path == "/api/stats/weight":
+            with stats_lock:
+                stats = get_stats_cached()
+                date = body.get("date", effective_date_str())
+                weight = body.get("weight")
+                if weight is None:
+                    self._send_json({"error": "weight is required"}, 400)
+                    return
+                wl = stats.setdefault("weight_logs", {})
+                wl[date] = weight
+                save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
+            self._send_json({"ok": True, "date": date, "weight": weight})
 
         else:
             self._send_json({"error": "not found"}, 404)

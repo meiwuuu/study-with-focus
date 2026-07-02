@@ -724,6 +724,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
         <button data-tab="manual" onclick="switchPanelTab('manual')">⏳ 数据修正</button>
         <button data-tab="theme" onclick="switchPanelTab('theme')">🎨 主题</button>
         <button data-tab="evaluate" onclick="switchPanelTab('evaluate')">🧠 AI 评价</button>
+        <button data-tab="weight" onclick="switchPanelTab('weight')">⚖️ 体重</button>
       </div>
       <div class="panel-content" id="panel-content">
 
@@ -761,6 +762,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 <div class="cs-option" data-value="cs" onclick="setSubject('cs',event)">408</div>
                 <div class="cs-option" data-value="eng" onclick="setSubject('eng',event)">英语</div>
                 <div class="cs-option" data-value="pol" onclick="setSubject('pol',event)">政治</div>
+                <div class="cs-option" data-value="sport" onclick="setSubject('sport',event)">运动</div>
               </div>
             </div>
           </div>
@@ -815,6 +817,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <select id="cal-plan-color">
                 <option value="default">默认</option><option value="math">数学</option>
                 <option value="cs">408</option><option value="eng">英语</option><option value="pol">政治</option>
+                <option value="sport">运动</option>
               </select>
               <input type="time" id="cal-plan-time" style="background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:2px 6px;font-family:var(--mono);font-size:.78em;width:96px;" title="计划时间">
               <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:.72em;white-space:nowrap;">
@@ -901,6 +904,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                     <div class="cs-option" data-value="cs" onclick="setManSubject('cs',event)">408综合</div>
                     <div class="cs-option" data-value="eng" onclick="setManSubject('eng',event)">英语一</div>
                     <div class="cs-option" data-value="pol" onclick="setManSubject('pol',event)">政治</div>
+                    <div class="cs-option" data-value="sport" onclick="setManSubject('sport',event)">运动</div>
                   </div>
                 </div>
               </div>
@@ -1096,6 +1100,34 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             <button class="btn btn-accent" id="btn-parse-eval" onclick="parseAndSaveEval()" style="width:100%;margin-bottom:8px;">3. 提取分数并保存</button>
             <button class="btn btn-red" id="btn-delete-eval" onclick="deleteCurrentAiReview()" style="width:100%;margin-bottom:8px;">🗑️ 清除该日AI评价</button>
             <div id="eval-result" style="font-size:.82em;text-align:center;min-height:1.5em;"></div>
+          </div>
+        </div>
+
+        <!-- ═══ Weight tab ═══ -->
+        <div class="panel-tab" id="ptab-weight">
+          <div class="card" style="margin-bottom:14px;">
+            <div style="font-size:.95em;font-weight:600;margin-bottom:14px;color:var(--accent);">⚖️ 体重记录</div>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div style="display:flex;gap:10px;align-items:center;">
+                <span style="font-size:.82em;color:#aaa;width:40px;">日期</span>
+                <input type="date" id="weight-date" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:.82em;padding:8px 10px;flex:1;font-family:inherit;">
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <span style="font-size:.82em;color:#aaa;width:40px;">体重</span>
+                <input type="number" id="weight-value" placeholder="单位: kg" step="0.1" min="30" max="200"
+                  style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:.82em;padding:8px 10px;flex:1;font-family:inherit;">
+                <span style="font-size:.78em;color:rgba(255,255,255,.4);">kg</span>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-accent btn-sm" onclick="submitWeight()" style="flex:1;">提交</button>
+                <button class="btn btn-sm" onclick="loadWeightHistory()">刷新历史</button>
+              </div>
+              <div id="weight-result" style="font-size:.82em;text-align:center;min-height:1.5em;color:#4ade80;"></div>
+            </div>
+          </div>
+          <div class="card" id="weight-history-card">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">📊 近期记录</div>
+            <div id="weight-history" style="font-size:.78em;color:rgba(255,255,255,.45);">加载中...</div>
           </div>
         </div>
       </div>
@@ -1555,7 +1587,7 @@ function setSubject(subj, e) {
   currentSubject = subj;
   try { localStorage.setItem('focus_subject', subj); } catch(e) {}
   // Update custom dropdown display
-  var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
+  var names = {math:'数学', cs:'408', eng:'英语', pol:'政治', sport:'运动'};
   document.getElementById('pomo-subject-label').textContent = names[subj] || '不区分';
   var opts = document.querySelectorAll('#pomo-subject-dropdown .cs-option');
   opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === subj); });
@@ -1611,7 +1643,7 @@ document.addEventListener('click', function(e) {
 
 function updateSubjectBadge() {
   var badge = document.getElementById('pomo-float-subject');
-  var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
+  var names = {math:'数学', cs:'408', eng:'英语', pol:'政治', sport:'运动'};
   if (currentSubject && names[currentSubject]) {
     badge.textContent = names[currentSubject];
     badge.className = 'pomo-subject-badge ' + currentSubject;
@@ -1925,7 +1957,7 @@ function restorePomoState() {
     pomoRecordedSeconds = s.pomoRecordedSeconds || 0;
     if (s.subject) { currentSubject = s.subject; updateSubjectBadge();
       var lbl = document.getElementById('pomo-subject-label');
-      var names = {math:'数学', cs:'408', eng:'英语', pol:'政治'};
+      var names = {math:'数学', cs:'408', eng:'英语', pol:'政治', sport:'运动'};
       if (lbl) lbl.textContent = names[s.subject] || '不区分';
       var opts = document.querySelectorAll('#pomo-subject-dropdown .cs-option');
       opts.forEach(function(o){ o.classList.toggle('selected', o.dataset.value === s.subject); });
@@ -1947,7 +1979,8 @@ var cal = { dailyLog:{}, plans:{} };
 var calYear, calMonth, calSelected = '';
 var PLAN_COLORS = [
   {v:'default',c:'rgba(255,255,255,.45)'},{v:'math',c:'#60a5fa'},
-  {v:'cs',c:'#a78bfa'},{v:'eng',c:'#fb923c'},{v:'pol',c:'#f87171'}
+  {v:'cs',c:'#a78bfa'},{v:'eng',c:'#fb923c'},{v:'pol',c:'#f87171'},
+  {v:'sport',c:'#4ade80'}
 ];
 
 function calInit() {
@@ -1987,12 +2020,12 @@ function calRender() {
   var today = calFmt(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
   var mKey = calYear + '-' + calMonth;
-  var ms = (cal._monthStats && cal._monthStats[mKey]) || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
-  var as = cal._allStats || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
+  var ms = (cal._monthStats && cal._monthStats[mKey]) || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0, sport:0}};
+  var as = cal._allStats || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0, sport:0}};
 
   if (calStatsSubject === 'subject') {
     var st = calStatsMode === 'month' ? ms.subj : as.subj;
-    if (st.math + st.cs + st.eng + st.pol === 0) {
+    if (st.math + st.cs + st.eng + st.pol + st.sport === 0) {
       document.getElementById('cal-active-days').textContent = '…';
       document.getElementById('cal-total-time').textContent = '点击刷新';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
@@ -2012,6 +2045,9 @@ function calRender() {
       document.getElementById('cal-lbl-2').textContent = '';
       if (st.pol > 0) {
         elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(st.pol)+'</div>';
+      }
+      if (st.sport > 0) {
+        elTP.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">运动 '+fmtH(st.sport)+'</div>';
       }
     }
   } else if (calStatsMode === 'all') {
@@ -2116,7 +2152,7 @@ function syncAllStats() {
     var dls = s.daily_logs || {};
     var monthStats = {};
     var allAd = 0, allTt = 0, allTp = 0;
-    var allSubj = {math:0, cs:0, eng:0, pol:0};
+    var allSubj = {math:0, cs:0, eng:0, pol:0, sport:0};
     for (var dk in dls) {
       var dl = dls[dk];
       // Populate cal.dailyLog
@@ -2127,7 +2163,7 @@ function syncAllStats() {
       if (dl.total_time > 0) { allAd++; allTt += dl.total_time || 0; allTp += dl.pomodoros || 0; }
       // Per-month
       var dp = dk.split('-'), mKey = dp[0] + '-' + (parseInt(dp[1])-1);
-      if (!monthStats[mKey]) monthStats[mKey] = {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0}};
+      if (!monthStats[mKey]) monthStats[mKey] = {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0, sport:0}};
       var ms = monthStats[mKey];
       if (dl.total_time > 0) { ms.ad++; ms.tt += dl.total_time || 0; ms.tp += dl.pomodoros || 0; }
       // Subject segments
@@ -3484,6 +3520,76 @@ function importLocalStorage(event) {
   };
   reader.readAsText(file);
 }
+
+// ═══════════ WEIGHT FUNCTIONS ═══════════
+function submitWeight() {
+  var dateEl = document.getElementById('weight-date');
+  var valEl = document.getElementById('weight-value');
+  var resEl = document.getElementById('weight-result');
+  var date = dateEl.value || new Date().toISOString().slice(0,10);
+  var weight = parseFloat(valEl.value);
+  if (isNaN(weight) || weight < 30 || weight > 200) {
+    resEl.innerHTML = '<span style="color:#f87171;">请输入有效的体重值 (30-200 kg)</span>';
+    return;
+  }
+  resEl.innerHTML = '提交中...';
+  fetch(API + '/api/stats/weight', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({date: date, weight: weight})
+  }).then(function(r){return r.json();}).then(function(data){
+    if (data.ok) {
+      resEl.innerHTML = '<span style="color:#4ade80;">✅ ' + date + ' 体重已记录：' + weight + ' kg</span>';
+      valEl.value = '';
+      loadWeightHistory();
+    } else {
+      resEl.innerHTML = '<span style="color:#f87171;">提交失败：' + (data.error || '未知错误') + '</span>';
+    }
+  }).catch(function(){
+    resEl.innerHTML = '<span style="color:#f87171;">网络错误，请检查后端是否运行</span>';
+  });
+}
+
+function loadWeightHistory() {
+  var histEl = document.getElementById('weight-history');
+  histEl.textContent = '加载中...';
+  fetch(API + '/api/stats/weights').then(function(r){return r.json();}).then(function(data){
+    var dates = Object.keys(data).sort().reverse();
+    if (!dates.length) {
+      histEl.innerHTML = '暂无体重记录';
+      return;
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:.82em;">';
+    html += '<tr style="color:rgba(255,255,255,.45);"><th style="text-align:left;padding:4px 8px;">日期</th><th style="text-align:right;padding:4px 8px;">体重 (kg)</th></tr>';
+    var shown = 0;
+    for (var i = 0; i < dates.length && shown < 30; i++) {
+      var d = dates[i];
+      if (typeof data[d] !== 'number') continue;
+      html += '<tr style="border-top:1px solid rgba(255,255,255,.06);">';
+      html += '<td style="padding:6px 8px;">' + d + '</td>';
+      html += '<td style="text-align:right;padding:6px 8px;font-weight:600;">' + data[d].toFixed(1) + '</td>';
+      html += '</tr>';
+      shown++;
+    }
+    html += '</table>';
+    histEl.innerHTML = html;
+  }).catch(function(){
+    histEl.textContent = '加载失败';
+  });
+}
+
+// Init weight tab: set today's date on open, load history
+(function(){
+  var orig = switchPanelTab;
+  switchPanelTab = function(name) {
+    orig(name);
+    if (name === 'weight') {
+      var dateEl = document.getElementById('weight-date');
+      if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+      loadWeightHistory();
+    }
+  };
+})();
 
 // ═══════════ INIT ═══════════
 calInit();
