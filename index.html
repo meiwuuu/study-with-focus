@@ -3539,7 +3539,7 @@ function submitWeight() {
     body: JSON.stringify({date: date, weight: weight})
   }).then(function(r){return r.json();}).then(function(data){
     if (data.ok) {
-      resEl.innerHTML = '<span style="color:#4ade80;">✅ ' + date + ' 体重已记录：' + weight + ' kg</span>';
+      resEl.innerHTML = '<span style="color:#4ade80;">✅ ' + date + ' 体重已记录：' + weight.toFixed(2) + ' kg</span>';
       valEl.value = '';
       loadWeightHistory();
     } else {
@@ -3567,7 +3567,7 @@ function loadWeightHistory() {
       if (typeof data[d] !== 'number') continue;
       html += '<tr style="border-top:1px solid rgba(255,255,255,.06);">';
       html += '<td style="padding:6px 8px;">' + d + '</td>';
-      html += '<td style="text-align:right;padding:6px 8px;font-weight:600;">' + data[d].toFixed(1) + '</td>';
+      html += '<td style="text-align:right;padding:6px 8px;font-weight:600;">' + data[d].toFixed(2) + '</td>';
       html += '</tr>';
       shown++;
     }

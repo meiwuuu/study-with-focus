@@ -1,9 +1,9 @@
 {
   "today": "2026-07-02",
-  "today_time": 4500,
-  "today_pomodoros": 3,
-  "total_time": 409935,
-  "total_pomodoros": 263,
+  "today_time": 3000,
+  "today_pomodoros": 2,
+  "total_time": 408435,
+  "total_pomodoros": 262,
   "sessions": [
     {
       "date": "2026-06-02 09:32",
@@ -19975,16 +19975,10 @@
           "end": "15:44",
           "duration": 1500,
           "subject": "eng"
-        },
-        {
-          "start": "16:21",
-          "end": "16:46",
-          "duration": 1500,
-          "subject": ""
         }
       ],
-      "total_time": 4500,
-      "pomodoros": 3,
+      "total_time": 3000,
+      "pomodoros": 2,
       "timeline": [
         {
           "from": "",
@@ -20079,5 +20073,8 @@
         }
       ]
     }
+  },
+  "weight_logs": {
+    "2026-07-02": 74.2
   }
 }
