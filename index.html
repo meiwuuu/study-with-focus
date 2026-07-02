@@ -2210,6 +2210,20 @@ function todoLoad() {
     var migrated = migrateToGlobalTasks();
     if (!migrated) { globalTasks = []; }
   }
+  // ─── 跨日重置：每日任务 done 清零 ───
+  var today = fmtLocalDate(new Date());
+  var lastDate = localStorage.getItem('focus_last_visit_date');
+  if (lastDate && lastDate !== today) {
+    var changed = false;
+    for (var di = 0; di < globalTasks.length; di++) {
+      if (globalTasks[di].type === 'daily' && globalTasks[di].done) {
+        globalTasks[di].done = false;
+        changed = true;
+      }
+    }
+    if (changed) saveGlobalTasks();
+  }
+  localStorage.setItem('focus_last_visit_date', today);
   // Ensure cal.plans is emptied (one-time cleanup after migration)
   if (typeof cal !== 'undefined' && cal.plans && Object.keys(cal.plans).length > 0) { cal.plans = {}; calSave(); }
   try { showTodo = localStorage.getItem('focus_todo_show') !== 'false'; } catch(e) { showTodo = true; }
