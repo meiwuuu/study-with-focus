@@ -6,6 +6,8 @@ import sys
 import time
 import threading
 import subprocess
+import argparse
+import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -104,8 +106,11 @@ def write_hosts_lines(lines):
             if lines and not lines[-1].endswith("\n"):
                 f.write("\n")
                 
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10,
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+        # 异步刷新 DNS，不阻塞 API 响应
+        threading.Thread(target=lambda: subprocess.run(
+            ["ipconfig", "/flushdns"], capture_output=True, timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        ), daemon=True).start()
         return True
     except PermissionError:
         return False
@@ -733,7 +738,38 @@ class FocusHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, 404)
 
 
+# --- Browser launcher (migrated from launch_browser.py) ---
+BROWSER_PATHS = {
+    "chrome": [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ],
+    "edge": [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ],
+    "firefox": [
+        r"C:\Program Files\Mozilla Firefox\firefox.exe",
+        r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
+    ],
+    "brave": [
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+    ],
+}
+
+def find_browser(browser_name):
+    paths = BROWSER_PATHS.get(browser_name, [])
+    for p in paths:
+        if os.path.isfile(p):
+            return p
+    return None
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--launch-browser", action="store_true",
+                        help="Open UI in browser after server starts")
+    args = parser.parse_args()
+
     print(f"Focus backend starting on http://localhost:{PORT}", flush=True)
     print(f"Stats file: {STATS_FILE}", flush=True)
     print(f"Config file: {CONFIG_FILE}", flush=True)
@@ -743,6 +779,31 @@ def main():
         print("WARNING: Cannot access hosts file. Run on Windows as Administrator for blocking.", flush=True)
     else:
         print("Hosts file: OK (blocking available)", flush=True)
+
+    # 后端就绪后自动打开浏览器（保留 --app 沉浸模式）
+    if args.launch_browser:
+        def open_ui():
+            time.sleep(0.5)  # 等 HTTP 服务就绪
+            with config_lock:
+                config = load_json(CONFIG_FILE, {})
+            browser_name = config.get("browser", "system")
+            html_url = "file:///" + (DATA_DIR / "index.html").as_posix()
+
+            if browser_name != "system":
+                exe = find_browser(browser_name)
+                if exe:
+                    # Chrome/Edge/Brave 用 --app 无边框模式
+                    if browser_name in ("chrome", "edge", "brave"):
+                        subprocess.Popen([exe, "--app=" + html_url],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    else:
+                        subprocess.Popen([exe, html_url],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return
+            # fallback: 系统默认浏览器
+            webbrowser.open(html_url)
+
+        threading.Thread(target=open_ui, daemon=True).start()
 
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
