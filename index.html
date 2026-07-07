@@ -2833,6 +2833,10 @@ function renderLearningLog(daily, date) {
   html += '<div class="stat-item"><div class="lbl">总时长</div><div class="val" style="font-size:1.1em;">' + fmtDuration(totalTime) + '</div></div>';
   html += '<div class="stat-item"><div class="lbl">学习段数</div><div class="val accent" style="font-size:1.1em;">' + segs.length + '</div></div>';
   html += '<div class="stat-item"><div class="lbl">番茄数</div><div class="val cyan" style="font-size:1.1em;">' + totalPomos + '</div></div>';
+  var wakeTime = daily.wake_time || '—';
+  var sleepTime = daily.sleep_time || '—';
+  html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;color:#ea580c;">' + wakeTime + '</div></div>';
+  html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;color:#a78bfa;">' + sleepTime + '</div></div>';
   html += '</div>';
 
   // Subject distribution bars
