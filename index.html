@@ -826,6 +826,11 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               </label>
               <button class="btn btn-green btn-sm" onclick="calAddPlan()">+</button>
             </div>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <button class="btn btn-sm" onclick="addRoutineTask('wake')" style="background:rgba(234,88,12,.15);color:#ea580c;border:1px solid rgba(234,88,12,.3);">🌅 添加起床打卡</button>
+              <button class="btn btn-sm" onclick="addRoutineTask('sleep')" style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.3);">🌙 添加睡觉打卡</button>
+            </div>
+            
             <div id="cal-plan-list"></div>
             <div class="cal-plan-empty" id="cal-plan-empty">暂无学习计划</div>
           </div>
@@ -2233,9 +2238,45 @@ function addTask(title, type, date, extra) {
   globalTasks.push({ id: String(Date.now()), title: title, type: type, date: type === 'specific' ? date : undefined, done: false, pinned: extra.pinned || false, color: extra.color || 'default', time: extra.time || '', alarm: extra.alarm || false, alarmTriggered: false });
   saveGlobalTasks();
 }
+
+// ─── 快捷添加作息任务 ───
+function addRoutineTask(type) {
+  var title = type === 'wake' ? '🌅 起床' : '🌙 睡觉';
+  var color = type === 'wake' ? 'eng' : 'cs';
+  // 避免重复添加：检查是否已存在同名的每日任务
+  var exists = globalTasks.find(function(t) { return t.title === title && t.type === 'daily'; });
+  if (!exists) {
+    // 设为每日任务 (daily)，这样它每天都会自动刷新重置为未打勾状态
+    addTask(title, 'daily', null, { color: color });
+    renderTodosForDate(fmtLocalDate(new Date()));
+    if (typeof calRenderDetail === 'function' && calSelected) calRenderDetail();
+    todoUpdateFloat();
+  }
+}
+
 function toggleTask(id) {
   var t = globalTasks.find(function(x) { return x.id === id; });
-  if (t) { t.done = !t.done; saveGlobalTasks(); }
+  if (t) {
+    t.done = !t.done;
+    saveGlobalTasks();
+
+    // 新增：如果是起床或睡觉任务，在打勾瞬间记录当前时间
+    if (t.done && (t.title.indexOf('起床') !== -1 || t.title.indexOf('睡觉') !== -1)) {
+      var isWake = t.title.indexOf('起床') !== -1;
+      var now = new Date();
+      var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+      // 判断日期归属：如果是凌晨4点前睡觉，记在昨天的数据里
+      var d = new Date(now);
+      if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+      var dateStr = fmtLocalDate(d);
+
+      apiCall('/api/stats/routine', {
+        method: 'POST',
+        body: JSON.stringify({ date: dateStr, type: isWake ? 'wake' : 'sleep', time: timeStr })
+      });
+    }
+  }
 }
 function deleteTask(id) {
   globalTasks = globalTasks.filter(function(x) { return x.id !== id; });

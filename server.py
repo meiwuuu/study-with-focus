@@ -767,6 +767,27 @@ class FocusHandler(BaseHTTPRequestHandler):
                 save_json(CONFIG_FILE, config)
             self._send_json({"ok": True, "browser": browser})
 
+        elif path == "/api/stats/routine":
+            with stats_lock:
+                stats = get_stats_cached()
+                rollover_if_new_day(stats)
+                date = body.get("date", effective_date_str())
+                r_type = body.get("type")  # "wake" or "sleep"
+                r_time = body.get("time")
+
+                if "daily_logs" not in stats:
+                    stats["daily_logs"] = {}
+                if date not in stats["daily_logs"]:
+                    stats["daily_logs"][date] = {"date": date, "segments": [], "total_time": 0, "pomodoros": 0}
+
+                # 记录起床或睡觉时间
+                if r_type in ["wake", "sleep"]:
+                    stats["daily_logs"][date][r_type + "_time"] = r_time
+
+                save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
+            self._send_json({"ok": True})
+
         elif path == "/api/stats/weight":
             with stats_lock:
                 stats = get_stats_cached()
