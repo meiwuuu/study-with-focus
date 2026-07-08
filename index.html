@@ -1228,13 +1228,13 @@ function switchPanelTab(name) {
 var inactivityTimer = null;
 var hoveringUI = false;
 function resetInactivity() {
-  showUI();
   if (inactivityTimer) clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(function() {
-    if (!hoveringUI) hideUI();
+    if (!hoveringUI) { console.log('hideUI触发'); hideUI(); }
   }, 3000);
 }
 function hideUI() {
+  console.log('hideUI执行');
   document.getElementById('pomo-float').classList.add('hidden');
   var dl = document.getElementById('pomo-float-deadline'); if (dl) dl.style.opacity = '0';
   document.getElementById('status-bar').classList.add('hidden');
