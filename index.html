@@ -128,6 +128,15 @@ body {
 .pomo-current-todo.show { opacity: 1; pointer-events: auto; }
 .pomo-current-todo::-webkit-scrollbar { width: 4px; }
 .pomo-current-todo::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+.pomo-float-deadline {
+  position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+  z-index: 99; font-size: 0.85em; color: var(--yellow);
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,193,7,0.3); border-radius: 8px;
+  padding: 8px 14px; white-space: nowrap;
+  transition: opacity 0.3s ease; cursor: default;
+}
+.pomo-float-deadline .deadline-urgent { color: var(--red); font-weight: 700; }
 .pomo-float-task { 
   display: flex;
   align-items: flex-start;
@@ -703,6 +712,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
     <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
   </div>
 </div>
+
+<div class="pomo-float-deadline" id="pomo-float-deadline" style="display:none;"></div>
 
 <div class="pomo-current-todo" id="pomo-float-todo">
   <div id="pomo-float-todo-list"></div>
@@ -2186,6 +2197,38 @@ function renderPhasePrompt(dateStr) {
     container.style.display = 'block';
 }
 
+// ─── 浮窗最紧急任务 ───
+function updateFloatDeadline() {
+  var el = document.getElementById('pomo-float-deadline');
+  if (!el) return;
+  if (typeof studyPhases === 'undefined') { el.style.display = 'none'; return; }
+  
+  var today = new Date(); today.setHours(0,0,0,0);
+  var currentPhase = null;
+  for (var i = 0; i < studyPhases.length; i++) {
+    if (today <= new Date(studyPhases[i].end + 'T23:59:59')) { currentPhase = studyPhases[i]; break; }
+  }
+  if (!currentPhase) { el.style.display = 'none'; return; }
+  
+  // Find active tasks (not yet past), pick the most urgent (fewest days left)
+  var mostUrgent = null;
+  var minDays = Infinity;
+  for (var j = 0; j < currentPhase.tasks.length; j++) {
+    var t = currentPhase.tasks[j];
+    var taskEnd = new Date(t.end + 'T00:00:00');
+    var days = Math.ceil((taskEnd - today) / 86400000);
+    if (days >= 0 && days < minDays) { minDays = days; mostUrgent = t; }
+  }
+  if (!mostUrgent) { el.style.display = 'none'; return; }
+  
+  var isUrgent = minDays <= 3;
+  var icon = isUrgent ? '⚠️' : '⏳';
+  var cls = isUrgent ? ' deadline-urgent' : '';
+  el.innerHTML = icon + ' <b>【' + mostUrgent.subj + '】</b>' + mostUrgent.desc +
+    ' <span class="' + cls + '">[' + (minDays === 0 ? '今天截止!' : '剩' + minDays + '天') + ']</span>';
+  el.style.display = 'block';
+}
+
 function calRenderDetail() {
   var dt=document.getElementById('cal-detail');
   if(!calSelected){dt.style.display='none';return;}
@@ -2528,6 +2571,7 @@ function todoDelete(id) { deleteTask(String(id)); renderTodosForDate(fmtLocalDat
 
 // ─── Floating todo display (on main Pomodoro screen) ───
 function todoUpdateFloat() {
+  updateFloatDeadline();
   var el = document.getElementById('pomo-float-todo');
   var lst = document.getElementById('pomo-float-todo-list');
   if (!el || !lst) return;
@@ -3731,7 +3775,7 @@ restorePomoState();
 // Restore subject
 try { var s=localStorage.getItem('focus_subject'); if(s) setSubject(s); } catch(e) {}
 // Auto-load today's calendar plans on page init
-setTimeout(function(){ if(typeof calGoToday==='function'){ calGoToday(); todoUpdateFloat(); } }, 100);
+setTimeout(function(){ if(typeof calGoToday==='function'){ calGoToday(); todoUpdateFloat(); updateFloatDeadline(); } }, 100);
 // Restore timeline from localStorage
 try {
   var savedTL = JSON.parse(localStorage.getItem('focus_pomo_tl') || '[]');
