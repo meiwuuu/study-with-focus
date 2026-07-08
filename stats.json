@@ -1,9 +1,9 @@
 {
   "today": "2026-07-08",
-  "today_time": 7200,
-  "today_pomodoros": 4,
-  "total_time": 454935,
-  "total_pomodoros": 289,
+  "today_time": 12900,
+  "today_pomodoros": 6,
+  "total_time": 460635,
+  "total_pomodoros": 291,
   "sessions": [
     {
       "date": "2026-06-08 10:25",
@@ -6948,6 +6948,155 @@
       "duration": 1500,
       "pomodoros": 1,
       "subject": "sport"
+    },
+    {
+      "date": "2026-07-08 22:13",
+      "duration": 2700,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "from": "sport",
+          "to": "cs",
+          "accSeconds": 0,
+          "ts": "2026-07-08T09:42:07.174Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T12:23:16.376Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 841,
+          "ts": "2026-07-08T12:37:17.833Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T12:47:38.099Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1197,
+          "ts": "2026-07-08T12:53:34.916Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T13:33:00.283Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1683,
+          "ts": "2026-07-08T13:41:06.973Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T13:41:40.141Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1960,
+          "ts": "2026-07-08T13:46:17.205Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T14:00:44.991Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "pomodoroNum": 1,
+          "totalSec": 2700,
+          "ts": "2026-07-08T14:13:05.006Z",
+          "action": "complete"
+        }
+      ]
+    },
+    {
+      "date": "2026-07-08 01:48",
+      "duration": 2700,
+      "pomodoros": 1,
+      "timeline": [
+        {
+          "subject": "cs",
+          "accSeconds": 14,
+          "ts": "2026-07-08T14:23:19.447Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T15:13:32.894Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 661,
+          "ts": "2026-07-08T15:24:20.804Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T15:55:04.260Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2090,
+          "ts": "2026-07-08T16:18:53.479Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:13:15.271Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2233,
+          "ts": "2026-07-08T17:15:38.552Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:20:32.283Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2316,
+          "ts": "2026-07-08T17:21:56.451Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:42:25.001Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "pomodoroNum": 2,
+          "totalSec": 2700,
+          "ts": "2026-07-08T17:48:49.156Z",
+          "action": "complete"
+        }
+      ]
     }
   ],
   "reviews": {
@@ -14634,13 +14783,18 @@
           "action": "complete"
         }
       ],
-      "wake_time": "07:30",
-      "sleep_time": "23:45"
+      "sleep_time": "03:10"
     },
     "2026-07-08": {
-      "total_time": 7200,
-      "pomodoros": 4,
+      "total_time": 12900,
+      "pomodoros": 6,
       "segments": [
+        {
+          "start": "01:48",
+          "end": "1:53",
+          "duration": 300,
+          "subject": "cs"
+        },
         {
           "start": "10:00",
           "end": "10:25",
@@ -14664,9 +14818,160 @@
           "end": "14:25",
           "duration": 1500,
           "subject": "sport"
+        },
+        {
+          "start": "20:23",
+          "end": "22:13",
+          "duration": 2700,
+          "subject": "cs"
+        },
+        {
+          "start": "22:13",
+          "end": "01:48",
+          "duration": 2700,
+          "subject": "cs"
         }
       ],
-      "wake_time": "08:10"
+      "wake_time": "08:10",
+      "date": "2026-07-08",
+      "timeline": [
+        {
+          "from": "sport",
+          "to": "cs",
+          "accSeconds": 0,
+          "ts": "2026-07-08T09:42:07.174Z",
+          "action": "subject_change"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T12:23:16.376Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 841,
+          "ts": "2026-07-08T12:37:17.833Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T12:47:38.099Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1197,
+          "ts": "2026-07-08T12:53:34.916Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T13:33:00.283Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1683,
+          "ts": "2026-07-08T13:41:06.973Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T13:41:40.141Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 1960,
+          "ts": "2026-07-08T13:46:17.205Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T14:00:44.991Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "pomodoroNum": 1,
+          "totalSec": 2700,
+          "ts": "2026-07-08T14:13:05.006Z",
+          "action": "complete"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 14,
+          "ts": "2026-07-08T14:23:19.447Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T15:13:32.894Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 661,
+          "ts": "2026-07-08T15:24:20.804Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T15:55:04.260Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2090,
+          "ts": "2026-07-08T16:18:53.479Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:13:15.271Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2233,
+          "ts": "2026-07-08T17:15:38.552Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:20:32.283Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "accSeconds": 2316,
+          "ts": "2026-07-08T17:21:56.451Z",
+          "action": "pause"
+        },
+        {
+          "subject": "cs",
+          "running": true,
+          "ts": "2026-07-08T17:42:25.001Z",
+          "action": "start"
+        },
+        {
+          "subject": "cs",
+          "pomodoroNum": 2,
+          "totalSec": 2700,
+          "ts": "2026-07-08T17:48:49.156Z",
+          "action": "complete"
+        }
+      ],
+      "sleep_time": "01:55"
     }
   },
   "weight_logs": {
