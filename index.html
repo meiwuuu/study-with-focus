@@ -2224,7 +2224,7 @@ function updateFloatDeadline() {
   if (!mostUrgent) { el.style.display = 'none'; return; }
   
   var isUrgent = minDays <= 3;
-  var icon = isUrgent ? '⚠️' : '⏳';
+  var icon = isUrgent ? '⚠️' : '';
   var cls = isUrgent ? ' deadline-urgent' : '';
   el.innerHTML = icon + ' <b>【' + mostUrgent.subj + '】</b>' + mostUrgent.desc +
     ' <span class="' + cls + '">[' + (minDays === 0 ? '今天截止!' : '剩' + minDays + '天') + ']</span>';
