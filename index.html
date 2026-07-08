@@ -1228,9 +1228,11 @@ function switchPanelTab(name) {
 var inactivityTimer = null;
 var hoveringUI = false;
 function resetInactivity() {
+  console.log('resetInactivity @', new Date().toLocaleTimeString());
   if (inactivityTimer) clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(function() {
     if (!hoveringUI) { console.log('hideUI触发'); hideUI(); }
+    else { console.log('skip hideUI: hoveringUI=true'); }
   }, 3000);
 }
 function hideUI() {
