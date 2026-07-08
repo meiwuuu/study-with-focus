@@ -14665,7 +14665,8 @@
           "duration": 1500,
           "subject": "sport"
         }
-      ]
+      ],
+      "wake_time": "08:10"
     }
   },
   "weight_logs": {
