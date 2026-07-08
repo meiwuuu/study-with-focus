@@ -713,7 +713,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   </div>
 </div>
 
-<div class="pomo-float-deadline" id="pomo-float-deadline" style="display:none;"></div>
+<div class="pomo-float-deadline" id="pomo-float-deadline" style="display:none;" onmouseenter="onUIEnter()" onmouseleave="onUILeave()"></div>
 
 <div class="pomo-current-todo" id="pomo-float-todo">
   <div id="pomo-float-todo-list"></div>
@@ -1233,6 +1233,7 @@ function resetInactivity() {
 }
 function hideUI() {
   document.getElementById('pomo-float').classList.add('hidden');
+  document.getElementById('pomo-float-deadline').style.opacity = '0';
   document.getElementById('status-bar').classList.add('hidden');
   document.getElementById('btn-focus-mode').classList.add('hidden');
   document.getElementById('btn-fullscreen').classList.add('hidden');
@@ -1240,6 +1241,7 @@ function hideUI() {
 }
 function showUI() {
   document.getElementById('pomo-float').classList.remove('hidden');
+  document.getElementById('pomo-float-deadline').style.opacity = '1';
   document.getElementById('status-bar').classList.remove('hidden');
   document.getElementById('btn-focus-mode').classList.remove('hidden');
   document.getElementById('btn-fullscreen').classList.remove('hidden');
