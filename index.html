@@ -3041,14 +3041,14 @@ function renderLearningLog(daily, date) {
 
 // ═══════════ 任务浮窗：拖拽 + JS缩放 + 右键固定 ═══════════
 function hasIncompleteItems() {
-  // 检查是否有未完成的 todo
-  if (todos.some(function(t){ return !t.completed; })) return true;
+  // 检查是否有未完成的 global_tasks
+  if (typeof globalTasks !== 'undefined' && globalTasks.some(function(t){ return !t.done; })) return true;
   // 检查今天是否有未完成的计划
   var _today = new Date();
   var _todayStr = _today.getFullYear() + '-' + 
     String(_today.getMonth() + 1).padStart(2, '0') + '-' + 
     String(_today.getDate()).padStart(2, '0');
-  if (cal.plans[_todayStr]) {
+  if (cal.plans && cal.plans[_todayStr]) {
     if (cal.plans[_todayStr].some(function(p){ return !p.done; })) return true;
   }
   return false;
