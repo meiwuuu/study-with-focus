@@ -813,6 +813,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <span class="cal-detail-date" id="cal-detail-date"></span>
               <div class="cal-detail-stats" id="cal-detail-stats"></div>
             </div>
+            
+            <div id="cal-phase-prompt" style="display:none; margin-bottom:12px; padding:10px 14px; background:rgba(96,165,250,0.1); border:1px solid rgba(96,165,250,0.25); border-radius:8px; font-size:0.85em; transition: all 0.3s ease;"></div>
+            
             <div class="cal-plan-row">
               <input type="text" id="cal-plan-input" placeholder="添加学习计划..." onkeydown="if(event.key==='Enter')calAddPlan()">
               <select id="cal-plan-color">
@@ -2101,6 +2104,88 @@ function calNextMonth(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}calRend
 function calGoToday(){var n=new Date();calYear=n.getFullYear();calMonth=n.getMonth();calSelected=calFmt(calYear,calMonth,n.getDate());calRender();}
 function calSelect(d){calSelected=d;calRender();}
 
+// ─── 补救指南：阶段与微型死线库 ───
+const studyPhases = [
+  {
+    name: "一轮复习"生死冲刺"",
+    end: "2026-08-15",
+    tasks: [
+      { end: "2026-07-25", subj: "计组", desc: "极限收官，只做选择，看硬件逻辑图" },
+      { end: "2026-08-01", subj: "概率论", desc: "钻研讲义+倍速网课，与计组交叉" },
+      { end: "2026-08-10", subj: "操作系统", desc: "只看书/写真题选择题，极速过基础" },
+      { end: "2026-08-15", subj: "计网", desc: "体量最小，一轮全线收官底线！" }
+    ]
+  },
+  {
+    name: "二轮强化与错题攻坚",
+    end: "2026-10-31",
+    tasks: [
+      { end: "2026-09-30", subj: "数学&408", desc: "开始刷历年真题分类卷，转向输出" },
+      { end: "2026-10-31", subj: "专题&政治", desc: "思路断点突破；最晚开启政治基础与1000题" }
+    ]
+  },
+  {
+    name: '50天"10日循环"冲刺',
+    end: "2026-12-20",
+    tasks: [
+      { end: "2026-11-10", subj: "全科", desc: "阶段一：模拟卷/套卷实战，严格3小时限时" },
+      { end: "2026-11-20", subj: "全科", desc: "阶段二：错题集中清理，费曼学习法吃透" },
+      { end: "2026-11-30", subj: "全科", desc: "阶段三：强化政治背诵，数学维持手感" },
+      { end: "2026-12-10", subj: "全科", desc: "阶段四：重点考点最后一次大总结" },
+      { end: "2026-12-20", subj: "全科", desc: "阶段五：保持心态平稳，迎接初试" }
+    ]
+  }
+];
+
+function renderPhasePrompt(dateStr) {
+    var container = document.getElementById('cal-phase-prompt');
+    if (!container) return;
+    var selDate = new Date(dateStr + "T00:00:00");
+    var currentPhase = studyPhases.find(function(p) { return selDate <= new Date(p.end + "T23:59:59"); });
+    
+    if (!currentPhase) { container.style.display = 'none'; return; }
+
+    var phaseEnd = new Date(currentPhase.end + "T00:00:00");
+    var daysToPhase = Math.ceil((phaseEnd - selDate) / 86400000);
+    
+    var isEmergency = daysToPhase <= 5;
+    var color = isEmergency ? 'var(--red)' : 'var(--accent)';
+    var bg = isEmergency ? 'rgba(244,67,54,0.1)' : 'rgba(96,165,250,0.1)';
+    var border = isEmergency ? 'rgba(244,67,54,0.3)' : 'rgba(96,165,250,0.3)';
+
+    var html = '<div style="font-weight:600; color:' + color + '; margin-bottom:8px; display:flex; justify-content:space-between;">' +
+               '<span>🎯 ' + currentPhase.name + '</span>' +
+               '<span>大限剩 <b style="font-size:1.1em;">' + daysToPhase + '</b> 天</span></div>';
+    
+    var activeTasks = currentPhase.tasks.filter(function(t) { return selDate <= new Date(t.end + "T23:59:59"); });
+    
+    if (activeTasks.length > 0) {
+        html += '<div style="display:flex; flex-direction:column; gap:6px;">';
+        activeTasks.forEach(function(t) {
+            var taskEnd = new Date(t.end + "T00:00:00");
+            var daysToTask = Math.ceil((taskEnd - selDate) / 86400000);
+            
+            var taskColor = daysToTask <= 3 ? '#f87171' : 'rgba(255,255,255,0.75)';
+            var icon = daysToTask <= 3 ? '⚠️' : '📌';
+            var countdown = daysToTask === 0 ? '今天截止！' : '剩 ' + daysToTask + ' 天';
+            
+            html += '<div style="font-size:0.9em; display:flex; gap:6px;">' +
+                    '<span style="flex-shrink:0;">' + icon + '</span>' +
+                    '<span style="color:' + taskColor + ';"><b>【' + t.subj + '】</b>' + t.desc + 
+                    ' <span style="font-size:0.85em; opacity:0.9; margin-left:4px;">[' + countdown + ']</span></span>' +
+                    '</div>';
+        });
+        html += '</div>';
+    } else {
+         html += '<div style="font-size:0.85em; color:rgba(255,255,255,0.4);">本阶段子任务已清空。</div>';
+    }
+
+    container.style.background = bg;
+    container.style.borderColor = border;
+    container.innerHTML = html;
+    container.style.display = 'block';
+}
+
 function calRenderDetail() {
   var dt=document.getElementById('cal-detail');
   if(!calSelected){dt.style.display='none';return;}
@@ -2116,6 +2201,7 @@ function calRenderDetail() {
   if(l.studyTime>0)sh+='<span class="cal-detail-stat">'+calFmtTime(l.studyTime)+'</span>';
   if(l.pomodoros>0)sh+='<span class="cal-detail-stat">'+l.pomodoros+'个番茄</span>';
   document.getElementById('cal-detail-stats').innerHTML=sh;
+  if (typeof renderPhasePrompt === 'function') renderPhasePrompt(calSelected);
   calRenderPlans(calSelected);
 }
 function calAddStudyTime(s) {
