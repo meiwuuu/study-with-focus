@@ -715,7 +715,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
 <div class="pomo-float-deadline" id="pomo-float-deadline" style="display:none;" onmouseenter="onUIEnter()" onmouseleave="onUILeave()"></div>
 
-<div class="pomo-current-todo" id="pomo-float-todo">
+<div class="pomo-current-todo" id="pomo-float-todo" onmouseenter="onUIEnter()" onmouseleave="onUILeave()">
   <div id="pomo-float-todo-list"></div>
 </div>
 
@@ -1207,8 +1207,11 @@ function closePanel(e) {
   if (e && e.target !== document.getElementById('settings-overlay')) return;
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('pomo-clock').classList.remove('panel-open');
+  // 强制重置鼠标悬浮状态，防止 pointer-events:none 不触发 mouseleave
+  hoveringUI = false;
+  resetInactivity();
   // 关闭设置面板时强制刷新主页浮窗为今天的数据
-  todoUpdateFloat();
+  if (typeof todoUpdateFloat === 'function') todoUpdateFloat();
 }
 function switchPanelTab(name) {
   document.querySelectorAll('#panel-content .panel-tab').forEach(function(t){t.classList.remove('active')});
