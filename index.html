@@ -130,11 +130,11 @@ body {
 .pomo-current-todo::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 .pomo-float-deadline {
   position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
-  z-index: 99; font-size: 0.85em; color: var(--yellow);
+  z-index: 99; font-size: 0.85em; color: var(--accent);
   background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,193,7,0.3); border-radius: 8px;
+  border: 1px solid var(--accent-glow); border-radius: 8px;
   padding: 8px 14px; white-space: nowrap;
-  transition: opacity 0.3s ease; cursor: default;
+  transition: opacity 0.3s ease, color 0.3s ease, border-color 0.3s ease; cursor: default;
 }
 .pomo-float-deadline .deadline-urgent { color: var(--red); font-weight: 700; }
 .pomo-float-task { 
