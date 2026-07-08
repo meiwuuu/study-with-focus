@@ -1231,8 +1231,8 @@ function resetInactivity() {
   console.log('resetInactivity @', new Date().toLocaleTimeString());
   if (inactivityTimer) clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(function() {
-    if (!hoveringUI) { console.log('hideUI触发'); hideUI(); }
-    else { console.log('skip hideUI: hoveringUI=true'); }
+    if (!hoveringUI && !pomo.running) { console.log('hideUI触发'); hideUI(); }
+    else { console.log('skip hideUI: hoveringUI=' + hoveringUI + ' pomo.running=' + pomo.running); }
   }, 3000);
 }
 function hideUI() {
