@@ -3040,6 +3040,7 @@ function renderLearningLog(daily, date) {
   html += '</tbody></table>';
   if (editMode) {
     html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">';
+    html += '<button class="btn btn-accent btn-sm" onclick="toggleEditMode()">保存</button>';
     html += '<button class="btn btn-red btn-sm" onclick="batchDeleteSegments()">删除选中</button>';
     html += '<button class="btn btn-sm" onclick="cancelEditMode()">取消</button>';
     html += '</div>';
