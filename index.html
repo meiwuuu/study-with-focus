@@ -2972,8 +2972,13 @@ function renderLearningLog(daily, date) {
   html += '<div class="stat-item"><div class="lbl">番茄数</div><div class="val cyan" style="font-size:1.1em;">' + totalPomos + '</div></div>';
   var wakeTime = daily.wake_time || '—';
   var sleepTime = daily.sleep_time || '—';
-  html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;color:#ea580c;">' + wakeTime + '</div></div>';
-  html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;color:#a78bfa;">' + sleepTime + '</div></div>';
+  if (editMode) {
+    html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;"><input type="time" id="edit-wake-time" value="' + (wakeTime !== '—' ? wakeTime : '07:30') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ea580c;font-family:var(--mono);font-size:.9em;padding:3px 6px;border-radius:4px;width:100px;outline:none;"></div></div>';
+    html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;"><input type="time" id="edit-sleep-time" value="' + (sleepTime !== '—' ? sleepTime : '22:30') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#a78bfa;font-family:var(--mono);font-size:.9em;padding:3px 6px;border-radius:4px;width:100px;outline:none;"></div></div>';
+  } else {
+    html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;color:#ea580c;">' + wakeTime + '</div></div>';
+    html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;color:#a78bfa;">' + sleepTime + '</div></div>';
+  }
   html += '</div>';
 
   // Subject distribution bars
@@ -3031,7 +3036,7 @@ function renderLearningLog(daily, date) {
   if (editMode) {
     html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">';
     html += '<button class="btn btn-red btn-sm" onclick="batchDeleteSegments()">删除选中</button>';
-    html += '<button class="btn btn-sm" onclick="toggleEditMode()">取消</button>';
+    html += '<button class="btn btn-sm" onclick="cancelEditMode()">取消</button>';
     html += '</div>';
   }
   html += '</div></div>';
@@ -3453,13 +3458,51 @@ function setManStatus(msg, type) {
     if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
 }
 
-// ─── 学习记录页编辑模式（勾选批量删除）───
+// ─── 学习记录页编辑模式（勾选批量删除 + 修改起床/睡觉时间）───
 function toggleEditMode() {
+  // 如果当前在编辑模式，先保存起床/睡觉时间再退出
+  if (editMode) {
+    var date = currentLogDate || fmtLocalDate(new Date());
+    var wakeEl = document.getElementById('edit-wake-time');
+    var sleepEl = document.getElementById('edit-sleep-time');
+    var saves = [];
+    if (wakeEl) saves.push(saveRoutineTime(date, 'wake', wakeEl.value));
+    if (sleepEl) saves.push(saveRoutineTime(date, 'sleep', sleepEl.value));
+    // 等待保存完成后再重渲染，确保数据已落盘
+    if (saves.length > 0) {
+      Promise.all(saves).then(function() {
+        editMode = false;
+        checkedSegments = {};
+        var btn = document.getElementById('btn-edit-segments');
+        if (btn) btn.textContent = '编辑';
+        loadLearningLog();
+      });
+      return;
+    }
+  }
   editMode = !editMode;
   checkedSegments = {};
   var btn = document.getElementById('btn-edit-segments');
   if (btn) btn.textContent = editMode ? '完成' : '编辑';
   loadLearningLog();
+}
+
+function cancelEditMode() {
+  editMode = false;
+  checkedSegments = {};
+  var btn = document.getElementById('btn-edit-segments');
+  if (btn) btn.textContent = '编辑';
+  loadLearningLog();
+}
+
+async function saveRoutineTime(date, type, time) {
+  if (!time) return;
+  try {
+    await apiCall('/api/stats/routine', {
+      method: 'POST',
+      body: JSON.stringify({ date: date, type: type, time: time })
+    });
+  } catch(e) { console.warn('saveRoutineTime failed:', e); }
 }
 
 function onSegCheck(cb) {
