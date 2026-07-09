@@ -1870,14 +1870,40 @@ function playCustomRingtoneRange(type) {
     audio.play().catch(function(err) { console.log('播放失败:', err); });
   });
 
-  // 核心截取：监听时间更新，到达终点强行掐断
+  // 截取逻辑：到达终点时 2 秒淡出，而非硬切
+  var fading = false;
+  var fadeRAF = null;
+
   audio.addEventListener('timeupdate', function onTimeUpdate() {
+    if (fading) return;
     if (cfg.end > cfg.start && audio.currentTime >= cfg.end) {
-      audio.pause();
+      fading = true;
       audio.removeEventListener('timeupdate', onTimeUpdate);
-      if (globalActiveCustomAudio === audio) {
-        globalActiveCustomAudio = null;
+      // 2 秒线性淡出
+      var startVol = audio.volume;
+      var startTime = performance.now();
+      function fadeStep() {
+        var elapsed = (performance.now() - startTime) / 1000;
+        if (elapsed >= 2 || audio.paused || audio.ended) {
+          audio.pause();
+          audio.volume = 0;
+          if (globalActiveCustomAudio === audio) {
+            globalActiveCustomAudio = null;
+          }
+          return;
+        }
+        audio.volume = startVol * (1 - elapsed / 2);
+        fadeRAF = requestAnimationFrame(fadeStep);
       }
+      fadeRAF = requestAnimationFrame(fadeStep);
+    }
+  });
+
+  // 音频自然结束（时长 < end 设置）：直接清理，不淡出
+  audio.addEventListener('ended', function() {
+    if (fadeRAF) cancelAnimationFrame(fadeRAF);
+    if (globalActiveCustomAudio === audio) {
+      globalActiveCustomAudio = null;
     }
   });
 }
