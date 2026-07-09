@@ -3502,7 +3502,8 @@ function cancelEditMode() {
 }
 
 async function saveRoutineTime(date, type, time) {
-  if (!time) return;
+  // 允许保存空值（清空起床/睡觉时间）
+  if (time === null || time === undefined) return;
   try {
     await apiCall('/api/stats/routine', {
       method: 'POST',
