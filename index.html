@@ -1879,12 +1879,12 @@ function playCustomRingtoneRange(type) {
     if (cfg.end > cfg.start && audio.currentTime >= cfg.end) {
       fading = true;
       audio.removeEventListener('timeupdate', onTimeUpdate);
-      // 2 秒线性淡出
+      // 1 秒指数淡出
       var startVol = audio.volume;
       var startTime = performance.now();
       function fadeStep() {
         var elapsed = (performance.now() - startTime) / 1000;
-        if (elapsed >= 2 || audio.paused || audio.ended) {
+        if (elapsed >= 1 || audio.paused || audio.ended) {
           audio.pause();
           audio.volume = 0;
           if (globalActiveCustomAudio === audio) {
@@ -1892,7 +1892,7 @@ function playCustomRingtoneRange(type) {
           }
           return;
         }
-        audio.volume = startVol * (1 - elapsed / 2);
+        audio.volume = startVol * Math.exp(-5 * elapsed);
         fadeRAF = requestAnimationFrame(fadeStep);
       }
       fadeRAF = requestAnimationFrame(fadeStep);
