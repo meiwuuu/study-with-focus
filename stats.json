@@ -13957,7 +13957,7 @@
       ],
       "total_time": 4500,
       "pomodoros": 3,
-      "wake_time": "09:00",
+      "wake_time": "08:00",
       "timeline": [
         {
           "from": "",
@@ -14114,7 +14114,8 @@
           "ts": "2026-07-09T05:44:26.694Z",
           "action": "complete"
         }
-      ]
+      ],
+      "sleep_time": "22:30"
     }
   },
   "weight_logs": {

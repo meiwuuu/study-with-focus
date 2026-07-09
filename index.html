@@ -2973,13 +2973,18 @@ function renderLearningLog(daily, date) {
   var wakeTime = daily.wake_time || '—';
   var sleepTime = daily.sleep_time || '—';
   if (editMode) {
-    html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;"><input type="time" id="edit-wake-time" value="' + (wakeTime !== '—' ? wakeTime : '07:30') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ea580c;font-family:var(--mono);font-size:.9em;padding:3px 6px;border-radius:4px;width:100px;outline:none;"></div></div>';
-    html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;"><input type="time" id="edit-sleep-time" value="' + (sleepTime !== '—' ? sleepTime : '22:30') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#a78bfa;font-family:var(--mono);font-size:.9em;padding:3px 6px;border-radius:4px;width:100px;outline:none;"></div></div>';
+    html += '</div>'; // close flex row, only 3 stat-items
+    html += '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+    html += '<span style="font-size:.78em;color:rgba(255,255,255,.4);">起床</span>';
+    html += '<input type="time" id="edit-wake-time" value="' + (wakeTime !== '—' ? wakeTime : '') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ea580c;font-family:var(--mono);font-size:.82em;padding:4px 8px;border-radius:4px;width:105px;outline:none;">';
+    html += '<span style="font-size:.78em;color:rgba(255,255,255,.4);margin-left:8px;">睡觉</span>';
+    html += '<input type="time" id="edit-sleep-time" value="' + (sleepTime !== '—' ? sleepTime : '') + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#a78bfa;font-family:var(--mono);font-size:.82em;padding:4px 8px;border-radius:4px;width:105px;outline:none;">';
+    html += '</div>';
   } else {
     html += '<div class="stat-item"><div class="lbl">起床时间</div><div class="val" style="font-size:1.1em;color:#ea580c;">' + wakeTime + '</div></div>';
     html += '<div class="stat-item"><div class="lbl">睡觉时间</div><div class="val" style="font-size:1.1em;color:#a78bfa;">' + sleepTime + '</div></div>';
+    html += '</div>'; // close flex row
   }
-  html += '</div>';
 
   // Subject distribution bars
   if (Object.keys(subjDist).length > 0) {
