@@ -1097,6 +1097,32 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <option value="opera">Opera</option>
             </select>
           </div>
+          <!-- ═══ Ringtone config ═══ -->
+          <div class="card" style="margin-top:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">🔔 专属提醒铃声自定义</div>
+            <div class="ringtone-config-row" style="margin-bottom:14px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;">
+              <label style="display:block;font-weight:bold;margin-bottom:6px;font-size:.78em;">🍅 番茄钟结束铃声</label>
+              <input type="text" id="ringtone-pomo-url" onchange="saveRingtoneConfig()" placeholder="音频路径（如: alarm.mp3 或网络URL）" style="width:100%;margin-bottom:8px;padding:6px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:6px;font-size:.78em;box-sizing:border-box;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:.78em;">
+                <span>播放区间 (秒):</span>
+                <input type="number" id="ringtone-pomo-start" onchange="saveRingtoneConfig()" step="0.1" min="0" value="0" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <span>至</span>
+                <input type="number" id="ringtone-pomo-end" onchange="saveRingtoneConfig()" step="0.1" min="0" value="5" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <button onclick="testCustomRingtone('pomo')" style="margin-left:auto;padding:4px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:4px;cursor:pointer;font-size:.78em;transition:0.2s;">测试播放</button>
+              </div>
+            </div>
+            <div class="ringtone-config-row" style="background:rgba(255,255,255,0.03);padding:10px;border-radius:8px;">
+              <label style="display:block;font-weight:bold;margin-bottom:6px;font-size:.78em;">📅 学习计划提醒铃声</label>
+              <input type="text" id="ringtone-plan-url" onchange="saveRingtoneConfig()" placeholder="音频路径（如: alarm.mp3 或网络URL）" style="width:100%;margin-bottom:8px;padding:6px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:6px;font-size:.78em;box-sizing:border-box;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:.78em;">
+                <span>播放区间 (秒):</span>
+                <input type="number" id="ringtone-plan-start" onchange="saveRingtoneConfig()" step="0.1" min="0" value="0" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <span>至</span>
+                <input type="number" id="ringtone-plan-end" onchange="saveRingtoneConfig()" step="0.1" min="0" value="5" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <button onclick="testCustomRingtone('plan')" style="margin-left:auto;padding:4px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:4px;cursor:pointer;font-size:.78em;transition:0.2s;">测试播放</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ═══ AI Evaluate tab ═══ -->
@@ -1771,6 +1797,95 @@ function testAlarm() {
     preloadedBell.play().catch(function(){});
   }
 }
+
+// ═══════════ CUSTOM RINGTONE ═══════════
+var globalActiveCustomAudio = null;
+
+function saveRingtoneConfig() {
+  var config = {
+    pomo: {
+      url: document.getElementById('ringtone-pomo-url').value.trim() || 'BreakOrWork.mp3',
+      start: parseFloat(document.getElementById('ringtone-pomo-start').value) || 0,
+      end: parseFloat(document.getElementById('ringtone-pomo-end').value) || 5
+    },
+    plan: {
+      url: document.getElementById('ringtone-plan-url').value.trim() || 'BreakOrWork.mp3',
+      start: parseFloat(document.getElementById('ringtone-plan-start').value) || 0,
+      end: parseFloat(document.getElementById('ringtone-plan-end').value) || 5
+    }
+  };
+  try { localStorage.setItem('focus_custom_ringtone_config', JSON.stringify(config)); } catch(e) {}
+}
+
+function loadRingtoneConfig() {
+  var defaultCfg = {
+    pomo: { url: 'BreakOrWork.mp3', start: 0, end: 5 },
+    plan: { url: 'BreakOrWork.mp3', start: 0, end: 5 }
+  };
+  var cfg = defaultCfg;
+  try {
+    var saved = localStorage.getItem('focus_custom_ringtone_config');
+    if (saved) cfg = JSON.parse(saved);
+  } catch(e) {}
+
+  var el;
+  el = document.getElementById('ringtone-pomo-url'); if (el) el.value = cfg.pomo.url || 'BreakOrWork.mp3';
+  el = document.getElementById('ringtone-pomo-start'); if (el) el.value = cfg.pomo.start;
+  el = document.getElementById('ringtone-pomo-end'); if (el) el.value = cfg.pomo.end;
+  el = document.getElementById('ringtone-plan-url'); if (el) el.value = cfg.plan.url || 'BreakOrWork.mp3';
+  el = document.getElementById('ringtone-plan-start'); if (el) el.value = cfg.plan.start;
+  el = document.getElementById('ringtone-plan-end'); if (el) el.value = cfg.plan.end;
+}
+
+function playCustomRingtoneRange(type) {
+  // 如果当前有正在播放的铃声，先停掉它
+  if (globalActiveCustomAudio) {
+    globalActiveCustomAudio.pause();
+    globalActiveCustomAudio = null;
+  }
+
+  // 获取配置
+  var cfg = { url: 'BreakOrWork.mp3', start: 0, end: 5 };
+  try {
+    var saved = localStorage.getItem('focus_custom_ringtone_config');
+    if (saved) {
+      var parsed = JSON.parse(saved);
+      if (parsed[type]) cfg = parsed[type];
+    }
+  } catch(e) {}
+
+  if (!cfg.url) return;
+
+  // 创建音频对象
+  var audio = new Audio(cfg.url);
+  audio.volume = getAlarmVolume();
+
+  globalActiveCustomAudio = audio;
+
+  // 元数据加载完成后，跳转到设定的起点并播放
+  audio.addEventListener('loadedmetadata', function() {
+    if (cfg.start < audio.duration) {
+      audio.currentTime = cfg.start;
+    }
+    audio.play().catch(function(err) { console.log('播放失败:', err); });
+  });
+
+  // 核心截取：监听时间更新，到达终点强行掐断
+  audio.addEventListener('timeupdate', function onTimeUpdate() {
+    if (cfg.end > cfg.start && audio.currentTime >= cfg.end) {
+      audio.pause();
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      if (globalActiveCustomAudio === audio) {
+        globalActiveCustomAudio = null;
+      }
+    }
+  });
+}
+
+function testCustomRingtone(type) {
+  saveRingtoneConfig(); // 先保存当前的输入
+  playCustomRingtoneRange(type); // 执行截段播放
+}
 function pomoFmt(s) { return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
 function pomoSetStatus(st) {
   pomo.status = st;
@@ -1840,7 +1955,7 @@ function pomoComplete() {
   pomoUpdateDisplay();
   if (pomo.running) { pomo.lastTick = Date.now(); pomo.timer = setTimeout(pomoTick, 250); }
   // 播放提示音
-  playBellSound();
+  playCustomRingtoneRange('pomo');
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification('番茄钟', { body: (pomo.status==='focus'?'休息结束！开始专注吧':'番茄钟完成！休息一下吧') });
   }
@@ -3693,7 +3808,7 @@ function checkPlanAlarms() {
   for (var i = 0; i < plans.length; i++) {
     var pp = plans[i];
     if (!pp.done && pp.time === currentTimeStr && pp.alarm && !pp.alarmTriggered) {
-      playBellSound();
+      playCustomRingtoneRange('plan');
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('⏰ 计划提醒', { body: pp.text, icon: 'file:///E:/恶魔飞鼠 ICON/随便设置5.ico' });
       }
@@ -3845,6 +3960,8 @@ try {
   document.getElementById('alarm-volume').value = pct;
   document.getElementById('alarm-volume-val').textContent = pct + '%';
 })();
+// 加载自定义铃声配置
+loadRingtoneConfig();
 // Show default block list immediately, then refresh from API
 blockRender();
 blockRefresh();
