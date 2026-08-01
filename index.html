@@ -327,6 +327,32 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   background: var(--accent);
 }
 
+/* ───── Reason modal ───── */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.65);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-card {
+  width: min(420px, 90vw);
+  background: rgba(255,255,255,0.10);
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px; padding: 22px 24px; box-shadow: var(--shadow);
+  color: #fff;
+}
+.modal-title { font-weight: 600; font-size: 1.05em; margin-bottom: 4px; }
+.modal-sub { font-size: .82em; color: rgba(255,255,255,0.55); margin-bottom: 12px; }
+#reason-input {
+  width: 100%; padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+  background: rgba(255,255,255,0.06); color: #fff;
+  font-family: inherit; font-size: .92em; outline: none;
+}
+#reason-input:focus { border-color: var(--accent); }
+#reason-input::placeholder { color: rgba(255,255,255,0.35); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
 /* ═══════════ Pomodoro settings tab ═══════════ */
 .pomo-circle-sm {
   position: relative; width: 140px; height: 140px; margin: 0 auto 16px;
@@ -867,6 +893,16 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           </div>
           <div class="block-list" id="block-list"></div>
           <div class="block-empty" id="block-empty">暂无禁站</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <label class="toggle">
+              <input type="checkbox" id="block-keep-break" onchange="blockKeepBreakToggle()">
+              <span class="toggle-slider"></span>
+            </label>
+            <div>
+              <div style="font-weight:600;font-size:.88em;">休息时保持屏蔽</div>
+              <div class="subtitle" style="font-size:.76em;">开启后，番茄钟休息/暂停时不会自动解除屏蔽</div>
+            </div>
+          </div>
           <div class="block-note">⚠ 需以管理员权限运行后端 (python server.py)</div>
         </div>
 
@@ -1314,6 +1350,8 @@ function updatePanelOpacity(val) {
   var alpha = val / 100;
   var panel = document.querySelector('.settings-panel');
   if (panel) panel.style.background = 'rgba(255,255,255,' + alpha + ')';
+  var modal = document.querySelector('.modal-card');
+  if (modal) modal.style.background = 'rgba(255,255,255,' + alpha + ')';
   var subjRow = document.querySelector('.subject-row');
   if (subjRow) subjRow.style.background = 'rgba(255,255,255,' + (alpha * 0.45) + ')';
   document.getElementById('panel-opacity-val').textContent = val + '%';
@@ -1330,7 +1368,7 @@ function loadPanelOpacity() {
 // ─── Focus mode toggle ───
 var focusModeActive = false;
 
-function toggleFocusMode() {
+async function toggleFocusMode() {
   if (!focusModeActive) {
     // 开始专注：全屏 + 启动番茄钟
     if (!document.fullscreenElement) {
@@ -1350,11 +1388,12 @@ function toggleFocusMode() {
     if (!pomo.running) pomoStart();
     focusModeActive = true;
   } else {
-    // 暂停专注：退出全屏 + 暂停 + 关屏蔽
+    // 暂停专注：先确认理由，再退出全屏 + 暂停
+    var paused = pomo.running ? await pomoPause() : true;
+    if (!paused) return;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(function(){});
     }
-    if (pomo.running) pomoPause();
     focusModeActive = false;
   }
   updateFocusBtn();
@@ -2016,10 +2055,16 @@ function pomoStart() {
   }
   updateStatusBar();
 }
-function pomoPause() {
+async function pomoPause() {
+  var phase = (pomo.status === 'focus') ? '专注' : '休息';
+  var reason = await askReason('暂停' + phase, '为什么要暂停' + phase + '？写下此刻的真实想法。');
+  if (reason === null) return false;
+  try {
+    apiCall('/api/stats/pause', {method:'POST',body:JSON.stringify({phase:phase, reason:reason})});
+  } catch(e) {}
   // Timeline: record pause
   if (pomo.running && pomo.status === 'focus') {
-    tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds});
+    tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds, reason: reason});
   }
   // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
@@ -2027,8 +2072,9 @@ function pomoPause() {
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
   document.getElementById('pomo-pause').style.display = 'none';
-  autoDisableBlocking();
+  if (!keepBlockOnBreak) autoDisableBlocking();
   updateStatusBar();
+  return true;
 }
 function pomoEnd() {
   // 休息阶段提前结束：保留蓝点，回到专注模式
@@ -2080,8 +2126,9 @@ function pomoEnd() {
   autoDisableBlocking();
   updateStatusBar();
 }
-function pomoReset() {
-  pomoPause();
+async function pomoReset() {
+  var ok = pomo.running ? await pomoPause() : true;
+  if (!ok) return;
   pomo.timeLeft = (parseInt(document.getElementById('pomo-focus').value)||25)*60;
   pomo.total = pomo.timeLeft;
   pomo.completed = 0;
@@ -2819,14 +2866,25 @@ function togglePlanAlarm(date, planId) {
 }
 
 // ═══════════ BLOCK ═══════════
-var blockSites=['bilibili.com','www.bilibili.com','weibo.com','www.weibo.com','zhihu.com','www.zhihu.com','tieba.baidu.com'],blockActive=false;
+var blockSites=['bilibili.com','www.bilibili.com','weibo.com','www.weibo.com','zhihu.com','www.zhihu.com','tieba.baidu.com'],blockActive=false,keepBlockOnBreak=true;
 async function blockRefresh(){
   var d=await apiCall('/api/status');
   if (d) {
     blockSites = d.blocked_sites || [];
     blockActive = d.blocking_active || false;
   }
+  var c=await apiCall('/api/config');
+  if (c && c.config) {
+    keepBlockOnBreak = c.config.keep_block_on_break !== false;
+    var kb=document.getElementById('block-keep-break');
+    if (kb) kb.checked = keepBlockOnBreak;
+  }
   blockRender();
+}
+async function blockKeepBreakToggle(){
+  keepBlockOnBreak = document.getElementById('block-keep-break').checked;
+  await apiCall('/api/config', {method:'POST',body:JSON.stringify({keep_block_on_break:keepBlockOnBreak})});
+  showToast(keepBlockOnBreak ? '休息时保持屏蔽已开启' : '休息时自动解除屏蔽已开启');
 }
 function blockRender(){
   document.getElementById('block-toggle').checked=blockActive;
@@ -2846,7 +2904,16 @@ async function blockToggle(){
       alert('无法启用屏蔽。请右键以管理员身份运行：\nE:\\code\\hermes\\focus\\run_server.bat');
     }
   } else {
-    await apiCall('/api/block/stop', {method:'POST'});
+    var reason = await askReason('关闭屏蔽', '为什么要关闭屏蔽？写下此刻的真实想法。');
+    if (reason === null) {
+      document.getElementById('block-toggle').checked = true;
+      return;
+    }
+    var res = await apiCall('/api/block/stop', {method:'POST',body:JSON.stringify({mode:'manual',reason:reason})});
+    if (res && res.cooldown) {
+      showToast(res.message || ('冷却中，剩余 ' + Math.ceil((res.wait_seconds||900)/60) + ' 分钟'));
+      document.getElementById('block-toggle').checked = true;
+    }
   }
   await blockRefresh();
 }
@@ -2861,10 +2928,58 @@ async function autoEnableBlocking() {
 }
 async function autoDisableBlocking() {
   var data = await apiCall('/api/status');
-  if (data && data.blocking_active) {
-    await apiCall('/api/block/stop', {method:'POST'});
+  if (data && data.blocking_active && !keepBlockOnBreak) {
+    await apiCall('/api/block/stop', {method:'POST',body:JSON.stringify({mode:'auto'})});
   }
   await blockRefresh();
+}
+
+// ─── 理由输入弹窗 ───
+var reasonCallback = null;
+function askReason(title, sub){
+  return new Promise(function(resolve){
+    document.getElementById('reason-title').textContent = title;
+    document.getElementById('reason-sub').textContent = sub || '写下此刻的真实想法。';
+    document.getElementById('reason-input').value = '';
+    document.getElementById('reason-modal').style.display = 'flex';
+    reasonCallback = resolve;
+    setTimeout(function(){ document.getElementById('reason-input').focus(); }, 60);
+  });
+}
+function reasonCancel(){
+  document.getElementById('reason-modal').style.display = 'none';
+  if (reasonCallback) reasonCallback(null);
+  reasonCallback = null;
+}
+function reasonConfirm(){
+  var v = document.getElementById('reason-input').value.trim();
+  if (v.length < 2) {
+    showToast('理由太短了，至少写 2 个字');
+    return;
+  }
+  document.getElementById('reason-modal').style.display = 'none';
+  if (reasonCallback) reasonCallback(v);
+  reasonCallback = null;
+}
+(function(){
+  var inp = document.getElementById('reason-input');
+  if (inp) inp.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); reasonConfirm(); }
+    else if (e.key === 'Escape') reasonCancel();
+  });
+})();
+function showToast(msg){
+  var el = document.getElementById('app-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-toast';
+    el.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:.85em;z-index:3000;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transition:opacity .3s;max-width:80vw;text-align:center;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.opacity = '0'; }, 3200);
 }
 
 async function blockAdd(){
@@ -4001,6 +4116,43 @@ document.addEventListener("visibilitychange", function() {
   if (document.hidden) { v.pause(); }
   else { v.play().catch(function(){}); }
 });
+
+// ─── 收工提醒：23:45 提示，0点后仍在专注则警告 ───
+(function(){
+  var lastCurfewDate = '';
+  var lastMidnightWarn = 0;
+  function checkCurfew(){
+    var now = new Date();
+    var h = now.getHours(), m = now.getMinutes();
+    var dayKey = now.getFullYear() + '-' + now.getMonth() + '-' + now.getDate();
+    // 23:45 收工提醒（每天一次）
+    if (h === 23 && m >= 45 && lastCurfewDate !== dayKey) {
+      lastCurfewDate = dayKey;
+      showToast('23:45 了，该收工了。今天到此为止，学不完的明天补。');
+    }
+    // 0:00-5:59 仍在专注 → 每 30 分钟警告一次
+    if (h < 6 && pomo.running && pomo.status === 'focus') {
+      var nowTs = Date.now();
+      if (nowTs - lastMidnightWarn > 30 * 60 * 1000) {
+        lastMidnightWarn = nowTs;
+        showToast('现在是凌晨，去睡觉。通宵是亏本生意，明天第一块再补。');
+      }
+    }
+  }
+  setInterval(checkCurfew, 60000);
+})();
 </script>
+<!-- Reason modal -->
+<div class="modal-mask" id="reason-modal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-title" id="reason-title">暂停</div>
+    <div class="modal-sub" id="reason-sub">写下暂停的理由</div>
+    <input type="text" id="reason-input" placeholder="写下此刻的真实想法…" maxlength="60">
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="reasonCancel()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="reasonConfirm()">确认</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

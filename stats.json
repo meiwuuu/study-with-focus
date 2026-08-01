@@ -1,8 +1,8 @@
 {
   "today": "2026-08-01",
-  "today_time": 4500,
+  "today_time": 5820,
   "today_pomodoros": 3,
-  "total_time": 611595,
+  "total_time": 612915,
   "total_pomodoros": 379,
   "sessions": [
     {
@@ -13460,9 +13460,15 @@
           "end": "17:54",
           "duration": 1500,
           "subject": "math"
+        },
+        {
+          "start": "18:00",
+          "end": "19:00",
+          "duration": 1320,
+          "subject": "math"
         }
       ],
-      "total_time": 5700,
+      "total_time": 7020,
       "pomodoros": 3,
       "timeline": [
         {
@@ -13697,5 +13703,22 @@
     "2026-07-20": 74.6,
     "2026-07-22": 75.35,
     "2026-07-23": 74.8
-  }
+  },
+  "pauses": [
+    {
+      "date": "2026-08-01 01:06",
+      "phase": "专注",
+      "reason": "测试"
+    },
+    {
+      "date": "2026-08-01 01:07",
+      "phase": "专注",
+      "reason": "测试"
+    },
+    {
+      "date": "2026-08-01 01:09",
+      "phase": "专注",
+      "reason": "测试"
+    }
+  ]
 }
