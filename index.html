@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Study With Focus</title>
-<link rel="icon" href="file:///E:/恶魔飞鼠 ICON/随便设置5.ico">
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<link rel="icon" href="favicon.ico">
+<script src="vendor/sortable.min.js"></script>
 <style>
 /* ═══════════ Design tokens ═══════════ */
 :root {
@@ -3836,7 +3836,7 @@ function checkPlanAlarms() {
     if (!pp.done && pp.time === currentTimeStr && pp.alarm && !pp.alarmTriggered) {
       playCustomRingtoneRange('plan');
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('⏰ 计划提醒', { body: pp.text, icon: 'file:///E:/恶魔飞鼠 ICON/随便设置5.ico' });
+        new Notification('⏰ 计划提醒', { body: pp.text, icon: 'favicon.ico' });
       }
       pp.alarmTriggered = true;
       needSave = true;
