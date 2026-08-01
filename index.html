@@ -2522,8 +2522,25 @@ var globalTasks = [];
 var showTodo = true, showMultiTodo = false;
 var _sortableInst = null;
 
+function genTaskId() {
+  // 时间戳36进制 + 随机后缀，避免模板批量写入时同毫秒碰撞
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+function fixDuplicateTaskIds() {
+  var seen = {}, changed = false;
+  for (var i = 0; i < globalTasks.length; i++) {
+    var t = globalTasks[i];
+    if (!t || typeof t !== 'object') continue;
+    if (!t.id || seen[t.id]) { t.id = genTaskId(); changed = true; }
+    seen[t.id] = true;
+  }
+  if (changed) saveGlobalTasks();
+}
 function loadGlobalTasks() {
-  try { var s = localStorage.getItem('global_tasks'); if (s) { globalTasks = JSON.parse(s); return true; } } catch(e) {}
+  try {
+    var s = localStorage.getItem('global_tasks');
+    if (s) { globalTasks = JSON.parse(s); fixDuplicateTaskIds(); return true; }
+  } catch(e) {}
   return false;
 }
 function saveGlobalTasks() { localStorage.setItem('global_tasks', JSON.stringify(globalTasks)); }
@@ -2560,7 +2577,7 @@ function migrateToGlobalTasks() {
 // ─── Unified CRUD ───
 function addTask(title, type, date, extra) {
   extra = extra || {};
-  globalTasks.push({ id: String(Date.now()), title: title, type: type, date: type === 'specific' ? date : undefined, done: false, pinned: extra.pinned || false, color: extra.color || 'default', time: extra.time || '', alarm: extra.alarm || false, alarmTriggered: false });
+  globalTasks.push({ id: genTaskId(), title: title, type: type, date: type === 'specific' ? date : undefined, done: false, pinned: extra.pinned || false, color: extra.color || 'default', time: extra.time || '', alarm: extra.alarm || false, alarmTriggered: false });
   saveGlobalTasks();
 }
 
