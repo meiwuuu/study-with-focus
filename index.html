@@ -149,11 +149,11 @@ body {
 .pomo-float-task .td-dot { width: 0.5em; height: 0.5em; border-radius: 50%; margin-right: 0.5em; margin-top: 0.5em; flex-shrink: 0; }
 .pomo-float-task .td-check { width: 1.25em; height: 1.25em; margin-right: 0.5em; margin-top: 0.1em; cursor: pointer; accent-color: var(--break); flex-shrink: 0; }
 .pomo-float-task .td-label { opacity: 0.55; margin-right: 0.5em; flex-shrink: 0; }
-/* 多任务模式：每项标题一行 + 时间独立一行（时间永远完整显示） */
+/* 多任务模式：标题一列（超长省略）+ 时间独立右列（永远完整显示） */
 .pomo-float-task.multi { display: block; }
-.pomo-float-task.multi .td-line { display: flex; align-items: flex-start; gap: 6px; }
-.pomo-float-task.multi .td-title { flex: 1; min-width: 0; word-break: break-all; }
-.pomo-float-task.multi .td-time { margin: 3px 0 0 25px; color: var(--yellow); font-size: .85em; font-family: var(--mono); white-space: nowrap; }
+.pomo-float-task.multi .td-line { display: flex; align-items: center; gap: 6px; width: 100%; }
+.pomo-float-task.multi .td-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pomo-float-task.multi .td-time { flex-shrink: 0; color: var(--yellow); font-size: .85em; font-family: var(--mono); white-space: nowrap; }
 
 /* 右下角极简倒角缩放提示线 */
 .pomo-current-todo::after {
@@ -2810,10 +2810,10 @@ function todoUpdateFloat() {
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot + '"></span>';
       h += '<span class="td-title">' + escHtml(it.title) + '</span>';
-      h += '</div>';
       if (it.time) {
-        h += '<div class="td-time">' + escHtml(it.time) + (it.alarm ? ' 🔔' : '') + '</div>';
+        h += '<span class="td-time">' + escHtml(it.time) + (it.alarm ? ' 🔔' : '') + '</span>';
       }
+      h += '</div>';
       h += '</div>';
     }
     lst.innerHTML = h;
