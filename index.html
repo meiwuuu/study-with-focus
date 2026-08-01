@@ -4210,11 +4210,6 @@ document.addEventListener("visibilitychange", function() {
   setInterval(checkCurfew, 60000);
 })();
 
-// ─── 页面心跳：关闭网页后，后端自动解除屏蔽 ───
-setInterval(function(){
-  fetch(API + '/api/heartbeat', {method:'POST'}).catch(function(){});
-}, 30000);
-
 </script>
 <!-- Reason modal -->
 <div class="modal-mask" id="reason-modal" style="display:none">

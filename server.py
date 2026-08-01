@@ -71,11 +71,6 @@ config_lock = threading.Lock()
 hosts_lock = threading.Lock()
 archive_lock = threading.Lock()
 
-# --- Page heartbeat: page closed => auto clear blocking ---
-last_heartbeat = time.time()
-HEARTBEAT_TIMEOUT = 150
-HEARTBEAT_CHECK_INTERVAL = 30
-
 # --- helpers ---
 
 def load_json(path, default):
@@ -258,21 +253,6 @@ def clear_blocking():
     if not result:
         return False, "Permission denied: run as Administrator"
     return True, "ok"
-
-def heartbeat_guard():
-    """Page closed (no heartbeat) => auto-clear blocking."""
-    while True:
-        time.sleep(HEARTBEAT_CHECK_INTERVAL)
-        try:
-            with hosts_lock, config_lock:
-                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                if config.get("active") and time.time() - last_heartbeat > HEARTBEAT_TIMEOUT:
-                    ok, _ = clear_blocking()
-                    if ok:
-                        config["active"] = False
-                        save_json(CONFIG_FILE, config)
-        except Exception:
-            pass
 
 # --- stats ---
 
@@ -711,12 +691,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                 invalidate_stats_cache()
             self._send_json({"ok": True})
 
-        elif path == "/api/heartbeat":
-            global last_heartbeat
-            with config_lock:
-                last_heartbeat = time.time()
-            self._send_json({"ok": True})
-
         elif path == "/api/stats/session":
             with stats_lock:
                 stats = get_stats_cached()
@@ -1037,8 +1011,6 @@ def main():
             webbrowser.open(html_url)
 
         threading.Thread(target=open_ui, daemon=True).start()
-
-    threading.Thread(target=heartbeat_guard, daemon=True).start()
 
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
