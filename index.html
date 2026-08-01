@@ -149,6 +149,11 @@ body {
 .pomo-float-task .td-dot { width: 0.5em; height: 0.5em; border-radius: 50%; margin-right: 0.5em; margin-top: 0.5em; flex-shrink: 0; }
 .pomo-float-task .td-check { width: 1.25em; height: 1.25em; margin-right: 0.5em; margin-top: 0.1em; cursor: pointer; accent-color: var(--break); flex-shrink: 0; }
 .pomo-float-task .td-label { opacity: 0.55; margin-right: 0.5em; flex-shrink: 0; }
+/* 多任务模式：每项标题一行 + 时间独立一行（时间永远完整显示） */
+.pomo-float-task.multi { display: block; }
+.pomo-float-task.multi .td-line { display: flex; align-items: flex-start; gap: 6px; }
+.pomo-float-task.multi .td-title { flex: 1; min-width: 0; word-break: break-all; }
+.pomo-float-task.multi .td-time { margin: 3px 0 0 25px; color: var(--yellow); font-size: .85em; font-family: var(--mono); white-space: nowrap; }
 
 /* 右下角极简倒角缩放提示线 */
 .pomo-current-todo::after {
@@ -2793,19 +2798,21 @@ function todoUpdateFloat() {
   var todayTasks = getTasksForDate(today).filter(function(t) { return !t.done; });
 
   if (showMultiTodo) {
-    if (!todayTasks.length) { el.classList.remove('show'); return; }
+    var shown = todayTasks.slice(0, 3);
+    if (!shown.length) { el.classList.remove('show'); return; }
     var h = '';
-    for (var k = 0; k < todayTasks.length; k++) {
-      var it = todayTasks[k];
+    for (var k = 0; k < shown.length; k++) {
+      var it = shown[k];
       var pc = PLAN_COLORS.find(function(c) { return c.v === it.color; });
       var dot = it.type === 'daily' ? dotColors.daily : it.type === 'persistent' ? dotColors.persist : (pc ? pc.c : dotColors.default);
-      h += '<div class="pomo-float-task">';
+      h += '<div class="pomo-float-task multi">';
+      h += '<div class="td-line">';
       h += '<input type="checkbox" class="td-check" onclick="event.stopPropagation();toggleTask(\'' + it.id + '\');todoUpdateFloat();renderTodosForDate(\'' + today + '\');if(typeof calRenderDetail===&quot;function&quot;)calRenderDetail();">';
       h += '<span class="td-dot" style="background:' + dot + '"></span>';
-      h += escHtml(it.title);
+      h += '<span class="td-title">' + escHtml(it.title) + '</span>';
+      h += '</div>';
       if (it.time) {
-        h += ' <span style="color:var(--yellow);font-size:.85em;">' + escHtml(it.time) + '</span>';
-        if (it.alarm) h += ' 🔔';
+        h += '<div class="td-time">' + escHtml(it.time) + (it.alarm ? ' 🔔' : '') + '</div>';
       }
       h += '</div>';
     }
@@ -4191,6 +4198,12 @@ document.addEventListener("visibilitychange", function() {
   }
   setInterval(checkCurfew, 60000);
 })();
+
+// ─── 页面心跳：关闭网页后，后端自动解除屏蔽 ───
+setInterval(function(){
+  fetch(API + '/api/heartbeat', {method:'POST'}).catch(function(){});
+}, 30000);
+
 </script>
 <!-- Reason modal -->
 <div class="modal-mask" id="reason-modal" style="display:none">
