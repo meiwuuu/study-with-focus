@@ -9,14 +9,16 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-cd /d "E:\code\hermes\focus"
+cd /d "%~dp0"
+set "FDIR=%~dp0"
+set "FDIR=%FDIR:\=/%"
 
 :: Kill old backend if running
 taskkill /f /im pythonw.exe >nul 2>&1
 
 echo ================================
 echo   Study With Focus Backend
-echo   file:///E:/code/hermes/focus/index.html
+echo   file:///%FDIR%index.html
 echo ================================
 echo Starting backend on port 8765...
 pythonw server.py
@@ -30,5 +32,5 @@ if errorlevel 1 goto wait
 
 :: Open browser
 echo Opening...
-start "" "file:///E:/code/hermes/focus/index.html"
+start "" "file:///%FDIR%index.html"
 exit

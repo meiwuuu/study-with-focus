@@ -36,6 +36,22 @@ def clean_sites(sites):
             out.append(s)
     return out
 
+def valid_num(v, lo, hi, default=0):
+    """数值校验：非数字或超范围返回 default，防止脏数据污染统计。"""
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return default
+    if n < lo or n > hi:
+        return default
+    return n
+
+def clean_str(v, max_len=100):
+    """字符串清洗：非字符串返回空串，超长截断。"""
+    if not isinstance(v, str):
+        return ""
+    return v.strip()[:max_len]
+
 def effective_date_str():
     """凌晨4点前算前一天"""
     now = datetime.now()
@@ -57,7 +73,7 @@ archive_lock = threading.Lock()
 
 # --- Page heartbeat: page closed => auto clear blocking ---
 last_heartbeat = time.time()
-HEARTBEAT_TIMEOUT = 90
+HEARTBEAT_TIMEOUT = 150
 HEARTBEAT_CHECK_INTERVAL = 30
 
 # --- helpers ---
@@ -705,9 +721,11 @@ class FocusHandler(BaseHTTPRequestHandler):
             with stats_lock:
                 stats = get_stats_cached()
                 rollover_if_new_day(stats)
-                duration = body.get("duration", 0)
-                pomodoros = body.get("pomodoros", 0)
+                duration = valid_num(body.get("duration", 0), 0, 86400)
+                pomodoros = valid_num(body.get("pomodoros", 0), 0, 100)
                 timeline = body.get("timeline", [])
+                if not isinstance(timeline, list):
+                    timeline = []
                 stats["today_time"] += duration
                 stats["today_pomodoros"] += pomodoros
                 stats["total_time"] += duration
@@ -739,11 +757,11 @@ class FocusHandler(BaseHTTPRequestHandler):
                 stats = get_stats_cached()
                 rollover_if_new_day(stats)
                 today = effective_date_str()
-                subject = body.get("subject", "")
-                start_time = body.get("start_time", datetime.now().strftime("%H:%M"))
-                end_time = body.get("end_time", datetime.now().strftime("%H:%M"))
-                duration = body.get("duration", 0)
-                pomodoros = body.get("pomodoros", 0)
+                subject = clean_str(body.get("subject", ""), 50)
+                start_time = clean_str(body.get("start_time", datetime.now().strftime("%H:%M")), 10)
+                end_time = clean_str(body.get("end_time", datetime.now().strftime("%H:%M")), 10)
+                duration = valid_num(body.get("duration", 0), 0, 86400)
+                pomodoros = valid_num(body.get("pomodoros", 0), 0, 100)
 
                 if today not in stats["daily_logs"]:
                     stats["daily_logs"][today] = {
@@ -816,11 +834,14 @@ class FocusHandler(BaseHTTPRequestHandler):
             with stats_lock:
                 stats = get_stats_cached()
                 date = body.get("date")
-                start_time = body.get("start_time")
-                end_time = body.get("end_time")
-                duration = body.get("duration", 0)
-                pomodoros = body.get("pomodoros", 0)
-                subject = body.get("subject", "")
+                if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+                    self._send_json({"error": "invalid date"}, 400)
+                    return
+                start_time = clean_str(body.get("start_time", ""), 10)
+                end_time = clean_str(body.get("end_time", ""), 10)
+                duration = valid_num(body.get("duration", 0), 0, 86400)
+                pomodoros = valid_num(body.get("pomodoros", 0), 0, 100)
+                subject = clean_str(body.get("subject", ""), 50)
 
                 if "daily_logs" not in stats:
                     stats["daily_logs"] = {}
@@ -901,7 +922,11 @@ class FocusHandler(BaseHTTPRequestHandler):
 
                 # 记录起床或睡觉时间
                 if r_type in ["wake", "sleep"]:
-                    stats["daily_logs"][date][r_type + "_time"] = r_time
+                    if r_time is None or r_time == "" or (isinstance(r_time, str) and re.fullmatch(r"\d{2}:\d{2}", r_time)):
+                        stats["daily_logs"][date][r_type + "_time"] = r_time if r_time is not None else ""
+                    else:
+                        self._send_json({"ok": False, "error": "invalid time, expected HH:MM"}, 400)
+                        return
 
                 save_json(STATS_FILE, stats)
                 invalidate_stats_cache()
@@ -911,9 +936,12 @@ class FocusHandler(BaseHTTPRequestHandler):
             with stats_lock:
                 stats = get_stats_cached()
                 date = body.get("date", effective_date_str())
-                weight = body.get("weight")
-                if weight is None:
-                    self._send_json({"error": "weight is required"}, 400)
+                try:
+                    weight = float(body.get("weight"))
+                except (TypeError, ValueError):
+                    weight = None
+                if weight is None or not (20 <= weight <= 300):
+                    self._send_json({"error": "invalid weight"}, 400)
                     return
                 wl = stats.setdefault("weight_logs", {})
                 wl[date] = weight

@@ -823,6 +823,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-sm" onclick="testAlarm()" style="flex-shrink:0;">测试</button>
             </div>
           </div>
+          <div class="card">
+            <button class="btn btn-red" onclick="exitFocus()" style="width:100%;justify-content:center;">退出 Focus（解除屏蔽并关闭页面）</button>
+          </div>
         </div>
 
         <!-- ═══ Calendar tab ═══ -->
@@ -1262,6 +1265,18 @@ function toggleFullscreen() {
 }
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─── 退出：解除屏蔽 + 关闭页面 ───
+async function exitFocus() {
+  if (!confirm('退出 Focus？将解除网络屏蔽并关闭页面。')) return;
+  try {
+    await apiCall('/api/block/stop', { method: 'POST', body: JSON.stringify({ mode: 'auto' }) });
+  } catch(e) {}
+  blockActive = false;
+  blockRender();
+  try { window.close(); } catch(e) {}
+  setTimeout(function(){ showToast('页面未能自动关闭，请手动关闭标签页'); }, 1000);
 }
 
 // ─── Panel ───
@@ -3369,14 +3384,6 @@ function renderLearningLog(daily, date) {
 function hasIncompleteItems() {
   // 检查是否有未完成的 global_tasks
   if (typeof globalTasks !== 'undefined' && globalTasks.some(function(t){ return !t.done; })) return true;
-  // 检查今天是否有未完成的计划
-  var _today = new Date();
-  var _todayStr = _today.getFullYear() + '-' + 
-    String(_today.getMonth() + 1).padStart(2, '0') + '-' + 
-    String(_today.getDate()).padStart(2, '0');
-  if (cal.plans && cal.plans[_todayStr]) {
-    if (cal.plans[_todayStr].some(function(p){ return !p.done; })) return true;
-  }
   return false;
 }
 (function initTodoWindow() {
