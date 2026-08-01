@@ -8,6 +8,7 @@ import threading
 import subprocess
 import argparse
 import webbrowser
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -17,6 +18,23 @@ HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
 BLOCK_MARKER_START = "# === FOCUS BLOCK START ==="
 BLOCK_MARKER_END = "# === FOCUS BLOCK END ==="
 REDIRECT_IP = "127.0.0.1"
+# 只允许合法域名（字母/数字/连字符/点，至少一个点，不以点或连字符开头/结尾）
+SITE_RE = re.compile(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$")
+
+def clean_sites(sites):
+    """校验屏蔽站点列表：只接受合法域名，非法输入整体拒绝（返回 None）。"""
+    if not isinstance(sites, list):
+        return None
+    out = []
+    for s in sites:
+        if not isinstance(s, str):
+            return None
+        s = s.strip().lower()
+        if not SITE_RE.fullmatch(s):
+            return None
+        if s not in out:
+            out.append(s)
+    return out
 
 def effective_date_str():
     """凌晨4点前算前一天"""
@@ -413,6 +431,9 @@ class FocusHandler(BaseHTTPRequestHandler):
             # 为指定日期生成/返回评价数据 txt（可下载）
             qs = parse_qs(urlparse(self.path).query)
             date = qs.get("date", [effective_date_str()])[0]
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+                self._send_json({"error": "invalid date, expected YYYY-MM-DD"}, 400)
+                return
             force_plan = qs.get("plan", [None])[0]
             # 先检查是否已有生成的 txt 文件
             txt_path = DATA_DIR / f"evaluate_{date}.txt"
@@ -483,8 +504,8 @@ class FocusHandler(BaseHTTPRequestHandler):
                     schedule = "有特定安排或轻量日"
                     has_class = True
             # ===================================
-            target_h = 6 if not has_class else 3
-            target_p = 8 if not has_class else 4
+            target_h = "3-6h（约5.5h为满档）" if not has_class else "≥3h"
+            target_p = "10-11（含运动1个）" if not has_class else "≥4"
 
             # 构建 txt
             lines = []
@@ -495,7 +516,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             lines.append("【基本信息】")
             lines.append(f"  日期：{date} {weekday}")
             lines.append(f"  日程分类：{mode}安排（{schedule}）")
-            lines.append(f"  目标：≥{target_h}小时 / ≥{target_p}番茄")
+            lines.append(f"  目标：{target_h}小时 / {target_p}番茄")
             lines.append("")
             lines.append("【核心统计】")
             lines.append(f"  - total_pomodoros: {date_pomodoros} 个")
@@ -576,6 +597,10 @@ class FocusHandler(BaseHTTPRequestHandler):
             with hosts_lock, config_lock:
                 config = load_json(CONFIG_FILE, {"sites": ["bilibili.com", "weibo.com", "zhihu.com", "tieba.baidu.com"]})
                 sites = body.get("sites") or config.get("sites", [])
+                sites = clean_sites(sites)
+                if sites is None:
+                    self._send_json({"ok": False, "error": "invalid_site", "message": "屏蔽站点格式不合法，仅支持域名（如 bilibili.com）。"}, 400)
+                    return
                 ok, msg = apply_blocking(sites)
                 if ok:
                     config["sites"] = sites
@@ -637,6 +662,10 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/block/sites":
             with config_lock:
                 sites = body.get("sites", [])
+                sites = clean_sites(sites)
+                if sites is None:
+                    self._send_json({"ok": False, "error": "invalid_site", "message": "屏蔽站点格式不合法，仅支持域名（如 bilibili.com）。"}, 400)
+                    return
                 config = load_json(CONFIG_FILE, {"sites": [], "active": False})
                 config["sites"] = sites
                 save_json(CONFIG_FILE, config)
@@ -899,6 +928,9 @@ class FocusHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith("/api/block/sites/"):
             domain = unquote(path.split("/api/block/sites/")[1])
+            if not SITE_RE.fullmatch(domain.strip().lower()):
+                self._send_json({"error": "invalid site"}, 400)
+                return
             with config_lock:
                 config = load_json(CONFIG_FILE, {"sites": [], "active": False})
                 if domain in config.get("sites", []):

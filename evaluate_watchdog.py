@@ -21,7 +21,7 @@ REQUEST_FILE = os.path.join(SCRIPT_DIR, "evaluate_request.json")
 STATS_FILE = os.path.join(SCRIPT_DIR, "stats.json")
 PROMPT_FILE = os.path.join(SCRIPT_DIR, "EVALUATE_PROMPT.md")
 
-SUBJECT_NAMES = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治"}
+SUBJECT_NAMES = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治", "sport": "运动"}
 
 # ═══════════ 用户背景（硬编码，定期更新） ═══════════
 USER_BACKGROUND = {
@@ -39,11 +39,11 @@ USER_BACKGROUND = {
         "周日": "无课，全天自主",
     },
     "study_modes": {
-        "A_全负荷": "07:30起床 → 08:00-11:00 数学 → 13:00-15:00 408 → 15:30-17:30 英语 → 19:00-21:00 政治/复习 → 22:30熄灯",
-        "B_最低可行": "08:00起床 → 只做核心科目（数学+408），减少政治英语",
+        "A_全负荷（无课日）": "08:30起床 → 09:00-09:55 数学 → 10:00-10:25 英语 → 10:35-11:30 数学 → 12:00-13:30 午饭+午休≤30min → 14:00-15:30 408 → 15:40-16:35 408 → 16:40-17:05 英语 → 17:10-17:35 运动 → 19:00-20:30 数学真题/错题复盘 → 21:00后收手 → 23:45收工",
+        "B_最低可行（有课日）": "08:00起床 → 只做核心科目（数学+408），目标≥3h",
     },
-    "target_hours": {"A": 6, "B": 3},
-    "target_pomodoros": {"A": 8, "B": 4},
+    "target_hours": {"A": "3-6h（约5.5h为满档）", "B": "≥3h"},
+    "target_pomodoros": {"A": "10-11（含运动1个）", "B": "≥4"},
 }
 
 def get_weekday_name(date_str):
@@ -243,7 +243,7 @@ def compute_per_date_stats(req_date, stats):
     lines.append(f"【基本信息】")
     lines.append(f"  日期：{req_date} {weekday}")
     lines.append(f"  日程分类：{mode}安排（{schedule}）")
-    lines.append(f"  目标：≥{USER_BACKGROUND['target_hours'][mode]}小时 / ≥{USER_BACKGROUND['target_pomodoros'][mode]}番茄")
+    lines.append(f"  目标：{USER_BACKGROUND['target_hours'][mode]}小时 / {USER_BACKGROUND['target_pomodoros'][mode]}番茄")
     lines.append(f"")
     lines.append(f"【核心统计】")
     lines.append(f"  - total_pomodoros: {date_pomodoros} 个")
