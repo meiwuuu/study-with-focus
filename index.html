@@ -2078,14 +2078,9 @@ function pomoStart() {
 }
 async function pomoPause() {
   var phase = (pomo.status === 'focus') ? '专注' : '休息';
-  var reason = await askReason('暂停' + phase, '为什么要暂停' + phase + '？写下此刻的真实想法。');
-  if (reason === null) return false;
-  try {
-    apiCall('/api/stats/pause', {method:'POST',body:JSON.stringify({phase:phase, reason:reason})});
-  } catch(e) {}
   // Timeline: record pause
   if (pomo.running && pomo.status === 'focus') {
-    tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds, reason: reason});
+    tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds, reason: ''});
   }
   // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
@@ -2095,6 +2090,13 @@ async function pomoPause() {
   document.getElementById('pomo-pause').style.display = 'none';
   if (!keepBlockOnBreak) autoDisableBlocking();
   updateStatusBar();
+  // 异步弹理由框：可选补记，不阻塞暂停
+  try {
+    var reason = await askReason('暂停' + phase, '已暂停。为什么要暂停' + phase + '？可留空直接关闭。', {allowEmpty:true});
+    if (reason) {
+      apiCall('/api/stats/pause', {method:'POST',body:JSON.stringify({phase:phase, reason:reason})}).catch(function(){});
+    }
+  } catch(e) {}
   return true;
 }
 function pomoEnd() {
@@ -3006,7 +3008,10 @@ async function autoDisableBlocking() {
 
 // ─── 理由输入弹窗 ───
 var reasonCallback = null;
-function askReason(title, sub){
+var reasonAllowEmpty = false;
+function askReason(title, sub, opts){
+  opts = opts || {};
+  reasonAllowEmpty = !!opts.allowEmpty;
   return new Promise(function(resolve){
     document.getElementById('reason-title').textContent = title;
     document.getElementById('reason-sub').textContent = sub || '写下此刻的真实想法。';
@@ -3023,7 +3028,7 @@ function reasonCancel(){
 }
 function reasonConfirm(){
   var v = document.getElementById('reason-input').value.trim();
-  if (v.length < 2) {
+  if (!reasonAllowEmpty && v.length < 2) {
     showToast('理由太短了，至少写 2 个字');
     return;
   }
