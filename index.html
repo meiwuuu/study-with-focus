@@ -843,6 +843,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             <div class="cal-stat"><div class="val" id="cal-active-days">0</div><div class="lbl" id="cal-lbl-0">活跃天数</div></div>
             <div class="cal-stat"><div class="val" id="cal-total-time">0m</div><div class="lbl" id="cal-lbl-1">总学习</div></div>
             <div class="cal-stat"><div class="val" id="cal-total-pomos">0</div><div class="lbl" id="cal-lbl-2">番茄数</div></div>
+            <div class="cal-stat" id="cal-stat-sport" style="display:none;"><div class="val" id="cal-total-sport">0m</div><div class="lbl" id="cal-lbl-3">运动</div></div>
           </div>
           <div class="cal-hdr">
             <button class="cal-nav-btn" onclick="calPrevMonth()">&lt;</button>
@@ -2264,29 +2265,34 @@ function calRender() {
 
   if (calStatsSubject === 'subject') {
     var st = calStatsMode === 'month' ? ms.subj : as.subj;
+    document.getElementById('cal-month-stats').style.gridTemplateColumns = 'repeat(4,1fr)';
+    var elSP = document.getElementById('cal-stat-sport');
+    if (elSP) elSP.style.display = 'block';
     if (st.math + st.cs + st.eng + st.pol + st.sport === 0) {
       document.getElementById('cal-active-days').textContent = '…';
       document.getElementById('cal-total-time').textContent = '点击刷新';
       document.getElementById('cal-total-pomos').textContent = calStatsMode === 'month' ? '本月' : '全部';
+      document.getElementById('cal-total-sport').textContent = '…';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
       document.getElementById('cal-lbl-2').textContent = '';
+      document.getElementById('cal-lbl-3').textContent = '';
     } else {
       var fmtH = function(s) { var h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h>0 ? h+'h'+m+'m' : m+'m'; };
       var elAD = document.getElementById('cal-active-days');
       var elTT = document.getElementById('cal-total-time');
       var elTP = document.getElementById('cal-total-pomos');
+      var elTS = document.getElementById('cal-total-sport');
       elAD.innerHTML = '<div style="font-size:.82em;">数学</div><div style="color:#60a5fa;">'+fmtH(st.math)+'</div>';
       elTT.innerHTML = '<div style="font-size:.82em;">408</div><div style="color:#a78bfa;">'+fmtH(st.cs)+'</div>';
       elTP.innerHTML = '<div style="font-size:.82em;">英语</div><div style="color:#fb923c;">'+fmtH(st.eng)+'</div>';
+      elTS.innerHTML = '<div style="font-size:.82em;">运动</div><div style="color:#4ade80;">'+fmtH(st.sport)+'</div>';
       document.getElementById('cal-lbl-0').textContent = '';
       document.getElementById('cal-lbl-1').textContent = '';
       document.getElementById('cal-lbl-2').textContent = '';
+      document.getElementById('cal-lbl-3').textContent = '';
       if (st.pol > 0) {
         elAD.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">政治 '+fmtH(st.pol)+'</div>';
-      }
-      if (st.sport > 0) {
-        elTP.innerHTML += '<div style="font-size:.65em;color:rgba(255,255,255,.35);margin-top:2px;">运动 '+fmtH(st.sport)+'</div>';
       }
     }
   } else if (calStatsMode === 'all') {
@@ -2296,6 +2302,9 @@ function calRender() {
     document.getElementById('cal-lbl-0').textContent = '活跃天数';
     document.getElementById('cal-lbl-1').textContent = '总学习';
     document.getElementById('cal-lbl-2').textContent = '番茄数';
+    document.getElementById('cal-month-stats').style.gridTemplateColumns = 'repeat(3,1fr)';
+    var spEl = document.getElementById('cal-stat-sport');
+    if (spEl) spEl.style.display = 'none';
   } else {
     document.getElementById('cal-active-days').textContent = ms.ad;
     document.getElementById('cal-total-time').textContent = calFmtTime(ms.tt);
@@ -2303,6 +2312,9 @@ function calRender() {
     document.getElementById('cal-lbl-0').textContent = '活跃天数';
     document.getElementById('cal-lbl-1').textContent = '总学习';
     document.getElementById('cal-lbl-2').textContent = '番茄数';
+    document.getElementById('cal-month-stats').style.gridTemplateColumns = 'repeat(3,1fr)';
+    var spEl = document.getElementById('cal-stat-sport');
+    if (spEl) spEl.style.display = 'none';
   }
 
   // Sync from server if localStorage has no data
