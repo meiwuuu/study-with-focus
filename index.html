@@ -115,7 +115,7 @@ body {
   right: 24px;
   z-index: 101;
   font-family: var(--font);
-  font-size: calc(0.8em * var(--todo-scale));
+  font-size: calc(0.8em * var(--todo-scale) * var(--todo-font-scale, 1));
   opacity: 0; pointer-events: none;
   background: rgba(20, 20, 20, 0.65);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -1075,6 +1075,15 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               </div>
             </div>
           </div>
+          <div class="card" style="margin-bottom:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">浮窗字体大小</div>
+            <div class="vol-row">
+              <input type="range" id="todo-font-scale" min="0.7" max="1.4" step="0.05" value="1" oninput="setTodoFontScale(this.value)">
+              <span class="vol-val" id="todo-font-scale-val">100%</span>
+              <button class="btn btn-sm" onclick="resetTodoFontScale()" style="flex-shrink:0;">默认</button>
+            </div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.35);margin-top:6px;">任务浮窗字号的整体倍率（在跟随窗口缩放的基础上再微调）</div>
+          </div>
           <div class="card">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">预览</div>
             <div class="theme-preview" id="theme-preview">
@@ -1538,6 +1547,33 @@ function saveTheme() {
   var hex = document.getElementById('theme-custom').value;
   applyTheme(hex);
   try { localStorage.setItem('focus_theme', hex); } catch(e) {}
+}
+
+// ─── 浮窗字体大小 ───
+function getTodoFontScale() {
+  try {
+    var v = parseFloat(localStorage.getItem('focus_todo_font_scale'));
+    if (!isNaN(v) && v >= 0.7 && v <= 1.4) return v;
+  } catch(e) {}
+  return 1;
+}
+function applyTodoFontScale(v) {
+  var el = document.getElementById('pomo-float-todo');
+  if (el) el.style.setProperty('--todo-font-scale', v);
+  var range = document.getElementById('todo-font-scale');
+  if (range) range.value = v;
+  var lbl = document.getElementById('todo-font-scale-val');
+  if (lbl) lbl.textContent = Math.round(v * 100) + '%';
+}
+function setTodoFontScale(v) {
+  v = parseFloat(v);
+  if (isNaN(v)) return;
+  try { localStorage.setItem('focus_todo_font_scale', String(v)); } catch(e) {}
+  applyTodoFontScale(v);
+}
+function resetTodoFontScale() {
+  try { localStorage.removeItem('focus_todo_font_scale'); } catch(e) {}
+  applyTodoFontScale(1);
 }
 
 /* ═══════════ Browser selector ═══════════ */
@@ -4160,6 +4196,7 @@ function loadWeightHistory() {
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();
+applyTodoFontScale(getTodoFontScale());
 initLogDateSelect();
 restorePomoState();
 // Restore subject
