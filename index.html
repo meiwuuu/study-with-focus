@@ -115,7 +115,7 @@ body {
   right: 24px;
   z-index: 101;
   font-family: var(--font);
-  font-size: calc(0.9em * var(--todo-scale));
+  font-size: calc(0.8em * var(--todo-scale));
   opacity: 0; pointer-events: none;
   background: rgba(20, 20, 20, 0.65);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -3492,7 +3492,7 @@ function hasIncompleteItems() {
     if (!todoEl) return;
     var ro = new ResizeObserver(function(entries) {
         var rect = entries[0].contentRect;
-        var scale = rect.width / 220;
+        var scale = rect.width / 240;
         scale = Math.max(1, Math.min(scale, 1.8));
         todoEl.style.setProperty('--todo-scale', scale);
     });
