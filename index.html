@@ -3446,6 +3446,15 @@ function hasIncompleteItems() {
     var isPinned = false;
     var startX, startY, initialLeft, initialTop, initialWidth, initialHeight;
 
+    // 恢复上次拖拽保存的尺寸（位置保持默认）
+    try {
+      var savedSize = JSON.parse(localStorage.getItem('focus_todo_size') || 'null');
+      if (savedSize && savedSize.w >= 220 && savedSize.w <= 3000 && savedSize.h >= 120 && savedSize.h <= 3000) {
+        todoEl.style.width = savedSize.w + 'px';
+        todoEl.style.height = savedSize.h + 'px';
+      }
+    } catch(e) {}
+
     // Sync with time float visibility
     var origShowUI = window.showUI;
     window.showUI = function() {
@@ -3499,7 +3508,13 @@ function hasIncompleteItems() {
 
     document.addEventListener('mouseup', function() {
         if (isDragging) { isDragging = false; todoEl.style.cursor = isPinned ? 'default' : 'grab'; }
-        if (isResizing) { isResizing = false; todoEl.style.cursor = isPinned ? 'default' : 'grab'; }
+        if (isResizing) {
+            isResizing = false; todoEl.style.cursor = isPinned ? 'default' : 'grab';
+            try {
+                var r = todoEl.getBoundingClientRect();
+                localStorage.setItem('focus_todo_size', JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) }));
+            } catch(e) {}
+        }
     });
 
     todoEl.addEventListener('click', function(e) {
