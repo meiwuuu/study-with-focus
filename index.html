@@ -3455,7 +3455,7 @@ function hasIncompleteItems() {
     var origHideUI = window.hideUI;
     window.hideUI = function() {
         if (origHideUI) origHideUI();
-        // 任务浮窗保持常显，不跟随不活动隐藏
+        if (!isPinned) todoEl.classList.remove('show');
     };
 
     todoEl.addEventListener('mousedown', function(e) {
