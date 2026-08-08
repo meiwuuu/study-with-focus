@@ -3449,9 +3449,14 @@ function hasIncompleteItems() {
     // 恢复上次拖拽保存的尺寸（位置保持默认）
     try {
       var savedSize = JSON.parse(localStorage.getItem('focus_todo_size') || 'null');
-      if (savedSize && savedSize.w >= 220 && savedSize.w <= 3000 && savedSize.h >= 120 && savedSize.h <= 3000) {
-        todoEl.style.width = savedSize.w + 'px';
-        todoEl.style.height = savedSize.h + 'px';
+      if (savedSize && savedSize.w && savedSize.h) {
+        // 限制在当前视口内，四条边不出界（默认位置 top:100 / right:24）
+        var maxW = Math.max(220, window.innerWidth - 48);
+        var maxH = Math.max(120, window.innerHeight - 124);
+        var w = Math.min(Math.max(220, savedSize.w), maxW);
+        var h = Math.min(Math.max(120, savedSize.h), maxH);
+        todoEl.style.width = w + 'px';
+        todoEl.style.height = h + 'px';
       }
     } catch(e) {}
 
@@ -3496,8 +3501,12 @@ function hasIncompleteItems() {
         if (isResizing) {
             var dw = e.clientX - startX;
             var dh = e.clientY - startY;
-            todoEl.style.width = Math.max(220, initialWidth + dw) + 'px';
-            todoEl.style.height = Math.max(120, initialHeight + dh) + 'px';
+            // 拖拽限制在视口内（基于当前位置，四条边不出界）
+            var rect = todoEl.getBoundingClientRect();
+            var maxW = Math.max(220, window.innerWidth - rect.left - 24);
+            var maxH = Math.max(120, window.innerHeight - rect.top - 24);
+            todoEl.style.width = Math.min(Math.max(220, initialWidth + dw), maxW) + 'px';
+            todoEl.style.height = Math.min(Math.max(120, initialHeight + dh), maxH) + 'px';
             return;
         }
         if (!isDragging) return;
