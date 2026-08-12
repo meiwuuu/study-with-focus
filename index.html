@@ -1278,6 +1278,25 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ─── 后端可用性检测 ───
+function isBackendUp() {
+  return new Promise(function(resolve){
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = setTimeout(function(){ if (ctrl) ctrl.abort(); resolve(false); }, 3000);
+    fetch(API + '/api/status', { signal: ctrl ? ctrl.signal : undefined })
+      .then(function(r){ clearTimeout(t); resolve(r.ok); })
+      .catch(function(){ clearTimeout(t); resolve(false); });
+  });
+}
+function showBackendModal() {
+  var m = document.getElementById('backend-modal');
+  if (m) m.style.display = 'flex';
+}
+function closeBackendModal() {
+  var m = document.getElementById('backend-modal');
+  if (m) m.style.display = 'none';
+}
+
 // ─── 退出：解除屏蔽 + 关闭页面 ───
 async function exitFocus() {
   if (!confirm('退出 Focus？将解除网络屏蔽并关闭页面。')) return;
@@ -1402,6 +1421,12 @@ var focusModeActive = false;
 
 async function toggleFocusMode() {
   if (!focusModeActive) {
+    // 开始专注前检测后端：未开启则弹窗提示
+    if (!(await isBackendUp())) {
+      showBackendModal();
+      return;
+    }
+    closeBackendModal();
     // 开始专注：全屏 + 启动番茄钟
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(function(){});
@@ -4287,6 +4312,20 @@ document.addEventListener("visibilitychange", function() {
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="reasonCancel()">取消</button>
       <button class="btn btn-primary btn-sm" onclick="reasonConfirm()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backend unavailable modal -->
+<div class="modal-mask" id="backend-modal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-title">后端未开启</div>
+    <div class="modal-sub">开始专注需要后端服务（网络屏蔽、学习记录都靠它）。请先开启：</div>
+    <div style="margin:6px 0 12px;padding:10px 12px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);border-radius:10px;font-size:.85em;line-height:1.6;">
+      在 focus 目录下<b>右键 run_server.bat</b>，选择"以管理员身份运行"，等出现"Ready."后刷新本页再开始专注。
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeBackendModal()">知道了</button>
     </div>
   </div>
 </div>
