@@ -606,54 +606,15 @@ class FocusHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
 
         elif path == "/api/block/stop":
-            mode = body.get("mode", "manual") if isinstance(body, dict) else "manual"
-            reason = (body.get("reason") or "").strip() if isinstance(body, dict) else ""
-            UNBLOCK_COOLDOWN = 15 * 60
-            # 自动解除（番茄钟自动调用且用户关闭了“休息保持屏蔽”）：立即生效
-            if mode == "auto":
-                with hosts_lock, config_lock:
-                    ok, msg = clear_blocking()
-                    if ok:
-                        config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                        config["active"] = False
-                        config.pop("unblock", None)
-                        save_json(CONFIG_FILE, config)
-                self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
-                return
-            # 手动解除：首次请求进入 15 分钟冷却，冷却结束后再确认才真正解除
-            with config_lock:
-                config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                now = time.time()
-                req = config.get("unblock")
-                if req and now - req.get("requested_at", 0) < UNBLOCK_COOLDOWN:
-                    wait = int(UNBLOCK_COOLDOWN - (now - req["requested_at"]))
-                    self._send_json({
-                        "ok": False,
-                        "cooldown": True,
-                        "wait_seconds": wait,
-                        "message": f"解除冷却中，剩余 {wait // 60} 分 {wait % 60} 秒。先回去学习吧。",
-                    })
-                    return
-                if req and now - req.get("requested_at", 0) >= UNBLOCK_COOLDOWN:
-                    with hosts_lock:
-                        ok, msg = clear_blocking()
-                    if ok:
-                        config["active"] = False
-                        config.pop("unblock", None)
-                        save_json(CONFIG_FILE, config)
-                    self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
-                    return
-                if len(reason) < 2:
-                    self._send_json({"ok": False, "error": "reason_required", "message": "关闭屏蔽前请先输入一句理由。"})
-                    return
-                config["unblock"] = {"requested_at": now, "reason": reason}
-                save_json(CONFIG_FILE, config)
-                self._send_json({
-                    "ok": False,
-                    "cooldown": True,
-                    "wait_seconds": UNBLOCK_COOLDOWN,
-                    "message": "解除请求已记录，15 分钟后才能确认解除。",
-                })
+            # 手动/自动解除均立即生效（已移除 15 分钟冷却与理由要求）
+            with hosts_lock, config_lock:
+                ok, msg = clear_blocking()
+                if ok:
+                    config = load_json(CONFIG_FILE, {"sites": [], "active": False})
+                    config["active"] = False
+                    config.pop("unblock", None)
+                    save_json(CONFIG_FILE, config)
+            self._send_json({"ok": ok, "message": msg}, 200 if ok else 403)
 
         elif path == "/api/block/sites":
             with config_lock:

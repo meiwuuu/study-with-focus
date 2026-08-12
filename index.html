@@ -3022,16 +3022,7 @@ async function blockToggle(){
       alert('无法启用屏蔽。请右键以管理员身份运行：\nE:\\code\\hermes\\focus\\run_server.bat');
     }
   } else {
-    var reason = await askReason('关闭屏蔽', '为什么要关闭屏蔽？写下此刻的真实想法。');
-    if (reason === null) {
-      document.getElementById('block-toggle').checked = true;
-      return;
-    }
-    var res = await apiCall('/api/block/stop', {method:'POST',body:JSON.stringify({mode:'manual',reason:reason})});
-    if (res && res.cooldown) {
-      showToast(res.message || ('冷却中，剩余 ' + Math.ceil((res.wait_seconds||900)/60) + ' 分钟'));
-      document.getElementById('block-toggle').checked = true;
-    }
+    await apiCall('/api/block/stop', {method:'POST',body:JSON.stringify({mode:'auto'})});
   }
   await blockRefresh();
 }
