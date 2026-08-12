@@ -384,7 +384,7 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             with config_lock:
                 config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                config.setdefault("keep_block_on_break", True)
+                config.setdefault("keep_block_on_break", False)
             self._send_json(config)
 
         elif path == "/api/stats":
@@ -634,7 +634,7 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             with config_lock:
                 config = load_json(CONFIG_FILE, {"sites": [], "active": False})
-                config.setdefault("keep_block_on_break", True)
+                config.setdefault("keep_block_on_break", False)
                 if isinstance(body, dict) and "keep_block_on_break" in body:
                     config["keep_block_on_break"] = bool(body["keep_block_on_break"])
                 save_json(CONFIG_FILE, config)

@@ -3009,7 +3009,7 @@ function applyDailyTemplate() {
 }
 
 // ═══════════ BLOCK ═══════════
-var blockSites=['bilibili.com','www.bilibili.com','weibo.com','www.weibo.com','zhihu.com','www.zhihu.com','tieba.baidu.com'],blockActive=false,keepBlockOnBreak=true;
+var blockSites=['bilibili.com','www.bilibili.com','weibo.com','www.weibo.com','zhihu.com','www.zhihu.com','tieba.baidu.com'],blockActive=false,keepBlockOnBreak=false;
 async function blockRefresh(){
   var d=await apiCall('/api/status');
   if (d) {
@@ -3018,7 +3018,7 @@ async function blockRefresh(){
   }
   var c=await apiCall('/api/config');
   if (c && c.config) {
-    keepBlockOnBreak = c.config.keep_block_on_break !== false;
+    keepBlockOnBreak = c.config.keep_block_on_break === true;
     var kb=document.getElementById('block-keep-break');
     if (kb) kb.checked = keepBlockOnBreak;
   }
