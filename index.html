@@ -1271,10 +1271,13 @@ function fmtLocalDate(d) {
     String(d.getDate()).padStart(2, '0');
 }
 // 焦点日期：与番茄钟一致，凌晨4点前仍算前一天
-function getFocusDate() {
+function getFocusDateObj() {
   var d = new Date();
   if (d.getHours() < 4) d.setDate(d.getDate() - 1);
-  return fmtLocalDate(d);
+  return d;
+}
+function getFocusDate() {
+  return fmtLocalDate(getFocusDateObj());
 }
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
@@ -2292,7 +2295,7 @@ var PLAN_COLORS = [
 
 function calInit() {
   todoLoad();
-  var n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth();
+  var n = getFocusDateObj(); calYear = n.getFullYear(); calMonth = n.getMonth();
   calLoad(); calRender();
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 }
@@ -2324,7 +2327,7 @@ function calRender() {
   var fd = new Date(calYear,calMonth,1).getDay();
   var dim = new Date(calYear,calMonth+1,0).getDate();
   var pd = new Date(calYear,calMonth,0).getDate();
-  var today = calFmt(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  var fdToday = getFocusDateObj(); var today = calFmt(fdToday.getFullYear(), fdToday.getMonth(), fdToday.getDate());
 
   var mKey = calYear + '-' + calMonth;
   var ms = (cal._monthStats && cal._monthStats[mKey]) || {ad:0, tt:0, tp:0, subj:{math:0, cs:0, eng:0, pol:0, sport:0}};
@@ -2407,7 +2410,7 @@ function calRender() {
 }
 function calPrevMonth(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}calRender();}
 function calNextMonth(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}calRender();}
-function calGoToday(){var n=new Date();calYear=n.getFullYear();calMonth=n.getMonth();calSelected=calFmt(calYear,calMonth,n.getDate());calRender();}
+function calGoToday(){var n=getFocusDateObj();calYear=n.getFullYear();calMonth=n.getMonth();calSelected=calFmt(calYear,calMonth,n.getDate());calRender();}
 function calSelect(d){calSelected=d;calRender();}
 
 // ─── 补救指南：阶段与微型死线库 ───
@@ -2498,7 +2501,7 @@ function updateFloatDeadline() {
   if (!el) return;
   if (typeof studyPhases === 'undefined') { el.style.display = 'none'; return; }
   
-  var today = new Date(); today.setHours(0,0,0,0);
+  var today = getFocusDateObj(); today.setHours(0,0,0,0);
   var currentPhase = null;
   for (var i = 0; i < studyPhases.length; i++) {
     if (today <= new Date(studyPhases[i].end + 'T23:59:59')) { currentPhase = studyPhases[i]; break; }
@@ -3207,7 +3210,7 @@ async function loadLearningLog() {
     initLogDateSelect();
   }
   if (!date) {
-    var today = new Date();
+    var today = getFocusDateObj();
     date = fmtLocalDate(today);
     var label = (today.getMonth()+1) + '/' + today.getDate() + ' (今天)';
     setLogDate(date, label);
@@ -3222,7 +3225,7 @@ async function loadLearningLog() {
 function initLogDateSelect() {
   var dd = document.getElementById('log-date-dropdown');
   if (!dd) return;
-  var today = new Date();
+  var today = getFocusDateObj();
   var html = '';
   for (var i = 0; i <= 13; i++) {
     var d = new Date(today); d.setDate(d.getDate() - i);
@@ -3314,7 +3317,7 @@ function escHtmlReview(s) {
 }
 
 async function deleteCurrentAiReview() {
-  var today = currentLogDate || fmtLocalDate(new Date());
+  var today = currentLogDate || getFocusDate();
   if (!today) {
     alert("未找到有效日期");
     return;
@@ -3652,7 +3655,7 @@ function updateManTimeHighlight(ddId, val) {
 function initManDateSelect() {
   var dd = document.getElementById('man-date-dropdown');
   if (!dd || dd.children.length > 0) return; // 已初始化
-  var today = new Date();
+  var today = getFocusDateObj();
   var html = '';
   for (var i = 0; i <= 29; i++) {
     var d = new Date(today); d.setDate(d.getDate() - i);
@@ -3825,7 +3828,7 @@ function autoCalcManualStats() {
 
 // ─── 提交精细化记录（本地优先，后端异步）───
 async function submitDetailedManualRecord() {
-    var dateVal = manDate || fmtLocalDate(new Date());
+    var dateVal = manDate || getFocusDate();
     var startVal = manStartTime;
     var endVal = manEndTime;
     var subjVal = manSubject;
@@ -3888,7 +3891,7 @@ function setManStatus(msg, type) {
 function toggleEditMode() {
   // 如果当前在编辑模式，先保存起床/睡觉时间再退出
   if (editMode) {
-    var date = currentLogDate || fmtLocalDate(new Date());
+    var date = currentLogDate || getFocusDate();
     var wakeEl = document.getElementById('edit-wake-time');
     var sleepEl = document.getElementById('edit-sleep-time');
     var saves = [];
@@ -3944,7 +3947,7 @@ async function batchDeleteSegments() {
   if (!confirm('确定要删除选中的 ' + keys.length + ' 条记录吗？')) return;
 
   var indices = keys.map(Number).sort(function(a,b){ return a - b; });  // 升序，用于查 segment
-  var date = currentLogDate || fmtLocalDate(new Date());
+  var date = currentLogDate || getFocusDate();
 
   // ─── 1. 本地优先：查 segment 详情，立即扣减日历 ───
   var totalDur = 0, totalPomos = 0;
@@ -4024,7 +4027,7 @@ function toggleEvalPlan() {
 })();
 
 async function generateEvalPrompt() {
-  var today = currentLogDate || fmtLocalDate(new Date());
+  var today = currentLogDate || getFocusDate();
   var resultEl = document.getElementById('eval-result');
   resultEl.innerHTML = '<span style="color:#fbbf24;">⏳ 正在生成 ' + today + ' 的数据…</span>';
 
@@ -4083,7 +4086,7 @@ function parseAndSaveEval() {
   else if (score >= 75) grade = 'B';
   else if (score >= 65) grade = 'C';
   else grade = 'D';
-  var today = currentLogDate || fmtLocalDate(new Date());
+  var today = currentLogDate || getFocusDate();
 
   document.getElementById('eval-result').innerHTML = '<span style="color:#34d399;">✅ 提取成功！' + score + '分 / ' + (grade||'?') + ' — 保存中…</span>';
 
@@ -4175,7 +4178,7 @@ function submitWeight() {
   var dateEl = document.getElementById('weight-date');
   var valEl = document.getElementById('weight-value');
   var resEl = document.getElementById('weight-result');
-  var date = dateEl.value || new Date().toISOString().slice(0,10);
+  var date = dateEl.value || getFocusDate();
   var weight = parseFloat(valEl.value);
   if (isNaN(weight) || weight < 30 || weight > 200) {
     resEl.innerHTML = '<span style="color:#f87171;">请输入有效的体重值 (30-200 kg)</span>';
@@ -4234,7 +4237,7 @@ function loadWeightHistory() {
     orig(name);
     if (name === 'weight') {
       var dateEl = document.getElementById('weight-date');
-      if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+      if (dateEl) dateEl.value = getFocusDate();
       loadWeightHistory();
     }
   };
