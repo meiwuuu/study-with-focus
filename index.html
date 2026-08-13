@@ -1270,6 +1270,12 @@ function fmtLocalDate(d) {
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 }
+// 焦点日期：与番茄钟一致，凌晨4点前仍算前一天
+function getFocusDate() {
+  var d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return fmtLocalDate(d);
+}
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
   else document.exitFullscreen();
@@ -1675,7 +1681,7 @@ function saveDotColors() {
   syncDotInputs();
   // Re-render current views
   if (typeof calSelected !== 'undefined' && calSelected) calRenderDetail();
-  renderTodosForDate(fmtLocalDate(new Date()));
+  renderTodosForDate(getFocusDate());
   todoUpdateFloat();
 }
 
@@ -1706,7 +1712,7 @@ function resetDotColor(type) {
   try { localStorage.setItem('focus_dot_colors', JSON.stringify(dotColors)); } catch(e) {}
   syncDotInputs();
   if (typeof calSelected !== 'undefined' && calSelected) calRenderDetail();
-  renderTodosForDate(fmtLocalDate(new Date()));
+  renderTodosForDate(getFocusDate());
   todoUpdateFloat();
 }
 
@@ -2683,7 +2689,7 @@ function addRoutineTask(type) {
   if (!exists) {
     // 设为每日任务 (daily)，这样它每天都会自动刷新重置为未打勾状态
     addTask(title, 'daily', null, { color: color });
-    renderTodosForDate(fmtLocalDate(new Date()));
+    renderTodosForDate(getFocusDate());
     if (typeof calRenderDetail === 'function' && calSelected) calRenderDetail();
     todoUpdateFloat();
   }
@@ -2724,7 +2730,7 @@ function pinTask(id) {
 function toggleTaskType(id) {
   var t = globalTasks.find(function(x) { return x.id === id; });
   if (!t) return;
-  if (t.type === 'daily') { t.type = 'specific'; t.date = fmtLocalDate(new Date()); }
+  if (t.type === 'daily') { t.type = 'specific'; t.date = getFocusDate(); }
   else { t.type = 'daily'; delete t.date; t.done = false; }
   saveGlobalTasks();
 }
@@ -2833,7 +2839,7 @@ function todoLoad() {
     if (!migrated) { globalTasks = []; }
   }
   // ─── 跨日重置：每日任务 done 清零 ───
-  var today = fmtLocalDate(new Date());
+  var today = getFocusDate();
   var lastDate = localStorage.getItem('focus_last_visit_date');
   if (lastDate && lastDate !== today) {
     var changed = false;
@@ -2852,7 +2858,7 @@ function todoLoad() {
   try { showMultiTodo = localStorage.getItem('focus_todo_multi') === 'true'; } catch(e) { showMultiTodo = false; }
   document.getElementById('todo-show').checked = showTodo;
   var mc = document.getElementById('todo-show-multi'); if (mc) mc.checked = showMultiTodo;
-  renderTodosForDate(fmtLocalDate(new Date()));
+  renderTodosForDate(getFocusDate());
   todoUpdateFloat();
 }
 function todoSave() { saveGlobalTasks(); todoUpdateFloat(); }
@@ -2863,17 +2869,17 @@ function todoAdd() {
   if (!t) return;
   addTask(t, 'daily', null, { pinned: false });
   inp.value = '';
-  renderTodosForDate(fmtLocalDate(new Date()));
+  renderTodosForDate(getFocusDate());
   todoUpdateFloat();
 }
 function todoSaveShow() { showTodo = document.getElementById('todo-show').checked; localStorage.setItem('focus_todo_show', showTodo.toString()); todoUpdateFloat(); }
 function todoSaveMulti() { showMultiTodo = document.getElementById('todo-show-multi').checked; localStorage.setItem('focus_todo_multi', showMultiTodo.toString()); todoUpdateFloat(); }
 
 // Backward-compat wrappers
-function todoToggle(id) { toggleTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); todoUpdateFloat(); }
-function todoPin(id) { pinTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); }
-function todoDaily(id) { toggleTaskType(String(id)); renderTodosForDate(fmtLocalDate(new Date())); }
-function todoDelete(id) { deleteTask(String(id)); renderTodosForDate(fmtLocalDate(new Date())); todoUpdateFloat(); }
+function todoToggle(id) { toggleTask(String(id)); renderTodosForDate(getFocusDate()); todoUpdateFloat(); }
+function todoPin(id) { pinTask(String(id)); renderTodosForDate(getFocusDate()); }
+function todoDaily(id) { toggleTaskType(String(id)); renderTodosForDate(getFocusDate()); }
+function todoDelete(id) { deleteTask(String(id)); renderTodosForDate(getFocusDate()); todoUpdateFloat(); }
 
 // ─── Floating todo display (on main Pomodoro screen) ───
 function todoUpdateFloat() {
@@ -2881,13 +2887,13 @@ function todoUpdateFloat() {
   var el = document.getElementById('pomo-float-todo');
   var lst = document.getElementById('pomo-float-todo-list');
   if (!el || !lst) return;
-  if (!showTodo) { el.classList.remove('show'); return; }
-  var today = fmtLocalDate(new Date());
+  if (!showTodo) { el.classList.remove('show'); lst.innerHTML = ''; return; }
+  var today = getFocusDate();
   var todayTasks = getTasksForDate(today).filter(function(t) { return !t.done; });
 
   if (showMultiTodo) {
     var shown = todayTasks.slice(0, 3);
-    if (!shown.length) { el.classList.remove('show'); return; }
+    if (!shown.length) { el.classList.remove('show'); lst.innerHTML = ''; return; }
     var h = '';
     for (var k = 0; k < shown.length; k++) {
       var it = shown[k];
@@ -2920,6 +2926,7 @@ function todoUpdateFloat() {
       el.classList.add('show');
     } else {
       el.classList.remove('show');
+      lst.innerHTML = '';
     }
   }
 }
@@ -4098,7 +4105,7 @@ function parseAndSaveEval() {
 function checkPlanAlarms() {
   var now = new Date();
   var currentTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-  var _today = fmtLocalDate(now);
+  var _today = getFocusDate();
   var plans = getTasksForDate(_today).filter(function(t){ return t.time === currentTimeStr && t.alarm && !t.done; });
   var needSave = false;
 
