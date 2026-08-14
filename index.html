@@ -1156,6 +1156,16 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <!-- ═══ Ringtone config ═══ -->
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">🔔 专属提醒铃声自定义</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;">
+              <label class="toggle">
+                <input type="checkbox" id="silent-ringtone" onchange="setSilentRingtone(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <div>
+                <div style="font-weight:600;font-size:.88em;">静音提醒（只弹通知）</div>
+                <div class="subtitle" style="font-size:.72em;color:rgba(255,255,255,.4);">番茄钟结束、学习计划提醒的铃声全部静音，通知照常弹出</div>
+              </div>
+            </div>
             <div class="ringtone-config-row" style="margin-bottom:14px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;">
               <label style="display:block;font-weight:bold;margin-bottom:6px;font-size:.78em;">🍅 番茄钟结束铃声</label>
               <input type="text" id="ringtone-pomo-url" onchange="saveRingtoneConfig()" placeholder="音频路径（如: alarm.mp3 或网络URL）" style="width:100%;margin-bottom:8px;padding:6px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:6px;font-size:.78em;box-sizing:border-box;">
@@ -1967,9 +1977,21 @@ function loadRingtoneConfig() {
   el = document.getElementById('ringtone-plan-url'); if (el) el.value = cfg.plan.url || 'BreakOrWork.mp3';
   el = document.getElementById('ringtone-plan-start'); if (el) el.value = cfg.plan.start;
   el = document.getElementById('ringtone-plan-end'); if (el) el.value = cfg.plan.end;
+  var sr = document.getElementById('silent-ringtone');
+  if (sr) sr.checked = getSilentRingtone();
+}
+
+function getSilentRingtone() {
+  try { return localStorage.getItem('focus_silent_ringtone') === '1'; } catch(e) { return false; }
+}
+function setSilentRingtone(v) {
+  try { localStorage.setItem('focus_silent_ringtone', v ? '1' : '0'); } catch(e) {}
+  showToast(v ? '铃声已静音，只弹通知' : '铃声已开启');
 }
 
 function playCustomRingtoneRange(type) {
+  // 静音模式：不播放任何铃声（通知仍由调用方弹出）
+  if (getSilentRingtone()) return;
   // 如果当前有正在播放的铃声，先停掉它
   if (globalActiveCustomAudio) {
     globalActiveCustomAudio.pause();
