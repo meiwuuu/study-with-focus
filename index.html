@@ -134,13 +134,15 @@ body {
 }
 .pomo-current-todo.show { opacity: 1; pointer-events: auto; }
 .pomo-float-deadline {
-  position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+  position: fixed; left: 50%; transform: translateX(-50%);
   z-index: 99; font-size: 0.85em; color: var(--accent);
   background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
   border: 1px solid var(--accent-glow); border-radius: 8px;
   padding: 8px 14px; white-space: nowrap;
-  transition: opacity 0.3s ease, color 0.3s ease, border-color 0.3s ease; cursor: default;
+  transition: opacity 0.3s ease, color 0.3s ease, border-color 0.3s ease, top 0.3s ease, bottom 0.3s ease; cursor: default;
 }
+.pomo-float-deadline.dl-pos-under-clock { top: 100px; bottom: auto; }
+.pomo-float-deadline.dl-pos-above-status { top: auto; bottom: 40px; }
 .pomo-float-deadline .deadline-urgent { color: var(--red); font-weight: 700; }
 .pomo-float-task { 
   display: flex;
@@ -1093,7 +1095,25 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <span class="tp-focus-btn" id="tp-focus-btn">暂停专注</span>
             </div>
           </div>
-          <div class="card" style="margin-top:14px;">
+                    <div class="card" style="margin-top:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">⏳ 死线提醒浮窗</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+              <label class="toggle" title="显示/隐藏死线提醒">
+                <input type="checkbox" id="deadline-visible" checked onchange="setDeadlineVisible(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <span style="font-size:.78em;">显示死线提醒</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span style="font-size:.78em;color:rgba(255,255,255,.5);flex-shrink:0;">位置</span>
+              <select id="deadline-pos-select" onchange="setDeadlinePos(this.value)" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:.82em;padding:7px 10px;font-family:inherit;outline:none;">
+                <option value="above-status">状态栏上方</option>
+                <option value="under-clock">时间浮窗下方</option>
+                <option value="in-status">状态栏内部</option>
+              </select>
+            </div>
+          </div>
+<div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">动态背景</div>
             <div style="display:flex;gap:8px;align-items:center;">
               <button class="btn btn-sm" onclick="cycleVideo()" id="theme-cycle-btn">切换背景</button>
@@ -1266,6 +1286,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
 <!-- ═══════════ Status bar ═══════════ -->
 <div class="status-bar" id="status-bar">
+  <span id="sb-deadline" style="display:none;color:var(--accent);font-size:0.95em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;cursor:default;"></span>
   <span class="sb-dot off" id="sb-dot"></span><span id="sb-status">就绪</span>
   <span>今日 <span class="sb-val" id="sb-today-time">0m</span></span>
   <span>🍅 <span class="sb-val" id="sb-today-pomos">0</span></span>
@@ -2602,9 +2623,48 @@ function updateFloatDeadline() {
     var pct = Math.round(done * 100 / mostUrgent.total);
     progTxt = ' <span style="opacity:.75;">(' + done + '/' + mostUrgent.total + ' 页 · ' + pct + '%)</span>';
   }
-  el.innerHTML = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc + progTxt +
+    var txt = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc + progTxt +
     ' <span class="' + cls + '">[' + timeTxt + ']</span></b>';
-  el.style.display = 'block';
+  renderDeadline(txt);
+}
+
+// ─── 死线浮窗显示与位置控制 ───
+function getDeadlinePos() {
+  try { var v = localStorage.getItem('focus_deadline_pos'); if (v) return v; } catch(e) {}
+  return 'above-status';
+}
+function getDeadlineVisible() {
+  try { return localStorage.getItem('focus_deadline_visible') !== '0'; } catch(e) { return true; }
+}
+function renderDeadline(txt) {
+  var el = document.getElementById('pomo-float-deadline');
+  var sb = document.getElementById('sb-deadline');
+  if (!el) return;
+  if (!getDeadlineVisible()) { el.style.display = 'none'; if (sb) sb.style.display = 'none'; return; }
+  var pos = getDeadlinePos();
+  if (pos === 'in-status') {
+    el.style.display = 'none';
+    if (sb) { sb.innerHTML = txt; sb.style.display = 'inline'; }
+  } else {
+    if (sb) sb.style.display = 'none';
+    el.innerHTML = txt;
+    el.className = 'pomo-float-deadline dl-pos-' + pos;
+    el.style.display = 'block';
+  }
+}
+function setDeadlinePos(pos) {
+  try { localStorage.setItem('focus_deadline_pos', pos); } catch(e) {}
+  updateFloatDeadline();
+}
+function setDeadlineVisible(v) {
+  try { localStorage.setItem('focus_deadline_visible', v ? '1' : '0'); } catch(e) {}
+  updateFloatDeadline();
+}
+function initDeadlineSettingsUI() {
+  var posSel = document.getElementById('deadline-pos-select');
+  if (posSel) posSel.value = getDeadlinePos();
+  var visSw = document.getElementById('deadline-visible');
+  if (visSw) visSw.checked = getDeadlineVisible();
 }
 
 function calRenderDetail() {
@@ -4373,7 +4433,7 @@ function loadRingtoneConfig() {
 }
 
 // 加载自定义铃声配置
-loadRingtoneConfig();
+loadRingtoneConfig(); initDeadlineSettingsUI();
 // Show default block list immediately, then refresh from API
 blockRender();
 blockRefresh();
