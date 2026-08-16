@@ -2482,9 +2482,9 @@ const studyPhases = [
     name: '408 一轮收尾（9/1 死线）',
     end: "2026-09-01",
     tasks: [
-      { end: "2026-08-21", subj: "计组", desc: "收尾剩余 2/3：只看书+真题选择题，看懂硬件流程图，严禁死磕大题" },
-      { end: "2026-08-28", subj: "操作系统", desc: "极速过基础：进程→内存→文件→I/O，只看书/写真题选择题" },
-      { end: "2026-09-01", subj: "计网", desc: "体量最小快速过：偏记忆，9/1 真题自测验收，408 一轮收官！" }
+      { end: "2026-08-21", subj: "计组", desc: "收尾剩余 2/3：只看书+真题选择题，看懂硬件流程图，严禁死磕大题", progress: 130, total: 327 },
+      { end: "2026-08-28", subj: "操作系统", desc: "极速过基础：进程→内存→文件→I/O，只看书/写真题选择题", progress: 0, total: 359 },
+      { end: "2026-09-01", subj: "计网", desc: "体量最小快速过：偏记忆，9/1 真题自测验收，408 一轮收官！", progress: 0, total: 303 }
     ]
   },
   {
@@ -2564,28 +2564,48 @@ function updateFloatDeadline() {
   if (typeof studyPhases === 'undefined') { el.style.display = 'none'; return; }
   
   var today = getFocusDateObj(); today.setHours(0,0,0,0);
+  
+  // 阶段选择：找第一个【存在未完成任务】的阶段（按真实进度，而非日历）
   var currentPhase = null;
   for (var i = 0; i < studyPhases.length; i++) {
-    if (today <= new Date(studyPhases[i].end + 'T23:59:59')) { currentPhase = studyPhases[i]; break; }
+    var ph = studyPhases[i];
+    var hasPending = ph.tasks.some(function(t){
+      if (t.total && t.progress !== undefined && t.progress >= t.total) return false; // 已学完
+      return true;
+    });
+    if (hasPending) { currentPhase = ph; break; }
   }
   if (!currentPhase) { el.style.display = 'none'; return; }
   
-  // Find active tasks (not yet past), pick the most urgent (fewest days left)
+  // 阶段内选最紧急：超期任务优先（拖得越久越紧急），其次剩余天数最少
   var mostUrgent = null;
   var minDays = Infinity;
   for (var j = 0; j < currentPhase.tasks.length; j++) {
     var t = currentPhase.tasks[j];
+    if (t.total && t.progress !== undefined && t.progress >= t.total) continue; // 跳过已完成
     var taskEnd = new Date(t.end + 'T00:00:00');
     var days = Math.ceil((taskEnd - today) / 86400000);
-    if (days >= 0 && days < minDays) { minDays = days; mostUrgent = t; }
+    // 超期(days<0)优先，超期越久越靠前；未超期按天数少优先
+    var score = days < 0 ? (-days + 10000) : (0 - days);
+    if (days < 0 && minDays >= 0) { minDays = days; mostUrgent = t; continue; }
+    if (days < 0) { if (days < minDays) { minDays = days; mostUrgent = t; } continue; }
+    if (minDays >= 0 && days < minDays) { minDays = days; mostUrgent = t; }
   }
   if (!mostUrgent) { el.style.display = 'none'; return; }
   
-  var isUrgent = minDays <= 3;
-  var icon = isUrgent ? '⚠️' : '';
-  var cls = isUrgent ? ' deadline-urgent' : '';
-  el.innerHTML = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc +
-    ' <span class="' + cls + '">[剩' + minDays + '天]</span></b>';
+  var overdue = minDays < 0;
+  var isUrgent = minDays <= 3 || overdue;
+  var icon = overdue ? '🚨' : (isUrgent ? '⚠️' : '');
+  var cls = overdue ? ' deadline-urgent' : (isUrgent ? ' deadline-urgent' : '');
+  var timeTxt = overdue ? ('已超期 ' + (-minDays) + ' 天') : ('剩 ' + minDays + ' 天');
+  var progTxt = '';
+  if (mostUrgent.total) {
+    var done = mostUrgent.progress || 0;
+    var pct = Math.round(done * 100 / mostUrgent.total);
+    progTxt = ' <span style="opacity:.75;">(' + done + '/' + mostUrgent.total + ' 页 · ' + pct + '%)</span>';
+  }
+  el.innerHTML = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc + progTxt +
+    ' <span class="' + cls + '">[' + timeTxt + ']</span></b>';
   el.style.display = 'block';
 }
 
