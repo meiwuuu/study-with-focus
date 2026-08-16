@@ -1286,7 +1286,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 
 <!-- ═══════════ Status bar ═══════════ -->
 <div class="status-bar" id="status-bar">
-  <span id="sb-deadline" style="display:none;color:var(--accent);font-size:0.95em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;cursor:default;"></span>
+  <span id="sb-deadline" style="display:none;color:var(--accent);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:absolute;left:50%;transform:translateX(-50%);max-width:60vw;cursor:default;z-index:2;"></span>
   <span class="sb-dot off" id="sb-dot"></span><span id="sb-status">就绪</span>
   <span>今日 <span class="sb-val" id="sb-today-time">0m</span></span>
   <span>🍅 <span class="sb-val" id="sb-today-pomos">0</span></span>
