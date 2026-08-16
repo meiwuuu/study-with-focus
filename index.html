@@ -1188,6 +1188,24 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 <button onclick="testCustomRingtone('plan')" style="margin-left:auto;padding:4px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:4px;cursor:pointer;font-size:.78em;transition:0.2s;">测试播放</button>
               </div>
             </div>
+            <div class="ringtone-config-row" style="background:rgba(255,255,255,0.03);padding:10px;border-radius:8px;">
+              <label style="display:block;font-weight:bold;margin-bottom:6px;font-size:.78em;">⏰ 休息超时提醒铃声</label>
+              <input type="text" id="ringtone-break-url" onchange="saveRingtoneConfig()" placeholder="音频路径（如: alarm.mp3 或网络URL）" style="width:100%;margin-bottom:8px;padding:6px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:6px;font-size:.78em;box-sizing:border-box;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:.78em;">
+                <span>播放区间 (秒):</span>
+                <input type="number" id="ringtone-break-start" onchange="saveRingtoneConfig()" step="0.1" min="0" value="0" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <span>至</span>
+                <input type="number" id="ringtone-break-end" onchange="saveRingtoneConfig()" step="0.1" min="0" value="5" style="width:55px;background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:3px 5px;text-align:center;font-size:.85em;">
+                <button onclick="testCustomRingtone('break')" style="margin-left:auto;padding:4px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:4px;cursor:pointer;font-size:.78em;transition:0.2s;">测试播放</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.78em;">
+                <span>音量:</span>
+                <input type="range" id="ringtone-break-volume" min="0" max="100" value="80" oninput="updateBreakVolume(this.value)" style="flex:1;accent-color:var(--accent);">
+                <span class="vol-val" id="ringtone-break-volume-val">80%</span>
+              </div>
+            </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1944,41 +1962,34 @@ function testAlarm() {
 var globalActiveCustomAudio = null;
 
 function saveRingtoneConfig() {
-  var config = {
-    pomo: {
-      url: document.getElementById('ringtone-pomo-url').value.trim() || 'BreakOrWork.mp3',
-      start: parseFloat(document.getElementById('ringtone-pomo-start').value) || 0,
-      end: parseFloat(document.getElementById('ringtone-pomo-end').value) || 5
-    },
-    plan: {
-      url: document.getElementById('ringtone-plan-url').value.trim() || 'BreakOrWork.mp3',
-      start: parseFloat(document.getElementById('ringtone-plan-start').value) || 0,
-      end: parseFloat(document.getElementById('ringtone-plan-end').value) || 5
-    }
-  };
-  try { localStorage.setItem('focus_custom_ringtone_config', JSON.stringify(config)); } catch(e) {}
+  var cfg = {};
+  try { cfg = JSON.parse(localStorage.getItem('focus_custom_ringtone_config') || '{}'); } catch(e) {}
+  var get = function(id, def) { var el = document.getElementById(id); return el ? el.value : def; };
+  cfg.pomo = { url: get('ringtone-pomo-url', 'BreakOrWork.mp3'), start: parseFloat(get('ringtone-pomo-start', 0)) || 0, end: parseFloat(get('ringtone-pomo-end', 5)) || 5 };
+  cfg.plan = { url: get('ringtone-plan-url', 'BreakOrWork.mp3'), start: parseFloat(get('ringtone-plan-start', 0)) || 0, end: parseFloat(get('ringtone-plan-end', 5)) || 5 };
+  cfg.break = { url: get('ringtone-break-url', 'BreakOrWork.mp3'), start: parseFloat(get('ringtone-break-start', 0)) || 0, end: parseFloat(get('ringtone-break-end', 5)) || 5 };
+  try { localStorage.setItem('focus_custom_ringtone_config', JSON.stringify(cfg)); } catch(e) {}
+  var volEl = document.getElementById('ringtone-break-volume');
+  if (volEl) setBreakVolume(volEl.value);
 }
 
-function loadRingtoneConfig() {
-  var defaultCfg = {
-    pomo: { url: 'BreakOrWork.mp3', start: 0, end: 5 },
-    plan: { url: 'BreakOrWork.mp3', start: 0, end: 5 }
-  };
-  var cfg = defaultCfg;
-  try {
-    var saved = localStorage.getItem('focus_custom_ringtone_config');
-    if (saved) cfg = JSON.parse(saved);
-  } catch(e) {}
-
-  var el;
-  el = document.getElementById('ringtone-pomo-url'); if (el) el.value = cfg.pomo.url || 'BreakOrWork.mp3';
-  el = document.getElementById('ringtone-pomo-start'); if (el) el.value = cfg.pomo.start;
-  el = document.getElementById('ringtone-pomo-end'); if (el) el.value = cfg.pomo.end;
-  el = document.getElementById('ringtone-plan-url'); if (el) el.value = cfg.plan.url || 'BreakOrWork.mp3';
-  el = document.getElementById('ringtone-plan-start'); if (el) el.value = cfg.plan.start;
-  el = document.getElementById('ringtone-plan-end'); if (el) el.value = cfg.plan.end;
-  var sr = document.getElementById('silent-ringtone');
-  if (sr) sr.checked = getSilentRingtone();
+// 休息超时提醒铃声音量（独立于全局闹铃音量）
+function getBreakVolume() {
+  try { var v = parseFloat(localStorage.getItem('focus_break_volume')); if (!isNaN(v) && v >= 0 && v <= 1) return v; } catch(e) {}
+  return 0.8;
+}
+function setBreakVolume(val) {
+  var vol = parseFloat(val);
+  if (isNaN(vol)) return;
+  if (vol >= 0 && vol <= 100) vol = vol / 100;
+  try { localStorage.setItem('focus_break_volume', String(vol)); } catch(e) {}
+  var lbl = document.getElementById('ringtone-break-volume-val');
+  if (lbl) lbl.textContent = Math.round(vol * 100) + '%';
+}
+function updateBreakVolume(val) {
+  setBreakVolume(val);
+  var lbl = document.getElementById('ringtone-break-volume-val');
+  if (lbl) lbl.textContent = Math.round(val) + '%';
 }
 
 function getSilentRingtone() {
@@ -1987,6 +1998,33 @@ function getSilentRingtone() {
 function setSilentRingtone(v) {
   try { localStorage.setItem('focus_silent_ringtone', v ? '1' : '0'); } catch(e) {}
   showToast(v ? '铃声已静音，只弹通知' : '铃声已开启');
+}
+
+// 休息超时提醒：休息满 5 分钟未开始专注则响铃 + toast
+var _breakTimeoutTimer = null;
+var _breakTimeoutFired = false;
+function scheduleBreakTimeoutReminder() {
+  if (_breakTimeoutTimer) { clearTimeout(_breakTimeoutTimer); _breakTimeoutTimer = null; }
+  _breakTimeoutFired = false;
+  var breakSeconds = (parseInt(document.getElementById('pomo-break').value) || 5) * 60;
+  var waitMs = breakSeconds * 1000;
+  _breakTimeoutTimer = setTimeout(function() {
+    _breakTimeoutTimer = null;
+    if (pomo.running && pomo.status !== 'focus') return; // 休息还在倒计时中，不算超时
+    if (pomo.status === 'focus') return; // 已开始专注
+    if (_breakTimeoutFired) return;
+    _breakTimeoutFired = true;
+    // 休息结束还没开始 → 提醒
+    playCustomRingtoneRange('break');
+    showToast('休息时间到了，该开始下一个番茄了！');
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('休息超时提醒', { body: '休息时间到了，回来继续学习吧！', icon: 'favicon.ico' });
+    }
+  }, waitMs);
+}
+function clearBreakTimeoutReminder() {
+  if (_breakTimeoutTimer) { clearTimeout(_breakTimeoutTimer); _breakTimeoutTimer = null; }
+  _breakTimeoutFired = false;
 }
 
 function playCustomRingtoneRange(type) {
@@ -2010,9 +2048,9 @@ function playCustomRingtoneRange(type) {
 
   if (!cfg.url) return;
 
-  // 创建音频对象
+  // 创建音频对象（休息超时提醒用独立音量，其余用全局闹铃音量）
   var audio = new Audio(cfg.url);
-  audio.volume = getAlarmVolume();
+  audio.volume = type === 'break' ? getBreakVolume() : getAlarmVolume();
 
   globalActiveCustomAudio = audio;
 
@@ -2134,6 +2172,8 @@ function pomoComplete() {
   pomo.total = pomo.timeLeft;
   pomoUpdateDisplay();
   if (pomo.running) { pomo.lastTick = Date.now(); pomo.timer = setTimeout(pomoTick, 250); }
+  // 休息超时提醒：进入休息后 5 分钟没开始下一个专注则提醒
+  if (pomo.status !== 'focus') scheduleBreakTimeoutReminder();
   // 播放提示音
   playCustomRingtoneRange('pomo');
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -2146,6 +2186,7 @@ function pomoGetDuration() {
   return (parseInt(document.getElementById('pomo-break').value)||5)*60;
 }
 function pomoStart() {
+  clearBreakTimeoutReminder();
   preloadBellSound();
   if (pomo.timeLeft <= 0) { pomo.timeLeft = pomoGetDuration(); pomo.total = pomo.timeLeft; }
   pomo.running = true;
@@ -4283,6 +4324,36 @@ try {
   document.getElementById('alarm-volume').value = pct;
   document.getElementById('alarm-volume-val').textContent = pct + '%';
 })();
+function loadRingtoneConfig() {
+  var defaultCfg = {
+    pomo: { url: 'BreakOrWork.mp3', start: 0, end: 5 },
+    plan: { url: 'BreakOrWork.mp3', start: 0, end: 5 },
+    break: { url: 'BreakOrWork.mp3', start: 0, end: 5 }
+  };
+  var cfg = defaultCfg;
+  try {
+    var saved = localStorage.getItem('focus_custom_ringtone_config');
+    if (saved) cfg = JSON.parse(saved);
+  } catch(e) {}
+
+  var el;
+  el = document.getElementById('ringtone-pomo-url'); if (el) el.value = cfg.pomo.url || 'BreakOrWork.mp3';
+  el = document.getElementById('ringtone-pomo-start'); if (el) el.value = cfg.pomo.start;
+  el = document.getElementById('ringtone-pomo-end'); if (el) el.value = cfg.pomo.end;
+  el = document.getElementById('ringtone-plan-url'); if (el) el.value = cfg.plan.url || 'BreakOrWork.mp3';
+  el = document.getElementById('ringtone-plan-start'); if (el) el.value = cfg.plan.start;
+  el = document.getElementById('ringtone-plan-end'); if (el) el.value = cfg.plan.end;
+  el = document.getElementById('ringtone-break-url'); if (el) el.value = (cfg.break && cfg.break.url) || 'BreakOrWork.mp3';
+  el = document.getElementById('ringtone-break-start'); if (el) el.value = cfg.break ? cfg.break.start : 0;
+  el = document.getElementById('ringtone-break-end'); if (el) el.value = cfg.break ? cfg.break.end : 5;
+  var volEl = document.getElementById('ringtone-break-volume');
+  if (volEl) volEl.value = Math.round(getBreakVolume() * 100);
+  var volLbl = document.getElementById('ringtone-break-volume-val');
+  if (volLbl) volLbl.textContent = Math.round(getBreakVolume() * 100) + '%';
+  var sr = document.getElementById('silent-ringtone');
+  if (sr) sr.checked = getSilentRingtone();
+}
+
 // 加载自定义铃声配置
 loadRingtoneConfig();
 // Show default block list immediately, then refresh from API
