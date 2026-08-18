@@ -2918,23 +2918,64 @@ function reorderFilteredTasks(containerId, movedId) {
     if (did) ids.push(did);
   }
   if (!ids.length) return;
-  // Find tasks + record original indices in globalTasks
-  var items = [];
-  ids.forEach(function(id) {
-    for (var j = 0; j < globalTasks.length; j++) {
-      if (globalTasks[j].id === id) { items.push({ task: globalTasks[j], origIdx: j }); break; }
+  // 直接按 DOM 新顺序重排：被拖拽的任务按新位置移动，其他保持相对顺序
+  // 将 DOM 顺序作为优先级：出现在列表中的任务按新顺序，未出现的（其他日期）保持原相对位置
+  var moved = null;
+  for (var k = 0; k < globalTasks.length; k++) {
+    if (globalTasks[k].id === movedId) { moved = globalTasks[k]; break; }
+  }
+  if (!moved) { // 没有 movedId（旧调用）时用整个列表重排
+    var byId = {};
+    globalTasks.forEach(function(t) { byId[t.id] = t; });
+    var ordered = [];
+    ids.forEach(function(id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+    // 追加未在列表中的任务（保持原顺序）
+    globalTasks.forEach(function(t) { if (byId[t.id]) { ordered.push(t); delete byId[t.id]; } });
+    globalTasks = ordered;
+    saveGlobalTasks();
+    autoRescheduleTaskTimes(movedId);
+    todoUpdateFloat();
+    return;
+  }
+  // 从 globalTasks 中移除被拖动的任务
+  var rest = globalTasks.filter(function(t) { return t.id !== movedId; });
+  // 找到目标位置：按 DOM 顺序中 moved 前后的任务 id 定位
+  var domIds = ids;
+  var targetIdx = -1;
+  for (var m = 0; m < domIds.length; m++) { if (domIds[m] === movedId) { targetIdx = m; break; } }
+  if (targetIdx < 0) return;
+  // 新数组 = [目标位置之前的任务] + moved + [目标位置之后的任务]
+  // 未在 DOM 中的任务插回原相对位置
+  var out = [];
+  var inserted = false;
+  var restIdx = 0;
+  var prevId = targetIdx > 0 ? domIds[targetIdx - 1] : null;
+  var nextId = targetIdx < domIds.length - 1 ? domIds[targetIdx + 1] : null;
+  for (var n = 0; n < rest.length; n++) {
+    var t = rest[n];
+    if (!inserted && nextId !== null && t.id === nextId) {
+      out.push(moved);
+      inserted = true;
     }
-  });
-  // Sort items by new DOM order
-  var idOrder = {};
-  ids.forEach(function(id, i) { idOrder[id] = i; });
-  items.sort(function(a, b) { return idOrder[a.task.id] - idOrder[b.task.id]; });
-  // Collect original positions, sort ascending, then map DOM-ordered tasks back
-  var positions = items.map(function(it) { return it.origIdx; });
-  positions.sort(function(a, b) { return a - b; });
-  positions.forEach(function(pos, i) {
-    globalTasks[pos] = items[i].task;
-  });
+    out.push(t);
+  }
+  if (!inserted) out.push(moved);
+  // 确保 prevId 在 moved 之前（若 prevId 还没出现，把 moved 放到 prevId 之后）
+  if (prevId !== null) {
+    var prevPos = -1;
+    for (var p = 0; p < out.length; p++) { if (out[p].id === prevId) { prevPos = p; break; } }
+    if (prevPos >= 0) {
+      // 从当前位置移除 moved，插到 prevId 之后
+      var mvIdx = -1;
+      for (var q = 0; q < out.length; q++) { if (out[q].id === movedId) { mvIdx = q; break; } }
+      if (mvIdx >= 0 && mvIdx !== prevPos + 1) {
+        var mv = out.splice(mvIdx, 1)[0];
+        var insertAt = prevPos < mvIdx ? prevPos + 1 : prevPos;
+        out.splice(insertAt, 0, mv);
+      }
+    }
+  }
+  globalTasks = out;
   saveGlobalTasks();
   autoRescheduleTaskTimes(movedId);
   todoUpdateFloat();
