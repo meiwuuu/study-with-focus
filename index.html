@@ -2925,6 +2925,20 @@ function reorderFilteredTasks(containerId, movedId) {
   }
   var slotTimes = [];
   preOrder.forEach(function(t) { if (!isFixedAnchorTask(t) && t.time) slotTimes.push(t.time); });
+  // 记录被拖拽任务的目标时间 = 移动前目标位置原任务的时间（第五个拿第二个的时间）
+  window.__movedTargetTime = null;
+  if (movedId) {
+    // 移动前容器内顺序（globalTasks 尚未被修改）
+    var preContainer = [];
+    for (var pc = 0; pc < globalTasks.length; pc++) {
+      if (ids.indexOf(globalTasks[pc].id) >= 0) preContainer.push(globalTasks[pc]);
+    }
+    var tgtIdx = -1;
+    for (var tt = 0; tt < ids.length; tt++) { if (ids[tt] === movedId) { tgtIdx = tt; break; } }
+    if (tgtIdx >= 0 && tgtIdx < preContainer.length && preContainer[tgtIdx]) {
+      window.__movedTargetTime = preContainer[tgtIdx].time;
+    }
+  }
   // 移动：被拖拽任务移到目标位置，其余保持相对顺序
   var moved = null;
   for (var k = 0; k < globalTasks.length; k++) {
@@ -3001,34 +3015,47 @@ function autoRescheduleTaskTimes(movedId) {
     if (t.type === 'specific' && t.time) ordered.push(t);
   }
   if (!ordered.length) return;
-  // 找到被拖拽任务的位置；没有则全量处理
+  // 找到被拖拽任务的位置
   var movedPos = -1;
   if (movedId) {
     for (var mp = 0; mp < ordered.length; mp++) { if (ordered[mp].id === movedId) { movedPos = mp; break; } }
   }
   var changed = false;
-  var consec = 0; // 连续完成番茄计数
-  var cursor = null; // {h,m} 上一个任务结束+休息后的时间
-  var inReschedule = movedPos < 0; // 无 movedId 时全量重排；有则从 movedPos 开始
+  var consec = 0;
+  var cursor = null;
+  // 重排区间：从 movedPos 开始，到下一个锚点前结束（锚点及其后保持原时间）
+  var rescheduleEnd = -1;
+  if (movedPos >= 0) {
+    rescheduleEnd = ordered.length;
+    for (var re = movedPos + 1; re < ordered.length; re++) {
+      if (isFixedAnchorTask(ordered[re])) { rescheduleEnd = re; break; }
+    }
+  }
+  // 被拖拽任务的新起点 = 移动前目标位置原任务的时间（A 方案）
+  var movedStart = null;
+  if (window.__movedTargetTime) {
+    var ms = window.__movedTargetTime.split(':');
+    movedStart = { h: parseInt(ms[0], 10), m: parseInt(ms[1], 10) };
+  } else if (movedPos >= 0 && movedPos < ordered.length) {
+    var ms2 = ordered[movedPos].time.split(':');
+    movedStart = { h: parseInt(ms2[0], 10), m: parseInt(ms2[1], 10) };
+  }
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
-    // 锚点任务：固定时间，作为分段点
     if (isFixedAnchorTask(task)) {
       var ap = task.time.split(':');
       cursor = { h: parseInt(ap[0], 10), m: parseInt(ap[1], 10) };
       consec = 0;
       continue;
     }
-    // 进入重排区间：从被拖拽任务开始（其之前保持原时间）
-    if (j === movedPos) inReschedule = true;
+    var inZone = (movedPos < 0) || (j >= movedPos && j < rescheduleEnd);
     var taskPomos = countTaskPomos(task);
     var dur = taskDurationMin(task);
     var newTime;
-    if (!inReschedule) {
-      // 插入点之前：保留原时间，仅推进 cursor（用于后续计算）
+    if (!inZone) {
+      // 区间外：保留原时间，仅推进 cursor
       var op = task.time.split(':');
       cursor = { h: parseInt(op[0], 10), m: parseInt(op[1], 10) };
-      newTime = task.time;
       cursor.m += dur;
       var b1 = calcBreakMins(consec, taskPomos);
       consec = b1.consecAfter;
@@ -3036,12 +3063,13 @@ function autoRescheduleTaskTimes(movedId) {
       while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
       continue;
     }
-    // 重排区间：时间 = 上一个任务结束 + 三档休息（被拖拽任务拿目标位置时间）
     var finalMin;
-    if (cursor) {
+    if (j === movedPos && movedStart) {
+      // 被拖拽任务：直接拿目标位置原任务的时间（用户确认的 A 方案）
+      finalMin = movedStart.h * 60 + movedStart.m;
+    } else if (cursor) {
       finalMin = cursor.h * 60 + cursor.m;
     } else {
-      // 第一个任务（无前置）：保留原时间作为起点
       var pp = task.time.split(':');
       finalMin = parseInt(pp[0], 10) * 60 + parseInt(pp[1], 10);
     }
@@ -3052,7 +3080,6 @@ function autoRescheduleTaskTimes(movedId) {
       changed = true;
     }
     cursor = { h: Math.floor(finalMin / 60), m: finalMin % 60 };
-    // 推进：本任务时长 + 三档休息
     cursor.m += dur;
     var b2 = calcBreakMins(consec, taskPomos);
     consec = b2.consecAfter;
