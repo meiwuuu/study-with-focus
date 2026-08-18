@@ -1771,6 +1771,7 @@ function resetDotColor(type) {
 var pomo = {
   timeLeft: 25 * 60, total: 25 * 60,
   running: false, status: 'focus', completed: 0,
+  consecutive: 0, // 连续完成番茄计数（满 4 进长休后归零）
   timer: null, studySeconds: 0,
 };
 // ─── Subject & segment tracking ───
@@ -2158,6 +2159,7 @@ function pomoComplete() {
   clearTimeout(pomo.timer);
   if (pomo.status === 'focus') {
     pomo.completed++;
+    pomo.consecutive++;
     pomoUpdateDots();
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
     // Timeline: pomodoro completed
@@ -2176,7 +2178,8 @@ function pomoComplete() {
     recordSession(1);
   }
   savePomoState();
-  var next = pomo.status === 'focus' ? (pomo.completed % 4 === 0 ? 'long-break' : 'break') : 'focus';
+  var next = pomo.status === 'focus' ? (pomo.consecutive >= 4 ? 'long-break' : 'break') : 'focus';
+  if (next === 'long-break') pomo.consecutive = 0; // 进长休后连续计数归零
   pomoSetStatus(next);
   updateFocusBtn();
   // Init segment tracking when auto-switching to focus
@@ -2239,6 +2242,7 @@ async function pomoPause() {
   }
   // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
+  pomo.consecutive = 0; // 暂停=实际休息，连续计数归零
   focusModeActive = false; updateFocusBtn();
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
@@ -2255,6 +2259,8 @@ async function pomoPause() {
   return true;
 }
 function pomoEnd() {
+  // 专注段手动结束：中断连续性，计数归零
+  if (pomo.status === 'focus') pomo.consecutive = 0;
   // 休息阶段提前结束：保留蓝点，回到专注模式
   if (pomo.status === 'break' || pomo.status === 'long-break') {
     pomo.running = false; clearTimeout(pomo.timer);
@@ -2330,6 +2336,7 @@ function savePomoState() {
     localStorage.setItem('focus_pomo_state', JSON.stringify({
       timeLeft: pomo.timeLeft, total: pomo.total,
       status: pomo.status, completed: pomo.completed,
+      consecutive: pomo.consecutive,
       subject: currentSubject, savedAt: Date.now(),
       pomoRecordedSeconds: pomoRecordedSeconds
     }));
@@ -2347,6 +2354,7 @@ function restorePomoState() {
     pomo.total = s.total || 25*60;
     pomo.status = s.status || 'focus';
     pomo.completed = s.completed || 0;
+    pomo.consecutive = s.consecutive || 0;
     pomoRecordedSeconds = s.pomoRecordedSeconds || 0;
     if (s.subject) { currentSubject = s.subject; updateSubjectBadge();
       var lbl = document.getElementById('pomo-subject-label');
