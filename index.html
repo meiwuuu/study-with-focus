@@ -2968,27 +2968,9 @@ function reorderFilteredTasks(containerId, movedId) {
     }
     globalTasks = out;
   }
-  // 时间槽位位移：按新顺序把槽位时间分配给非锚点任务（被拖拽任务拿到目标位置时间，被挤任务依次继承下一槽位）
-  var changed = false;
-  var slotIdx = 0;
-  ids.forEach(function(id) {
-    for (var j = 0; j < globalTasks.length; j++) {
-      if (globalTasks[j].id === id) {
-        var t = globalTasks[j];
-        if (!isFixedAnchorTask(t) && t.time && slotIdx < slotTimes.length) {
-          if (t.time !== slotTimes[slotIdx]) {
-            t.time = slotTimes[slotIdx];
-            t.alarmTriggered = false;
-            changed = true;
-          }
-          slotIdx++;
-        }
-        break;
-      }
-    }
-  });
+  // 连锁重排：插入点之前不变，从被拖拽任务开始按各自时长+三档休息顺排
   saveGlobalTasks();
-  if (changed) calRenderDetail();
+  autoRescheduleTaskTimes(movedId);
   todoUpdateFloat();
 }
 
@@ -3019,56 +3001,62 @@ function autoRescheduleTaskTimes(movedId) {
     if (t.type === 'specific' && t.time) ordered.push(t);
   }
   if (!ordered.length) return;
+  // 找到被拖拽任务的位置；没有则全量处理
+  var movedPos = -1;
+  if (movedId) {
+    for (var mp = 0; mp < ordered.length; mp++) { if (ordered[mp].id === movedId) { movedPos = mp; break; } }
+  }
   var changed = false;
-  var consec = 0; // 连续完成番茄计数（跨任务累计）
-  var cursor = null; // {h, m} 上一个任务结束+休息后的时间
+  var consec = 0; // 连续完成番茄计数
+  var cursor = null; // {h,m} 上一个任务结束+休息后的时间
+  var inReschedule = movedPos < 0; // 无 movedId 时全量重排；有则从 movedPos 开始
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
+    // 锚点任务：固定时间，作为分段点
     if (isFixedAnchorTask(task)) {
-      // 锚点任务保留自己的时间，并作为后续任务的起点（分段）
-      var parts = task.time.split(':');
-      cursor = { h: parseInt(parts[0], 10), m: parseInt(parts[1], 10) };
-      consec = 0; // 大间隔后连续计数重置
+      var ap = task.time.split(':');
+      cursor = { h: parseInt(ap[0], 10), m: parseInt(ap[1], 10) };
+      consec = 0;
       continue;
     }
-    // 本任务番茄数与时长
+    // 进入重排区间：从被拖拽任务开始（其之前保持原时间）
+    if (j === movedPos) inReschedule = true;
     var taskPomos = countTaskPomos(task);
     var dur = taskDurationMin(task);
-    // 期望开始时间 = 上一个任务结束 + 三档休息
-    var expected = null;
-    if (cursor) {
-      expected = { h: cursor.h, m: cursor.m };
-    }
     var newTime;
-    if (!expected) {
-      // 第一个非锚点任务：保留原时间作为起点
-      var p0 = task.time.split(':');
+    if (!inReschedule) {
+      // 插入点之前：保留原时间，仅推进 cursor（用于后续计算）
+      var op = task.time.split(':');
+      cursor = { h: parseInt(op[0], 10), m: parseInt(op[1], 10) };
       newTime = task.time;
-      cursor = { h: parseInt(p0[0], 10), m: parseInt(p0[1], 10) };
-    } else {
-      var wantMin = expected.h * 60 + expected.m;
-      var origMin = (parseInt(task.time.split(':')[0], 10) * 60 + parseInt(task.time.split(':')[1], 10));
-      var finalMin;
-      if (task.id === movedId) {
-        // 被拖动的任务：强制落到期望位置（前一个结束+休息）
-        finalMin = wantMin;
-      } else {
-        // 其他任务：保留原时间，除非被挤压（原时间 < 期望时间 → 后推）
-        finalMin = Math.max(origMin, wantMin);
-      }
-      newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
-      cursor = { h: Math.floor(finalMin / 60), m: finalMin % 60 };
+      cursor.m += dur;
+      var b1 = calcBreakMins(consec, taskPomos);
+      consec = b1.consecAfter;
+      cursor.m += b1.total;
+      while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
+      continue;
     }
+    // 重排区间：时间 = 上一个任务结束 + 三档休息（被拖拽任务拿目标位置时间）
+    var finalMin;
+    if (cursor) {
+      finalMin = cursor.h * 60 + cursor.m;
+    } else {
+      // 第一个任务（无前置）：保留原时间作为起点
+      var pp = task.time.split(':');
+      finalMin = parseInt(pp[0], 10) * 60 + parseInt(pp[1], 10);
+    }
+    newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
     if (task.time !== newTime) {
       task.time = newTime;
       task.alarmTriggered = false;
       changed = true;
     }
-    // 推进：本任务时长 + 三档休息（按连续番茄推算）
+    cursor = { h: Math.floor(finalMin / 60), m: finalMin % 60 };
+    // 推进：本任务时长 + 三档休息
     cursor.m += dur;
-    var breaks = calcBreakMins(consec, taskPomos);
-    consec = breaks.consecAfter;
-    cursor.m += breaks.total;
+    var b2 = calcBreakMins(consec, taskPomos);
+    consec = b2.consecAfter;
+    cursor.m += b2.total;
     while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
   }
   if (changed) {
