@@ -546,7 +546,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
   border-radius:var(--radius-sm); transition:all .2s;
 }
 .cal-plan-item:hover { background:rgba(255,255,255,.05); }
-.cal-plan-item { cursor: grab; }
+.cal-plan-item { cursor: default; }
 .cal-plan-item.done { opacity:.4; }
 .cal-plan-item.done .cal-plan-text { text-decoration:line-through; }
 .cal-plan-item.perm { border-color:rgba(255,193,7,.15); }
@@ -3126,16 +3126,9 @@ function todoInitSortable() {
 // ─── SortableJS init for calendar plan list ───
 var _calSortableInst = null;
 function calInitSortable() {
-  var container = document.getElementById('cal-plan-list');
-  if (!container || !container.children.length) { if (_calSortableInst) { _calSortableInst.destroy(); _calSortableInst = null; } return; }
+  // 时间表固定：带时间的内容禁止拖动，时间完全按模板不改动
+  // 不再创建 Sortable 实例，列表不可拖拽
   if (_calSortableInst) { _calSortableInst.destroy(); _calSortableInst = null; }
-  if (typeof Sortable === 'undefined') return;
-  _calSortableInst = Sortable.create(container, {
-    animation: 150,
-    ghostClass: 'sortable-ghost',
-    dragClass: 'sortable-drag',
-    onEnd: function(evt) { reorderFilteredTasks('cal-plan-list', evt && evt.item ? evt.item.getAttribute('data-id') : null); }
-  });
 }
 
 // ─── Rendering ───
