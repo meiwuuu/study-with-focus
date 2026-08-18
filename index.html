@@ -3126,9 +3126,45 @@ function todoInitSortable() {
 // ─── SortableJS init for calendar plan list ───
 var _calSortableInst = null;
 function calInitSortable() {
-  // 时间表固定：带时间的内容禁止拖动，时间完全按模板不改动
-  // 不再创建 Sortable 实例，列表不可拖拽
+  var container = document.getElementById('cal-plan-list');
+  if (!container || !container.children.length) { if (_calSortableInst) { _calSortableInst.destroy(); _calSortableInst = null; } return; }
   if (_calSortableInst) { _calSortableInst.destroy(); _calSortableInst = null; }
+  if (typeof Sortable === 'undefined') return;
+  _calSortableInst = Sortable.create(container, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    // 带时间的任务固定不可拖（filter 返回 true 的项禁止拖动）；无时间任务（如 daily 循环）可拖
+    filter: function(evt) {
+      var el = evt.target && evt.target.closest ? evt.target.closest('.cal-plan-item') : evt.target;
+      if (!el) return false;
+      // 有 data-time 属性或任务带 time 字段 → 禁拖
+      if (el.getAttribute('data-time')) return true;
+      var id = el.getAttribute('data-id');
+      if (id) {
+        for (var i = 0; i < globalTasks.length; i++) {
+          if (globalTasks[i].id === id && globalTasks[i].time) return true;
+        }
+      }
+      return false;
+    },
+    onEnd: function(evt) {
+      // 只有无时间任务可拖，拖动后仅按 DOM 新顺序重排 globalTasks，不改任何时间
+      var ids = [];
+      for (var i2 = 0; i2 < container.children.length; i2++) {
+        var did = container.children[i2].getAttribute('data-id');
+        if (did) ids.push(did);
+      }
+      var byId = {};
+      globalTasks.forEach(function(t) { byId[t.id] = t; });
+      var newArr = [];
+      ids.forEach(function(id) { if (byId[id]) { newArr.push(byId[id]); delete byId[id]; } });
+      globalTasks.forEach(function(t) { if (byId[t.id]) { newArr.push(t); delete byId[t.id]; } });
+      globalTasks = newArr;
+      saveGlobalTasks();
+      todoUpdateFloat();
+    }
+  });
 }
 
 // ─── Rendering ───
