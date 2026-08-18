@@ -815,6 +815,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="card pomo-set-row">
             <label>专注 <span class="spin-wrap"><input type="number" id="pomo-focus" value="25" min="1" max="60"><button class="spin-btn up" onclick="spinInc('pomo-focus')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-focus')">▼</button></span> 分</label>
             <label>休息 <span class="spin-wrap"><input type="number" id="pomo-break" value="5" min="1" max="30"><button class="spin-btn up" onclick="spinInc('pomo-break')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-break')">▼</button></span> 分</label>
+            <label>长休 <span class="spin-wrap"><input type="number" id="pomo-long-break" value="15" min="5" max="60"><button class="spin-btn up" onclick="spinInc('pomo-long-break')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-long-break')">▼</button></span> 分</label>
           </div>
           <div class="card">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -2201,7 +2202,7 @@ function pomoComplete() {
 }
 function pomoGetDuration() {
   if (pomo.status === 'focus') return (parseInt(document.getElementById('pomo-focus').value)||25)*60;
-  if (pomo.status === 'long-break') return (parseInt(document.getElementById('pomo-break').value)||5)*60*2;
+  if (pomo.status === 'long-break') return (parseInt(document.getElementById('pomo-long-break').value)||15)*60;
   return (parseInt(document.getElementById('pomo-break').value)||5)*60;
 }
 function pomoStart() {
