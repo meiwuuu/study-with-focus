@@ -2981,17 +2981,19 @@ function reorderFilteredTasks(containerId, movedId) {
 
 // ─── 拖拽后自动重排任务时间：按持续时间顺序累加 ───
 function taskDurationMin(t) {
-  // 从标题解析持续时间（分钟）
+  // 从标题解析持续时间（分钟）：番茄数×25 优先，分钟数兜底，默认 30
   var title = t.title || '';
   var m;
   m = title.match(/(\d+)\s*番茄/);
   if (m) return parseInt(m[1], 10) * 25;
   m = title.match(/(\d+)\s*分钟/);
   if (m) return parseInt(m[1], 10);
+  m = title.match(/(\d+)\s*(?:分|m|min)/i);
+  if (m) return parseInt(m[1], 10);
   // 含"番茄"字样的单番茄（如 英语 · 第 1 个番茄）
   if (title.indexOf('番茄') >= 0) return 25;
-  // 默认一个番茄
-  return 25;
+  // 默认 30 分钟
+  return 30;
 }
 function isFixedAnchorTask(t) {
   // 固定锚点：收手/收工/睡觉（一天的开始与结束提醒固定），午饭不锚定、参与重排
@@ -3006,19 +3008,18 @@ function autoRescheduleTaskTimes(movedId) {
     if (t.type === 'specific' && t.time) ordered.push(t);
   }
   if (!ordered.length) return;
-  // 找到被拖拽任务的位置
+  // 找到被拖拽任务的位置（过滤后索引）
   var movedPos = -1;
   if (movedId) {
     for (var mp = 0; mp < ordered.length; mp++) { if (ordered[mp].id === movedId) { movedPos = mp; break; } }
   }
   var oldPos = (typeof window.__movedOldPos === 'number') ? window.__movedOldPos : -1;
   var dayStart = window.__dayStartTime;
-  // 重排区间：[移动前位置, 移动后位置]
+  // 重排区间：[移动前位置, 移动后位置]；遇锚点（收手/收工）截断
   var zoneStart = -1, zoneEnd = -1;
   if (oldPos >= 0 && movedPos >= 0) {
     zoneStart = Math.min(oldPos, movedPos);
     zoneEnd = Math.max(oldPos, movedPos) + 1;
-    // 区间内遇锚点（收手/收工）截断：锚点及其后保持原时间
     for (var zz = zoneStart; zz < zoneEnd; zz++) {
       if (isFixedAnchorTask(ordered[zz])) { zoneEnd = zz; break; }
     }
@@ -3026,8 +3027,8 @@ function autoRescheduleTaskTimes(movedId) {
     zoneStart = movedPos; zoneEnd = ordered.length;
   }
   var changed = false;
-  var consec = 0;
-  var cursor = null; // {h,m} 上一个任务结束+休息后的时间
+  var consec = 0; // 连续番茄计数（仅番茄任务计入，非番茄重置）
+  var cursor = null;
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
     if (isFixedAnchorTask(task)) {
@@ -3041,19 +3042,21 @@ function autoRescheduleTaskTimes(movedId) {
     var dur = taskDurationMin(task);
     var inZone = (zoneStart < 0) || (j >= zoneStart && j < zoneEnd);
     if (!inZone) {
-      // 区间外：保留原时间，仅推进 cursor 和连续计数
+      // 区间外：保留原时间，仅推进 cursor 与连续计数
       var op = task.time.split(':');
       cursor = { h: parseInt(op[0], 10), m: parseInt(op[1], 10) };
       cursor.m += dur;
-      var b1 = calcBreakMins(consec, taskPomos);
-      consec = b1.consecAfter;
-      cursor.m += b1.total;
+      if (taskPomos > 0) {
+        var b1 = calcBreakMins(consec, taskPomos);
+        consec = b1.consecAfter;
+        cursor.m += b1.total;
+      } else {
+        consec = 0; // 非番茄任务（午饭/运动）重置连续计数
+      }
       while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
       continue;
     }
-    // 区间内：时间 = cursor（上一个结束+休息）；区间第一个任务：
-    //   - 拖到最上（zoneStart===0）→ 用当天最早时间（dayStart）
-    //   - 否则用 cursor（前一个任务的结束+休息）
+    // 区间内：时间 = cursor（上一个结束+休息）；区间起点拖到最上时用 dayStart
     var finalMin;
     if (j === zoneStart && zoneStart === 0 && dayStart) {
       var ds = dayStart.split(':');
@@ -3064,7 +3067,7 @@ function autoRescheduleTaskTimes(movedId) {
       var pp = task.time.split(':');
       finalMin = parseInt(pp[0], 10) * 60 + parseInt(pp[1], 10);
     }
-    var newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
+    var newTime = String(Math.floor(finalMin / 60)).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
     if (task.time !== newTime) {
       task.time = newTime;
       task.alarmTriggered = false;
@@ -3072,9 +3075,13 @@ function autoRescheduleTaskTimes(movedId) {
     }
     cursor = { h: Math.floor(finalMin / 60), m: finalMin % 60 };
     cursor.m += dur;
-    var b2 = calcBreakMins(consec, taskPomos);
-    consec = b2.consecAfter;
-    cursor.m += b2.total;
+    if (taskPomos > 0) {
+      var b2 = calcBreakMins(consec, taskPomos);
+      consec = b2.consecAfter;
+      cursor.m += b2.total;
+    } else {
+      consec = 0; // 非番茄任务重置连续计数，不插入休息
+    }
     while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
   }
   if (changed) {
@@ -3084,11 +3091,12 @@ function autoRescheduleTaskTimes(movedId) {
 }
 // 计算一个任务的番茄数（从标题解析）
 function countTaskPomos(t) {
+  // 从标题解析番茄数；无番茄字样（如午饭/运动/收手）返回 0，不占番茄计数
   var title = t.title || '';
   var m = title.match(/(\d+)\s*番茄/);
   if (m) return parseInt(m[1], 10);
   if (title.indexOf('番茄') >= 0) return 1;
-  return 1;
+  return 0;
 }
 // 三档休息推算：连续第1个→短休5，第2个→中休10，第3个→短休5，第4个→长休15并归零
 function calcBreakMins(consecBefore, taskPomos) {
