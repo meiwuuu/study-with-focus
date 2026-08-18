@@ -17,6 +17,7 @@
   --break: #4ecdc4;
   --break-bg: rgba(78,205,196,0.12);
   --long-break: #45b7d1;
+  --mid-break: #3aa6a0;
   --green: #4caf50;
   --green-bg: rgba(76,175,80,0.15);
   --yellow: #ffc107;
@@ -105,6 +106,7 @@ body {
 }
 .pomo-status-badge.focus { color: var(--focus-color); }
 .pomo-status-badge.break { color: var(--break); }
+.pomo-status-badge.mid-break { color: var(--mid-break); }
 .pomo-status-badge.long-break { color: var(--long-break); }
 
 /* 任务浮窗：独立悬浮，可拖拽，右键固定 */
@@ -815,6 +817,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
           <div class="card pomo-set-row">
             <label>专注 <span class="spin-wrap"><input type="number" id="pomo-focus" value="25" min="1" max="60"><button class="spin-btn up" onclick="spinInc('pomo-focus')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-focus')">▼</button></span> 分</label>
             <label>休息 <span class="spin-wrap"><input type="number" id="pomo-break" value="5" min="1" max="30"><button class="spin-btn up" onclick="spinInc('pomo-break')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-break')">▼</button></span> 分</label>
+            <label>中休 <span class="spin-wrap"><input type="number" id="pomo-mid-break" value="10" min="5" max="45"><button class="spin-btn up" onclick="spinInc('pomo-mid-break')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-mid-break')">▼</button></span> 分</label>
             <label>长休 <span class="spin-wrap"><input type="number" id="pomo-long-break" value="15" min="5" max="60"><button class="spin-btn up" onclick="spinInc('pomo-long-break')">▲</button><button class="spin-btn down" onclick="spinDec('pomo-long-break')">▼</button></span> 分</label>
           </div>
           <div class="card">
@@ -1489,7 +1492,7 @@ async function toggleFocusMode() {
       document.documentElement.requestFullscreen().catch(function(){});
     }
     // If currently in break, skip break and start focus immediately
-    if (pomo.status === 'break' || pomo.status === 'long-break') {
+    if (pomo.status === 'break' || pomo.status === 'mid-break' || pomo.status === 'long-break') {
       pomoSetStatus('focus');
       pomo.timeLeft = pomoGetDuration();
       pomo.total = pomo.timeLeft;
@@ -2128,7 +2131,7 @@ function testCustomRingtone(type) {
 function pomoFmt(s) { return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
 function pomoSetStatus(st) {
   pomo.status = st;
-  var map = { focus:'专注', break:'休息', 'long-break':'长休' };
+  var map = { focus:'专注', break:'休息', 'mid-break':'中休', 'long-break':'长休' };
   document.getElementById('pomo-float-status').textContent = map[st];
   document.getElementById('pomo-float-status').className = 'pomo-status-badge ' + st;
   updateStatusBar();
@@ -2178,7 +2181,7 @@ function pomoComplete() {
     recordSession(1);
   }
   savePomoState();
-  var next = pomo.status === 'focus' ? (pomo.consecutive >= 4 ? 'long-break' : 'break') : 'focus';
+  var next = pomo.status === 'focus' ? (pomo.consecutive >= 4 ? 'long-break' : pomo.consecutive === 2 ? 'mid-break' : 'break') : 'focus';
   if (next === 'long-break') pomo.consecutive = 0; // 进长休后连续计数归零
   pomoSetStatus(next);
   updateFocusBtn();
@@ -2205,6 +2208,7 @@ function pomoComplete() {
 }
 function pomoGetDuration() {
   if (pomo.status === 'focus') return (parseInt(document.getElementById('pomo-focus').value)||25)*60;
+  if (pomo.status === 'mid-break') return (parseInt(document.getElementById('pomo-mid-break').value)||10)*60;
   if (pomo.status === 'long-break') return (parseInt(document.getElementById('pomo-long-break').value)||15)*60;
   return (parseInt(document.getElementById('pomo-break').value)||5)*60;
 }
@@ -2262,7 +2266,7 @@ function pomoEnd() {
   // 专注段手动结束：中断连续性，计数归零
   if (pomo.status === 'focus') pomo.consecutive = 0;
   // 休息阶段提前结束：保留蓝点，回到专注模式
-  if (pomo.status === 'break' || pomo.status === 'long-break') {
+  if (pomo.status === 'break' || pomo.status === 'mid-break' || pomo.status === 'long-break') {
     pomo.running = false; clearTimeout(pomo.timer);
     focusModeActive = false; updateFocusBtn();
     savePomoState();
