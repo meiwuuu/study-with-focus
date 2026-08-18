@@ -2918,13 +2918,17 @@ function reorderFilteredTasks(containerId, movedId) {
     if (did) ids.push(did);
   }
   if (!ids.length) return;
-  // 记录被拖拽任务的移动前位置（供补位重排）
+  // 记录移动前：被拖拽任务的位置 + 序列第一个任务的时间（当天最早，用于拖到最上）
   window.__movedOldPos = -1;
-  if (movedId) {
-    for (var ok2 = 0; ok2 < globalTasks.length; ok2++) {
-      if (globalTasks[ok2].id === movedId) { window.__movedOldPos = ok2; break; }
+  window.__dayStartTime = null;
+  var firstWithTime = null;
+  for (var ok2 = 0; ok2 < globalTasks.length; ok2++) {
+    if (globalTasks[ok2].id === movedId) { window.__movedOldPos = ok2; }
+    if (!firstWithTime && globalTasks[ok2].type === 'specific' && globalTasks[ok2].time) {
+      firstWithTime = globalTasks[ok2].time;
     }
   }
+  if (firstWithTime) window.__dayStartTime = firstWithTime;
   // 移动：被拖拽任务移到目标位置，其余保持相对顺序
   var moved = null;
   for (var k = 0; k < globalTasks.length; k++) {
@@ -3005,39 +3009,26 @@ function autoRescheduleTaskTimes(movedId) {
   if (movedId) {
     for (var mp = 0; mp < ordered.length; mp++) { if (ordered[mp].id === movedId) { movedPos = mp; break; } }
   }
-  // 重排区间：[移动前位置, 移动后位置] 之间的任务连锁重排；遇锚点截断，锚点后保留原时间
   var oldPos = (typeof window.__movedOldPos === 'number') ? window.__movedOldPos : -1;
+  var dayStart = window.__dayStartTime;
+  // 重排区间：[移动前位置, 移动后位置]
   var zoneStart = -1, zoneEnd = -1;
   if (oldPos >= 0 && movedPos >= 0) {
     zoneStart = Math.min(oldPos, movedPos);
     zoneEnd = Math.max(oldPos, movedPos) + 1;
-    // 区间内若出现锚点，在锚点位置截断（锚点后的任务不重排）
-    for (var zz = zoneStart; zz < zoneEnd; zz++) {
-      if (isFixedAnchorTask(ordered[zz])) { zoneEnd = zz; break; }
-    }
   } else if (movedPos >= 0) {
     zoneStart = movedPos; zoneEnd = ordered.length;
   }
   var changed = false;
   var consec = 0;
   var cursor = null; // {h,m} 上一个任务结束+休息后的时间
-  // 被拖拽任务之前的所有任务保持原时间，只推进 cursor
-  // 从 movedPos 起：被拖拽任务=前一个结束+休息；之后的任务依次继承前一个的时间（补位）
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
-    if (isFixedAnchorTask(task)) {
-      // 锚点：固定时间，作为分段点
-      var ap = task.time.split(':');
-      cursor = { h: parseInt(ap[0], 10), m: parseInt(ap[1], 10) };
-      consec = 0;
-      continue;
-    }
     var taskPomos = countTaskPomos(task);
     var dur = taskDurationMin(task);
-    var inReschedule = (zoneStart < 0) || (j >= zoneStart && j < zoneEnd);
-    var newTime;
-    if (!inReschedule) {
-      // movedPos 之前：保留原时间，仅推进 cursor
+    var inZone = (zoneStart < 0) || (j >= zoneStart && j < zoneEnd);
+    if (!inZone) {
+      // 区间外：保留原时间，仅推进 cursor 和连续计数
       var op = task.time.split(':');
       cursor = { h: parseInt(op[0], 10), m: parseInt(op[1], 10) };
       cursor.m += dur;
@@ -3047,16 +3038,20 @@ function autoRescheduleTaskTimes(movedId) {
       while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
       continue;
     }
-    // 重排区间：时间 = 上一个任务结束 + 三档休息（被拖拽任务与其后任务同样规则，自然补位）
+    // 区间内：时间 = cursor（上一个结束+休息）；区间第一个任务：
+    //   - 拖到最上（zoneStart===0）→ 用当天最早时间（dayStart）
+    //   - 否则用 cursor（前一个任务的结束+休息）
     var finalMin;
-    if (cursor) {
+    if (j === zoneStart && zoneStart === 0 && dayStart) {
+      var ds = dayStart.split(':');
+      finalMin = parseInt(ds[0], 10) * 60 + parseInt(ds[1], 10);
+    } else if (cursor) {
       finalMin = cursor.h * 60 + cursor.m;
     } else {
-      // 区间第一个任务（无前置，如拖到最前）：保留原时间作为起点
       var pp = task.time.split(':');
       finalMin = parseInt(pp[0], 10) * 60 + parseInt(pp[1], 10);
     }
-    newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
+    var newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
     if (task.time !== newTime) {
       task.time = newTime;
       task.alarmTriggered = false;
