@@ -2921,14 +2921,16 @@ function reorderFilteredTasks(containerId, movedId) {
   // 记录移动前：被拖拽任务的位置 + 序列第一个任务的时间（当天最早，用于拖到最上）
   window.__movedOldPos = -1;
   window.__dayStartTime = null;
-  var firstWithTime = null;
+  var filteredIdx = 0;
   for (var ok2 = 0; ok2 < globalTasks.length; ok2++) {
-    if (globalTasks[ok2].id === movedId) { window.__movedOldPos = ok2; }
-    if (!firstWithTime && globalTasks[ok2].type === 'specific' && globalTasks[ok2].time) {
-      firstWithTime = globalTasks[ok2].time;
+    var g = globalTasks[ok2];
+    // 只统计带时间的 specific 任务（daily/循环固定任务不计入时间索引）
+    if (g.type === 'specific' && g.time) {
+      if (g.id === movedId) { window.__movedOldPos = filteredIdx; }
+      if (window.__dayStartTime === null) { window.__dayStartTime = g.time; }
+      filteredIdx++;
     }
   }
-  if (firstWithTime) window.__dayStartTime = firstWithTime;
   // 移动：被拖拽任务移到目标位置，其余保持相对顺序
   var moved = null;
   for (var k = 0; k < globalTasks.length; k++) {
