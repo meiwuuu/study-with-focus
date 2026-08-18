@@ -2895,6 +2895,7 @@ function setTaskPersistent(id) {
 }
 
 // ─── Shared: reorder filtered tasks by DOM order, preserving global positions ───
+
 function reorderFilteredTasks(containerId) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -2922,10 +2923,73 @@ function reorderFilteredTasks(containerId) {
     globalTasks[pos] = items[i].task;
   });
   saveGlobalTasks();
+  autoRescheduleTaskTimes();
   todoUpdateFloat();
 }
 
-// ─── SortableJS init for todo list ───
+// ─── 拖拽后自动重排任务时间：按持续时间顺序累加 ───
+function taskDurationMin(t) {
+  // 从标题解析持续时间（分钟）
+  var title = t.title || '';
+  var m;
+  m = title.match(/(\d+)\s*番茄/);
+  if (m) return parseInt(m[1], 10) * 25;
+  m = title.match(/(\d+)\s*分钟/);
+  if (m) return parseInt(m[1], 10);
+  // 含"番茄"字样的单番茄（如 英语 · 第 1 个番茄）
+  if (title.indexOf('番茄') >= 0) return 25;
+  // 默认一个番茄
+  return 25;
+}
+function isFixedAnchorTask(t) {
+  // 固定锚点：午饭/收手/收工/睡觉 这类非学习任务，不参与重排
+  var title = t.title || '';
+  return title.indexOf('午饭') >= 0 || title.indexOf('收手') >= 0 || title.indexOf('收工') >= 0 || title.indexOf('睡觉') >= 0;
+}
+function autoRescheduleTaskTimes() {
+  // 按当前 globalTasks 中的顺序（已重排）取出有 time 字段的 specific 任务
+  var ordered = [];
+  for (var i = 0; i < globalTasks.length; i++) {
+    var t = globalTasks[i];
+    if (t.type === 'specific' && t.time) ordered.push(t);
+  }
+  if (!ordered.length) return;
+  // 起点 = 当天最早的任务时间（拖到最前的任务应变成最早的时间）
+  var startTime = null;
+  for (var k = 0; k < ordered.length; k++) {
+    if (isFixedAnchorTask(ordered[k])) continue;
+    var sp = ordered[k].time.split(':');
+    var mins = parseInt(sp[0], 10) * 60 + parseInt(sp[1], 10);
+    if (startTime === null || mins < startTime) startTime = mins;
+  }
+  if (startTime === null) return;
+  var changed = false;
+  var cursor = { h: Math.floor(startTime / 60), m: startTime % 60 };
+  for (var j = 0; j < ordered.length; j++) {
+    var task = ordered[j];
+    if (isFixedAnchorTask(task)) {
+      // 锚点任务保留自己的时间，并作为后续任务的起点（分段）
+      var parts = task.time.split(':');
+      cursor = { h: parseInt(parts[0], 10), m: parseInt(parts[1], 10) };
+      continue;
+    }
+    var newTime = String(cursor.h).padStart(2, '0') + ':' + String(cursor.m).padStart(2, '0');
+    if (task.time !== newTime) {
+      task.time = newTime;
+      task.alarmTriggered = false;
+      changed = true;
+    }
+    // 推进：+ 持续时间 + 5 分钟休息
+    var dur = taskDurationMin(task);
+    cursor.m += dur + 5;
+    while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
+  }
+  if (changed) {
+    saveGlobalTasks();
+    calRenderDetail();
+  }
+}
+
 function todoInitSortable() {
   var container = document.getElementById('todo-list');
   if (!container || !container.children.length) { if (_sortableInst) { _sortableInst.destroy(); _sortableInst = null; } return; }
