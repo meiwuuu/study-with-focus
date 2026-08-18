@@ -2992,9 +2992,9 @@ function taskDurationMin(t) {
   return 25;
 }
 function isFixedAnchorTask(t) {
-  // 固定锚点：午饭/收手/收工/睡觉 这类非学习任务，不参与重排
+  // 固定锚点：收手/收工/睡觉（一天的开始与结束提醒固定），午饭不锚定、参与重排
   var title = t.title || '';
-  return title.indexOf('午饭') >= 0 || title.indexOf('收手') >= 0 || title.indexOf('收工') >= 0 || title.indexOf('睡觉') >= 0;
+  return title.indexOf('收手') >= 0 || title.indexOf('收工') >= 0 || title.indexOf('睡觉') >= 0;
 }
 function autoRescheduleTaskTimes(movedId) {
   // 按当前 globalTasks 中的顺序（已重排）取出有 time 字段的 specific 任务
@@ -3016,6 +3016,10 @@ function autoRescheduleTaskTimes(movedId) {
   if (oldPos >= 0 && movedPos >= 0) {
     zoneStart = Math.min(oldPos, movedPos);
     zoneEnd = Math.max(oldPos, movedPos) + 1;
+    // 区间内遇锚点（收手/收工）截断：锚点及其后保持原时间
+    for (var zz = zoneStart; zz < zoneEnd; zz++) {
+      if (isFixedAnchorTask(ordered[zz])) { zoneEnd = zz; break; }
+    }
   } else if (movedPos >= 0) {
     zoneStart = movedPos; zoneEnd = ordered.length;
   }
@@ -3024,6 +3028,13 @@ function autoRescheduleTaskTimes(movedId) {
   var cursor = null; // {h,m} 上一个任务结束+休息后的时间
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
+    if (isFixedAnchorTask(task)) {
+      // 锚点（收手/收工）：固定时间，作为分段点，连续计数重置
+      var ap = task.time.split(':');
+      cursor = { h: parseInt(ap[0], 10), m: parseInt(ap[1], 10) };
+      consec = 0;
+      continue;
+    }
     var taskPomos = countTaskPomos(task);
     var dur = taskDurationMin(task);
     var inZone = (zoneStart < 0) || (j >= zoneStart && j < zoneEnd);
