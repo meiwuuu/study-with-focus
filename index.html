@@ -601,8 +601,26 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 }
 .todo-del:hover { background:rgba(244,67,54,.25); }
 .todo-empty { text-align:center;padding:30px;color:rgba(255,255,255,.30);font-size:.82em; }
-.sortable-ghost { opacity: .35; background: rgba(255,255,255,.03); }
-.sortable-drag { cursor: grabbing !important; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.sortable-ghost {
+  opacity: .45;
+  background: rgba(255,255,255,.04);
+  border: 1px dashed rgba(255,255,255,.25);
+  border-radius: var(--radius-sm);
+  transition: opacity .15s ease, background .15s ease;
+}
+.sortable-drag {
+  cursor: grabbing !important;
+  background: rgba(30,30,30,.9);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: var(--radius-sm);
+  transform: scale(1.02);
+  z-index: 999;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.sortable-chosen { background: rgba(255,255,255,.08); }
+.sortable-ghost .cal-plan-dot, .sortable-ghost .cal-plan-check { visibility: hidden; }
 .todo-item { cursor: grab; }
 
 /* ═══════════ Block tab ═══════════ */
@@ -3131,9 +3149,12 @@ function calInitSortable() {
   if (_calSortableInst) { _calSortableInst.destroy(); _calSortableInst = null; }
   if (typeof Sortable === 'undefined') return;
   _calSortableInst = Sortable.create(container, {
-    animation: 150,
+    animation: 200,
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
+    chosenClass: 'sortable-chosen',
+    delay: 80,
+    delayOnTouchOnly: true,
     // 带时间的任务固定不可拖（filter 返回 true 的项禁止拖动）；无时间任务（如 daily 循环）可拖
     filter: function(evt) {
       var el = evt.target && evt.target.closest ? evt.target.closest('.cal-plan-item') : evt.target;
