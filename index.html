@@ -2909,7 +2909,7 @@ function setTaskPersistent(id) {
 
 // ─── Shared: reorder filtered tasks by DOM order, preserving global positions ───
 
-function reorderFilteredTasks(containerId) {
+function reorderFilteredTasks(containerId, movedId) {
   var container = document.getElementById(containerId);
   if (!container) return;
   var ids = [];
@@ -2936,7 +2936,7 @@ function reorderFilteredTasks(containerId) {
     globalTasks[pos] = items[i].task;
   });
   saveGlobalTasks();
-  autoRescheduleTaskTimes();
+  autoRescheduleTaskTimes(movedId);
   todoUpdateFloat();
 }
 
@@ -2959,7 +2959,7 @@ function isFixedAnchorTask(t) {
   var title = t.title || '';
   return title.indexOf('午饭') >= 0 || title.indexOf('收手') >= 0 || title.indexOf('收工') >= 0 || title.indexOf('睡觉') >= 0;
 }
-function autoRescheduleTaskTimes() {
+function autoRescheduleTaskTimes(movedId) {
   // 按当前 globalTasks 中的顺序（已重排）取出有 time 字段的 specific 任务
   var ordered = [];
   for (var i = 0; i < globalTasks.length; i++) {
@@ -2967,34 +2967,56 @@ function autoRescheduleTaskTimes() {
     if (t.type === 'specific' && t.time) ordered.push(t);
   }
   if (!ordered.length) return;
-  // 起点 = 当天最早的任务时间（拖到最前的任务应变成最早的时间）
-  var startTime = null;
-  for (var k = 0; k < ordered.length; k++) {
-    if (isFixedAnchorTask(ordered[k])) continue;
-    var sp = ordered[k].time.split(':');
-    var mins = parseInt(sp[0], 10) * 60 + parseInt(sp[1], 10);
-    if (startTime === null || mins < startTime) startTime = mins;
-  }
-  if (startTime === null) return;
   var changed = false;
-  var cursor = { h: Math.floor(startTime / 60), m: startTime % 60 };
+  var consec = 0; // 连续完成番茄计数（跨任务累计）
+  var cursor = null; // {h, m} 上一个任务结束+休息后的时间
   for (var j = 0; j < ordered.length; j++) {
     var task = ordered[j];
     if (isFixedAnchorTask(task)) {
       // 锚点任务保留自己的时间，并作为后续任务的起点（分段）
       var parts = task.time.split(':');
       cursor = { h: parseInt(parts[0], 10), m: parseInt(parts[1], 10) };
+      consec = 0; // 大间隔后连续计数重置
       continue;
     }
-    var newTime = String(cursor.h).padStart(2, '0') + ':' + String(cursor.m).padStart(2, '0');
+    // 本任务番茄数与时长
+    var taskPomos = countTaskPomos(task);
+    var dur = taskDurationMin(task);
+    // 期望开始时间 = 上一个任务结束 + 三档休息
+    var expected = null;
+    if (cursor) {
+      expected = { h: cursor.h, m: cursor.m };
+    }
+    var newTime;
+    if (!expected) {
+      // 第一个非锚点任务：保留原时间作为起点
+      var p0 = task.time.split(':');
+      newTime = task.time;
+      cursor = { h: parseInt(p0[0], 10), m: parseInt(p0[1], 10) };
+    } else {
+      var wantMin = expected.h * 60 + expected.m;
+      var origMin = (parseInt(task.time.split(':')[0], 10) * 60 + parseInt(task.time.split(':')[1], 10));
+      var finalMin;
+      if (task.id === movedId) {
+        // 被拖动的任务：强制落到期望位置（前一个结束+休息）
+        finalMin = wantMin;
+      } else {
+        // 其他任务：保留原时间，除非被挤压（原时间 < 期望时间 → 后推）
+        finalMin = Math.max(origMin, wantMin);
+      }
+      newTime = String(Math.floor(finalMin / 60) % 24).padStart(2, '0') + ':' + String(finalMin % 60).padStart(2, '0');
+      cursor = { h: Math.floor(finalMin / 60), m: finalMin % 60 };
+    }
     if (task.time !== newTime) {
       task.time = newTime;
       task.alarmTriggered = false;
       changed = true;
     }
-    // 推进：+ 持续时间 + 5 分钟休息
-    var dur = taskDurationMin(task);
-    cursor.m += dur + 5;
+    // 推进：本任务时长 + 三档休息（按连续番茄推算）
+    cursor.m += dur;
+    var breaks = calcBreakMins(consec, taskPomos);
+    consec = breaks.consecAfter;
+    cursor.m += breaks.total;
     while (cursor.m >= 60) { cursor.m -= 60; cursor.h += 1; }
   }
   if (changed) {
@@ -3002,7 +3024,26 @@ function autoRescheduleTaskTimes() {
     calRenderDetail();
   }
 }
-
+// 计算一个任务的番茄数（从标题解析）
+function countTaskPomos(t) {
+  var title = t.title || '';
+  var m = title.match(/(\d+)\s*番茄/);
+  if (m) return parseInt(m[1], 10);
+  if (title.indexOf('番茄') >= 0) return 1;
+  return 1;
+}
+// 三档休息推算：连续第1个→短休5，第2个→中休10，第3个→短休5，第4个→长休15并归零
+function calcBreakMins(consecBefore, taskPomos) {
+  var total = 0;
+  var consec = consecBefore;
+  for (var i = 0; i < taskPomos; i++) {
+    consec++;
+    if (consec >= 4) { total += 15; consec = 0; }
+    else if (consec === 2) { total += 10; }
+    else { total += 5; }
+  }
+  return { total: total, consecAfter: consec };
+}
 function todoInitSortable() {
   var container = document.getElementById('todo-list');
   if (!container || !container.children.length) { if (_sortableInst) { _sortableInst.destroy(); _sortableInst = null; } return; }
@@ -3027,7 +3068,7 @@ function calInitSortable() {
     animation: 150,
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
-    onEnd: function() { reorderFilteredTasks('cal-plan-list'); }
+    onEnd: function(evt) { reorderFilteredTasks('cal-plan-list', evt && evt.item ? evt.item.getAttribute('data-id') : null); }
   });
 }
 
