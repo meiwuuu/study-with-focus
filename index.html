@@ -3385,10 +3385,25 @@ function applyDailyTemplate() {
     ? '将用今日作息模板覆盖当天已有的 ' + existing.length + ' 条计划？'
     : '将填入今日作息模板（' + DAILY_TEMPLATE.length + ' 条计划）？';
   if (!confirm(msg)) return;
-  existing.forEach(function(t){ deleteTask(t.id); });
+  // 删除当天全部 specific 任务（含已勾选），立即持久化
+  globalTasks = globalTasks.filter(function(t){ return !(t.type === 'specific' && t.date === date); });
+  saveGlobalTasks();
+  // 重新按模板生成全新任务：done 强制 false、alarmTriggered 重置，彻底清空打勾状态
   DAILY_TEMPLATE.forEach(function(item){
-    addTask(item.title, 'specific', date, { color: item.color, time: item.time, alarm: item.alarm });
+    globalTasks.push({
+      id: genTaskId(),
+      title: item.title,
+      type: 'specific',
+      date: date,
+      done: false,
+      pinned: false,
+      color: item.color || 'default',
+      time: item.time || '',
+      alarm: item.alarm || false,
+      alarmTriggered: false
+    });
   });
+  saveGlobalTasks();
   calSave(); calRenderDetail(); todoUpdateFloat();
 }
 
