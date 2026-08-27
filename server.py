@@ -309,6 +309,46 @@ def archive_old_data(stats, keep_days=30):
                     arc["daily_logs"][d_date].setdefault("timeline", []).extend(d_content["timeline"])
             save_json(ARCHIVE_FILE, arc)
 
+def merge_archive_segments(stats):
+    """把归档文件中缺失日期的 segments/timeline 合并回 stats.daily_logs，
+    供 /api/stats 返回，保证前端科目统计能看到完整历史数据。"""
+    try:
+        if not ARCHIVE_FILE.exists():
+            return stats
+        arc = load_json(ARCHIVE_FILE, {"daily_logs": {}})
+        arc_logs = arc.get("daily_logs") or {}
+        dls = stats.setdefault("daily_logs", {})
+        merged_any = False
+        for d_date, d_content in arc_logs.items():
+            segs = d_content.get("segments") or []
+            tl = d_content.get("timeline") or []
+            if not segs and not tl:
+                continue
+            if d_date not in dls:
+                # 归档日期在 stats.json 缺失：补全整条
+                dls[d_date] = {
+                    "date": d_date,
+                    "segments": segs,
+                    "timeline": tl,
+                    "total_time": d_content.get("total_time", 0),
+                    "pomodoros": d_content.get("pomodoros", 0),
+                }
+                merged_any = True
+            else:
+                # 存在但 segments 被抽走（stats.json 只有 total_time）
+                dl = dls[d_date]
+                if not dl.get("segments") and segs:
+                    dl["segments"] = segs
+                    merged_any = True
+                if not dl.get("timeline") and tl:
+                    dl["timeline"] = tl
+                    merged_any = True
+        if merged_any:
+            _stats_cache["mtime"] = 0  # 不落盘，仅返回时合并
+    except Exception:
+        pass
+    return stats
+
 def rollover_if_new_day(stats):
     today = effective_date_str()
     if stats.get("today") != today:
@@ -391,6 +431,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             with stats_lock:
                 stats = get_stats_cached()
                 rollover_if_new_day(stats)
+                merge_archive_segments(stats)
             self._send_json(stats)
 
         elif path == "/api/stats/daily":
