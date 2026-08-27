@@ -311,7 +311,8 @@ def archive_old_data(stats, keep_days=30):
 
 def merge_archive_segments(stats):
     """把归档文件中缺失日期的 segments/timeline 合并回 stats.daily_logs，
-    供 /api/stats 返回，保证前端科目统计能看到完整历史数据。"""
+    供 /api/stats 返回，保证前端科目统计能看到完整历史数据。
+    合并时对 segments 去重：5-6 月早期记录 bug 产生过大量重复段（同一番茄×数百次）。"""
     try:
         if not ARCHIVE_FILE.exists():
             return stats
@@ -320,12 +321,19 @@ def merge_archive_segments(stats):
         dls = stats.setdefault("daily_logs", {})
         merged_any = False
         for d_date, d_content in arc_logs.items():
-            segs = d_content.get("segments") or []
+            raw_segs = d_content.get("segments") or []
             tl = d_content.get("timeline") or []
+            # 去重：按 (start,end,subject,duration) 保留一个
+            seen = set()
+            segs = []
+            for s in raw_segs:
+                key = (s.get("start"), s.get("end"), s.get("subject"), s.get("duration"))
+                if key not in seen:
+                    seen.add(key)
+                    segs.append(s)
             if not segs and not tl:
                 continue
             if d_date not in dls:
-                # 归档日期在 stats.json 缺失：补全整条
                 dls[d_date] = {
                     "date": d_date,
                     "segments": segs,
@@ -335,7 +343,6 @@ def merge_archive_segments(stats):
                 }
                 merged_any = True
             else:
-                # 存在但 segments 被抽走（stats.json 只有 total_time）
                 dl = dls[d_date]
                 if not dl.get("segments") and segs:
                     dl["segments"] = segs
