@@ -1106,6 +1106,32 @@ def main():
             print(f"[提示] 端口 {cat_port} 无法监听（{e}），该端口的屏蔽吞噬不可用。"
                   f"不影响主服务，但走该端口的被屏蔽站点可能有 RST 卡顿。", flush=True)
 
+    # ─── UDP 吞噬（补充：被屏蔽站点常走 QUIC/HTTP3, 即 UDP 443）───
+    # 浏览器对现代网站优先用 HTTP/3(QUIC)。hosts 重定向后 QUIC 发往 127.0.0.1:443,
+    # 若该 UDP 端口无监听 -> 内核回 ICMP port unreachable, 反复重试同样会
+    # 在 tcpip.sys 堆积高延迟 DPC -> 音频爆音。此处在 UDP 80/443 上吞掉数据报。
+    import socket as _socket
+    _udp_socks = []
+    for _up in (80, 443):
+        try:
+            _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            _s.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+            _s.bind(("127.0.0.1", _up))
+            _udp_socks.append(_s)
+            print(f"UDP catcher listening on 127.0.0.1:{_up}", flush=True)
+        except OSError as e:
+            print(f"[提示] UDP 端口 {_up} 无法监听（{e}），QUIC 走该端口可能仍有 ICMP 卡顿。", flush=True)
+
+    def _udp_swallow(sock):
+        while True:
+            try:
+                sock.recvfrom(65535)
+            except Exception:
+                break
+
+    for _s in _udp_socks:
+        threading.Thread(target=_udp_swallow, args=(_s,), daemon=True).start()
+
     try:
         for c in catchers:
             threading.Thread(target=c.serve_forever, daemon=True).start()
