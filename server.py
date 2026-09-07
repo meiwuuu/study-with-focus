@@ -1093,26 +1093,29 @@ def main():
         if 'server' in locals():
             server.server_close()
 
-    # ─── 80 端口吞噬服务器（方案A：消除被屏蔽站点重定向到 127.0.0.1 后的 RST 风暴）───
-    catcher = None
-    try:
-        catcher = ThreadingHTTPServer(("127.0.0.1", 80), BlockCatcherHandler)
-        print(f"Block catcher listening on http://127.0.0.1:80", flush=True)
-    except OSError as e:
-        print(f"[提示] 80 端口无法监听（{e}），屏蔽吞噬页不可用。"
-              f"不影响主服务，但被屏蔽站点可能仍有 RST 卡顿。", flush=True)
-        catcher = None
+    # ─── 吞噬服务器（方案A：消除被屏蔽站点重定向到 127.0.0.1 后的 RST 风暴）───
+    # 被屏蔽站点既可能走 HTTP(80) 也可能走 HTTPS(443)，两者都要监听吞掉，
+    # 否则漏洞端口无监听 -> 内核回 RST -> tcpip.sys 高延迟 DPC -> 音频爆音。
+    catchers = []
+    for cat_port in (80, 443):
+        try:
+            c = ThreadingHTTPServer(("127.0.0.1", cat_port), BlockCatcherHandler)
+            catchers.append(c)
+            print(f"Block catcher listening on 127.0.0.1:{cat_port}", flush=True)
+        except OSError as e:
+            print(f"[提示] 端口 {cat_port} 无法监听（{e}），该端口的屏蔽吞噬不可用。"
+                  f"不影响主服务，但走该端口的被屏蔽站点可能有 RST 卡顿。", flush=True)
 
     try:
-        if catcher:
-            threading.Thread(target=catcher.serve_forever, daemon=True).start()
+        for c in catchers:
+            threading.Thread(target=c.serve_forever, daemon=True).start()
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
         if 'server' in locals():
             server.server_close()
-        if catcher:
-            catcher.server_close()
+        for c in catchers:
+            c.server_close()
     except OSError as e:
         if e.errno in (98, 10048):  # EADDRINUSE
             print(f"\n[错误] 端口 {PORT} 已被占用！")
