@@ -973,6 +973,62 @@ BROWSER_PATHS = {
     ],
 }
 
+class BlockCatcherHandler(BaseHTTPRequestHandler):
+    """80 端口吞噬页：被屏蔽网站被 hosts 重定向到 127.0.0.1 后，
+    连接会自由访问 80 端口。原先 80 端口无监听 -> 内核回 RST 拒绝包，
+    反复重连会在 tcpip.sys 里堆积高延迟 DPC（audio 卡顿根因）。
+    本 handler 监听 80 端口，把连接立即吞掉并关闭，避免 RST 风暴。
+    """
+    def do_GET(self):
+        self._swallow()
+    def do_POST(self):
+        self._swallow()
+    def do_HEAD(self):
+        self._swallow()
+    def do_PUT(self):
+        self._swallow()
+    def do_DELETE(self):
+        self._swallow()
+    def do_PATCH(self):
+        self._swallow()
+    def do_OPTIONS(self):
+        self._swallow()
+    def do_CONNECT(self):
+        self._swallow()
+    def _swallow(self):
+        try:
+            body = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                    "<title>Focus Blocked</title></head>"
+                    "<body style='background:#111;color:#fff;font-family:sans-serif;"
+                    "display:flex;justify-content:center;align-items:center;height:100vh;margin:0'>"
+                    "<div style='text-align:center'>"
+                    "<h2>Focus 专注模式</h2>"
+                    "<p style='color:#aaa'>该站点已被 Focus 屏蔽</p>"
+                    "</div></body></html>").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        finally:
+            try:
+                self.connection.shutdown(2)  # SHUT_RDWR，立即断开
+            except Exception:
+                pass
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+    def log_message(self, *a):
+        pass  # 抑制 80 端口吞噬页的日志噪音
+
 def find_browser(browser_name):
     paths = BROWSER_PATHS.get(browser_name, [])
     for p in paths:
@@ -1024,7 +1080,39 @@ def main():
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), FocusHandler)
         print("Ready.", flush=True)
+    except OSError as e:
+        if e.errno in (98, 10048):  # EADDRINUSE
+            print(f"\n[错误] 端口 {PORT} 已被占用！")
+            print("请检查是否已在后台运行了该脚本，或者有代理软件占用了该端口。")
+            print("如需更改端口，请同步修改 server.py 和 index.html 中的 API 地址。")
+        else:
+            print(f"\n[错误] 启动服务器失败: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nShutting down.")
+        if 'server' in locals():
+            server.server_close()
+
+    # ─── 80 端口吞噬服务器（方案A：消除被屏蔽站点重定向到 127.0.0.1 后的 RST 风暴）───
+    catcher = None
+    try:
+        catcher = ThreadingHTTPServer(("127.0.0.1", 80), BlockCatcherHandler)
+        print(f"Block catcher listening on http://127.0.0.1:80", flush=True)
+    except OSError as e:
+        print(f"[提示] 80 端口无法监听（{e}），屏蔽吞噬页不可用。"
+              f"不影响主服务，但被屏蔽站点可能仍有 RST 卡顿。", flush=True)
+        catcher = None
+
+    try:
+        if catcher:
+            threading.Thread(target=catcher.serve_forever, daemon=True).start()
         server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down.")
+        if 'server' in locals():
+            server.server_close()
+        if catcher:
+            catcher.server_close()
     except OSError as e:
         if e.errno in (98, 10048):  # EADDRINUSE
             print(f"\n[错误] 端口 {PORT} 已被占用！")
