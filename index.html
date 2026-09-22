@@ -3024,18 +3024,25 @@ function reorderFilteredTasks(containerId, movedId) {
 }
 
 // ─── 拖拽后自动重排任务时间：按持续时间顺序累加 ───
+function getPomoMinutes() {
+  // 当前番茄时长（分钟），跟随设置面板的"专注"值，默认 15（短番茄）
+  var el = document.getElementById('pomo-focus');
+  var v = el ? parseInt(el.value, 10) : NaN;
+  return (v && v > 0) ? v : 15;
+}
 function taskDurationMin(t) {
-  // 从标题解析持续时间（分钟）：番茄数×25 优先，分钟数兜底，默认 30
+  // 从标题解析持续时间（分钟）：番茄数 × 当前番茄时长 优先，分钟数兜底，默认 30
+  var pomoMin = getPomoMinutes();
   var title = t.title || '';
   var m;
   m = title.match(/(\d+)\s*番茄/);
-  if (m) return parseInt(m[1], 10) * 25;
+  if (m) return parseInt(m[1], 10) * pomoMin;
   m = title.match(/(\d+)\s*分钟/);
   if (m) return parseInt(m[1], 10);
   m = title.match(/(\d+)\s*(?:分|m|min)/i);
   if (m) return parseInt(m[1], 10);
   // 含"番茄"字样的单番茄（如 英语 · 第 1 个番茄）
-  if (title.indexOf('番茄') >= 0) return 25;
+  if (title.indexOf('番茄') >= 0) return pomoMin;
   // 默认 30 分钟
   return 30;
 }

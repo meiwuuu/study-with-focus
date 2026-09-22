@@ -54,10 +54,10 @@ def _seg_start_minutes(t):
     except Exception:
         return None
 
-def count_pomodoros_from_segments(segments, pomo_seconds=1500, gap_seconds=300):
+def count_pomodoros_from_segments(segments, pomo_seconds=900, gap_seconds=300):
     """按番茄工作法口径统计番茄数：同科目、相邻段间隔不超过 5 分钟（标准番茄休息）
-    的连续段累加，每满 25 分钟计 1 个番茄。跨科目或间隔过大的段不合并。
-    单段 >= 25 分钟仍计 1 个（保持原行为）。"""
+    的连续段累加，每满 15 分钟（短番茄）计 1 个番茄。跨科目或间隔过大的段不合并。
+    单段 >= 15 分钟仍计 1 个（保持原行为）。"""
     if not segments:
         return 0
     timed = []
@@ -920,13 +920,12 @@ class FocusHandler(BaseHTTPRequestHandler):
                     daily = stats["daily_logs"][date]
                     seg = daily["segments"].pop(index)
                     dur = seg.get("duration", 0)
-                    # 番茄数按剩余段重新计算（连续碎片合并口径）
-                    old_pomos = daily.get("pomodoros", 0) or 0
-                    new_pomos = count_pomodoros_from_segments(daily.get("segments", []))
-                    pomos = max(0, old_pomos - new_pomos)  # 实际扣除数
+                    # 删除的段本身达到一个番茄时长（短番茄 15 分钟）才扣 1 个番茄
+                    # 注意：不重算全天番茄数——历史数据是 25 分钟制时代记录的，重算会失真
+                    pomos = 1 if dur >= 900 else 0
 
                     daily["total_time"] = max(0, daily.get("total_time", 0) - dur)
-                    daily["pomodoros"] = max(0, new_pomos)
+                    daily["pomodoros"] = max(0, daily.get("pomodoros", 0) - pomos)
 
                     if date == stats.get("today", effective_date_str()):
                         stats["today_time"] = max(0, stats.get("today_time", 0) - dur)

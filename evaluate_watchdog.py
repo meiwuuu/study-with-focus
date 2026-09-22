@@ -27,8 +27,8 @@ SUBJECT_NAMES = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治"
 try:
     from server import count_pomodoros_from_segments as _count_pomos
 except Exception:
-    def _count_pomos(segments, pomo_seconds=1500, gap_seconds=300):
-        return sum(1 for s in segments if (s.get("duration", 0) or 0) >= 1500)
+    def _count_pomos(segments, pomo_seconds=900, gap_seconds=300):
+        return sum(1 for s in segments if (s.get("duration", 0) or 0) >= 900)
 
 # ═══════════ 用户背景（硬编码，定期更新） ═══════════
 USER_BACKGROUND = {
