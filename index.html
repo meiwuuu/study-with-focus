@@ -761,7 +761,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <!-- ═══════════ Floating pomodoro ═══════════ -->
 <div class="pomo-float" id="pomo-float" onmouseenter="onUIEnter()" onmouseleave="onUILeave()">
   <div class="pomo-clock" id="pomo-clock" onclick="openPanel('pomodoro')">
-    <span class="pomo-time-display" id="pomo-float-time">25:00</span>
+    <span class="pomo-time-display" id="pomo-float-time">15:00</span>
     <span class="pomo-status-badge focus" id="pomo-float-status">专注</span>
     <span class="pomo-subject-badge" id="pomo-float-subject" style="display:none;"></span>
   </div>
@@ -803,7 +803,7 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="0"
                 transform="rotate(-90 70 70)" id="pomo-ring"/>
             </svg>
-            <div class="pomo-circle-time" id="pomo-time">25:00</div>
+            <div class="pomo-circle-time" id="pomo-time">15:00</div>
           </div>
           <div class="pomo-ctrl-row">
             <button class="btn btn-accent btn-icon" id="pomo-play" onclick="pomoStart()">▶</button>
@@ -1790,7 +1790,7 @@ function resetDotColor(type) {
 
 // ═══════════ POMODORO ═══════════
 var pomo = {
-  timeLeft: 25 * 60, total: 25 * 60,
+  timeLeft: 15 * 60, total: 15 * 60,
   running: false, status: 'focus', completed: 0,
   consecutive: 0, // 连续完成番茄计数（满 4 进长休后归零）
   timer: null, studySeconds: 0,
@@ -2371,6 +2371,14 @@ function restorePomoState() {
     if (Date.now() - s.savedAt > 120 * 60 * 1000) {
       localStorage.removeItem('focus_pomo_state');
       return;
+    }
+    // 校验：focus 存档的总时长须与当前专注设置一致，否则丢弃（防止改了时长设置后仍被旧存档覆盖）
+    if (s.status === 'focus') {
+      var curFocusSec = (parseInt(document.getElementById('pomo-focus').value) || 15) * 60;
+      if (s.total && Math.abs(s.total - curFocusSec) > 61) {
+        localStorage.removeItem('focus_pomo_state');
+        return;
+      }
     }
     pomo.timeLeft = s.timeLeft || 15*60;
     pomo.total = s.total || 15*60;
@@ -4364,7 +4372,7 @@ async function batchDeleteSegments() {
       if (seg) {
         var dur = seg.duration || 0;
         totalDur += dur;
-        if (dur >= 1500) totalPomos++;  // ≥25分钟算1个番茄
+        if (dur >= 900) totalPomos++;  // ≥15分钟算1个番茄
       }
     }
   }
