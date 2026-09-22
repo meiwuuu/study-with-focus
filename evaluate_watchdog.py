@@ -23,6 +23,13 @@ PROMPT_FILE = os.path.join(SCRIPT_DIR, "EVALUATE_PROMPT.md")
 
 SUBJECT_NAMES = {"math": "数学", "cs": "408", "eng": "英语", "pol": "政治", "sport": "运动"}
 
+# 复用 server.py 的统一番茄口径（同科目、间隔<=5分钟的连续段累加，每满25分钟计1个）
+try:
+    from server import count_pomodoros_from_segments as _count_pomos
+except Exception:
+    def _count_pomos(segments, pomo_seconds=1500, gap_seconds=300):
+        return sum(1 for s in segments if (s.get("duration", 0) or 0) >= 1500)
+
 # ═══════════ 用户背景（硬编码，定期更新） ═══════════
 USER_BACKGROUND = {
     "name": "M5",
@@ -125,7 +132,7 @@ def build_context(req_date, stats):
 
     # fallback: 如果 daily_log 没有统计数据（旧格式），从 segments/sessions 计算
     if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-        date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+        date_pomodoros = _count_pomos(segments)
         date_total_seconds = sum(s.get("duration", 0) for s in segments)
 
     # 如果 daily_log 也没有 segments，从 sessions 计算
@@ -201,7 +208,7 @@ def compute_per_date_stats(req_date, stats):
     date_total_seconds = date_log.get("total_time", 0)
 
     if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-        date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+        date_pomodoros = _count_pomos(segments)
         date_total_seconds = sum(s.get("duration", 0) for s in segments)
 
     if not segments and not date_log:

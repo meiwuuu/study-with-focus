@@ -46,6 +46,61 @@ def valid_num(v, lo, hi, default=0):
         return default
     return n
 
+def _seg_start_minutes(t):
+    """把 HH:MM 转成当天分钟数；无法解析返回 None"""
+    try:
+        parts = str(t).split(":")
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return None
+
+def count_pomodoros_from_segments(segments, pomo_seconds=1500, gap_seconds=300):
+    """按番茄工作法口径统计番茄数：同科目、相邻段间隔不超过 5 分钟（标准番茄休息）
+    的连续段累加，每满 25 分钟计 1 个番茄。跨科目或间隔过大的段不合并。
+    单段 >= 25 分钟仍计 1 个（保持原行为）。"""
+    if not segments:
+        return 0
+    timed = []
+    untimed = []
+    for s in segments:
+        if not isinstance(s, dict):
+            continue
+        dur = s.get("duration", 0) or 0
+        sm = _seg_start_minutes(s.get("start", ""))
+        em = _seg_start_minutes(s.get("end", ""))
+        subj = s.get("subject", "") or ""
+        if sm is None:
+            untimed.append((dur, subj))
+            continue
+        if em is not None and em < sm:
+            em += 24 * 60  # 跨午夜
+        if em is None:
+            em = sm + int(dur // 60)
+        timed.append((sm, em, dur, subj))
+    timed.sort(key=lambda x: x[0])
+
+    total = 0
+    cur_subj = None
+    cur_end = None
+    cur_secs = 0
+    for sm, em, dur, subj in timed:
+        if cur_end is not None and cur_subj == subj and (sm - cur_end) * 60 <= gap_seconds:
+            # 连续：合并累加
+            cur_secs += dur
+            cur_end = max(cur_end, em)
+        else:
+            if cur_secs:
+                total += int(cur_secs // pomo_seconds)
+            cur_subj = subj
+            cur_secs = dur
+            cur_end = em
+    if cur_secs:
+        total += int(cur_secs // pomo_seconds)
+    # 无时间信息的段各自独立计算
+    for dur, subj in untimed:
+        total += int(dur // pomo_seconds)
+    return total
+
 def clean_str(v, max_len=100):
     """字符串清洗：非字符串返回空串，超长截断。"""
     if not isinstance(v, str):
@@ -455,7 +510,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             daily["date"] = date
             if daily.get("pomodoros", 0) == 0:
                 segs = daily.get("segments", [])
-                date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
+                date_pomos = count_pomodoros_from_segments(segs)
                 if date_pomos > 0:
                     daily["pomodoros"] = date_pomos
             self._send_json(daily)
@@ -505,7 +560,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             date_pomodoros = date_log.get("pomodoros", 0)
             date_total_seconds = date_log.get("total_time", 0)
             if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-                date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+                date_pomodoros = count_pomodoros_from_segments(segments)
                 date_total_seconds = sum(s.get("duration", 0) for s in segments)
             if not segments and not date_log:
                 date_ses = [s for s in sessions if s.get("date", "").startswith(date)]
@@ -865,11 +920,13 @@ class FocusHandler(BaseHTTPRequestHandler):
                     daily = stats["daily_logs"][date]
                     seg = daily["segments"].pop(index)
                     dur = seg.get("duration", 0)
-                    # 如果该段时长 >= 1500 秒(25分钟)，则扣除 1 个番茄钟
-                    pomos = 1 if dur >= 1500 else 0
+                    # 番茄数按剩余段重新计算（连续碎片合并口径）
+                    old_pomos = daily.get("pomodoros", 0) or 0
+                    new_pomos = count_pomodoros_from_segments(daily.get("segments", []))
+                    pomos = max(0, old_pomos - new_pomos)  # 实际扣除数
 
                     daily["total_time"] = max(0, daily.get("total_time", 0) - dur)
-                    daily["pomodoros"] = max(0, daily.get("pomodoros", 0) - pomos)
+                    daily["pomodoros"] = max(0, new_pomos)
 
                     if date == stats.get("today", effective_date_str()):
                         stats["today_time"] = max(0, stats.get("today_time", 0) - dur)
