@@ -1494,8 +1494,26 @@ async function addWallpaper() {
   var listEl = document.getElementById('wallpaper-list');
   if (!modal || !listEl) return;
   modal.style.display = 'flex';
+  // 打开面板时顺手清理残留重复项（同名只保留一个，路径优先）
+  var deduped = dedupeWallpapers(videos);
+  if (deduped.length !== videos.length) {
+    videos = deduped;
+    if (videoIndex >= videos.length) videoIndex = 0;
+    saveWallpapers(); loadVideo(videoIndex);
+  }
   listEl.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.8em;padding:8px 0;">正在扫描壁纸目录…</div>';
   _wallpaperAvail = await fetchAvailableWallpapers();
+  // 扫描成功时：清掉列表里已不存在的文件（被删/改名），保证与目录一致
+  if (_wallpaperAvail.length) {
+    var availBases = {};
+    for (var k = 0; k < _wallpaperAvail.length; k++) availBases[wallpaperBase(_wallpaperAvail[k])] = 1;
+    var cleaned = videos.filter(function(v) { return availBases[wallpaperBase(v)]; });
+    if (cleaned.length !== videos.length && cleaned.length) {
+      videos = cleaned;
+      if (videoIndex >= videos.length) videoIndex = 0;
+      saveWallpapers(); loadVideo(videoIndex);
+    }
+  }
   renderWallpaperPanel();
 }
 // 壁纸同名归一：同一文件在根目录/子目录各一份时视为同一个壁纸
@@ -1508,6 +1526,15 @@ function wallpaperJoined(name) {
 function renderWallpaperPanel() {
   var listEl = document.getElementById('wallpaper-list');
   if (!listEl) return;
+  // 统计：已加入 / 目录可用
+  var joinedCount = 0;
+  for (var k = 0; k < _wallpaperAvail.length; k++) {
+    if (wallpaperJoined(_wallpaperAvail[k])) joinedCount++;
+  }
+  var subEl = document.getElementById('wallpaper-sub');
+  if (subEl) {
+    subEl.textContent = '已加入 ' + joinedCount + ' 个 · 目录共 ' + _wallpaperAvail.length + ' 个可用（点「加入」进轮播，点「移除」取消）';
+  }
   if (!_wallpaperAvail.length) {
     listEl.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.8em;padding:8px 0;">目录里暂无可用的视频文件，点下方「从电脑选择」添加</div>';
     return;
@@ -4946,7 +4973,7 @@ document.addEventListener("visibilitychange", function() {
 <div class="modal-mask" id="wallpaper-modal" style="display:none" onclick="if(event.target===this)closeWallpaperModal()">
   <div class="modal-card" style="width:min(480px,92vw);max-height:72vh;display:flex;flex-direction:column;">
     <div class="modal-title">增加壁纸</div>
-    <div class="modal-sub">选择要加入轮播的视频（目录里已有的无需上传）</div>
+    <div class="modal-sub" id="wallpaper-sub">选择要加入轮播的视频（目录里已有的无需上传）</div>
     <div id="wallpaper-list" style="flex:1;overflow-y:auto;margin-bottom:12px;min-height:80px;"></div>
     <input type="file" id="wallpaper-file-input" accept="video/*" multiple style="display:none" onchange="onWallpaperFiles(this)">
     <div class="modal-actions">
