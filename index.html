@@ -1766,8 +1766,8 @@ function stopCanvasBG() {
   if (canvasBGRaf) { cancelAnimationFrame(canvasBGRaf); canvasBGRaf = null; }
 }
 
-// Init video（壁纸列表以用户确认添加的为准，首次用内置 3 个）
-(function() {
+// Init video（列表以用户确认添加的为准；启动时与目录同步，清掉已不存在的壁纸）
+(async function() {
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('focus_video_idx')) || 0; } catch(e) {}
   var savedList = getSavedWallpapers();
@@ -1775,6 +1775,22 @@ function stopCanvasBG() {
   saveWallpapers();
   if (saved >= videos.length) saved = 0;
   loadVideo(saved);
+  // 与目录同步（后端可用时）：清掉已被删除/改名的壁纸，保证总数与目录可用数一致
+  try {
+    var avail = await fetchAvailableWallpapers();
+    if (avail && avail.length) {
+      var availBases = {};
+      for (var i = 0; i < avail.length; i++) availBases[wallpaperBase(avail[i])] = 1;
+      var cleaned = videos.filter(function(v) { return availBases[wallpaperBase(v)]; });
+      if (cleaned.length && cleaned.length !== videos.length) {
+        var cur = videos[videoIndex];
+        videos = cleaned;
+        videoIndex = Math.max(0, videos.indexOf(cur));
+        if (videoIndex >= videos.length) videoIndex = 0;
+        saveWallpapers(); loadVideo(videoIndex);
+      }
+    }
+  } catch(e) {}
 })();
 
 // ─── Theme ───
