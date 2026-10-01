@@ -80,28 +80,33 @@ def _wallpaper_sort_key(name):
     return (1, 0, base.lower())
 
 def list_wallpapers():
-    """扫描 wallpapers/ 子目录 + 根目录的视频文件，返回排序后的文件名列表。"""
-    found = []
-    seen = set()
-    # wallpapers/ 子目录优先（用户新增壁纸的推荐位置）
+    """扫描 wallpapers/ 子目录 + 根目录的视频文件。
+    按文件名去重（子目录优先，避免同名文件出现两条），最后统一按自然序排列。"""
+    seen = set()      # 按文件名小写去重
+    candidates = []   # (返回名, 排序用文件名)
+    # wallpapers/ 子目录优先（用户上传的壁纸）
     if WALLPAPER_DIR.is_dir():
         try:
-            for f in sorted(WALLPAPER_DIR.iterdir(), key=lambda x: _wallpaper_sort_key(x.name)):
+            for f in WALLPAPER_DIR.iterdir():
                 if f.is_file() and f.suffix.lower() in WALLPAPER_EXTS:
-                    name = "wallpapers/" + f.name
-                    if name not in seen:
-                        seen.add(name); found.append(name)
+                    key = f.name.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        candidates.append(("wallpapers/" + f.name, f.name))
         except Exception:
             pass
-    # 根目录（内置壁纸 1.mp4/2.mp4/3.mp4 等）
+    # 根目录（内置壁纸 1.mp4/2.mp4/3.mp4 等）；与子目录同名则跳过
     try:
-        for f in sorted(DATA_DIR.iterdir(), key=lambda x: _wallpaper_sort_key(x.name)):
+        for f in DATA_DIR.iterdir():
             if f.is_file() and f.suffix.lower() in WALLPAPER_EXTS:
-                if f.name not in seen:
-                    seen.add(f.name); found.append(f.name)
+                key = f.name.lower()
+                if key not in seen:
+                    seen.add(key)
+                    candidates.append((f.name, f.name))
     except Exception:
         pass
-    return found
+    candidates.sort(key=lambda x: _wallpaper_sort_key(x[1]))
+    return [c[0] for c in candidates]
 
 # --- Thread safety ---
 stats_lock = threading.Lock()

@@ -1466,6 +1466,16 @@ function getSavedWallpapers() {
   return null;
 }
 function saveWallpapers() { try { localStorage.setItem('focus_wallpapers', JSON.stringify(videos)); } catch(e) {} }
+// 按文件名去重（避免同名文件被重复加入）
+function dedupeWallpapers(list) {
+  var seen = {}, out = [];
+  for (var i = 0; i < list.length; i++) {
+    var base = String(list[i]).split('/').pop().toLowerCase();
+    if (seen[base]) continue;
+    seen[base] = 1; out.push(list[i]);
+  }
+  return out;
+}
 
 // 扫描目录可用视频（供添加面板选择）
 async function fetchAvailableWallpapers() {
@@ -1718,8 +1728,8 @@ function stopCanvasBG() {
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('focus_video_idx')) || 0; } catch(e) {}
   var savedList = getSavedWallpapers();
-  videos = savedList ? savedList : DEFAULT_VIDEOS.slice();
-  if (!savedList) saveWallpapers();
+  videos = dedupeWallpapers(savedList ? savedList : DEFAULT_VIDEOS.slice());
+  saveWallpapers();
   if (saved >= videos.length) saved = 0;
   loadVideo(saved);
 })();
