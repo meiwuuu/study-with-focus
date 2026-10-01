@@ -1498,6 +1498,13 @@ async function addWallpaper() {
   _wallpaperAvail = await fetchAvailableWallpapers();
   renderWallpaperPanel();
 }
+// 壁纸同名归一：同一文件在根目录/子目录各一份时视为同一个壁纸
+function wallpaperBase(name) { return String(name).split('/').pop().toLowerCase(); }
+function wallpaperJoined(name) {
+  var base = wallpaperBase(name);
+  for (var i = 0; i < videos.length; i++) { if (wallpaperBase(videos[i]) === base) return true; }
+  return false;
+}
 function renderWallpaperPanel() {
   var listEl = document.getElementById('wallpaper-list');
   if (!listEl) return;
@@ -1508,7 +1515,7 @@ function renderWallpaperPanel() {
   var h = '';
   for (var i = 0; i < _wallpaperAvail.length; i++) {
     var name = _wallpaperAvail[i];
-    var joined = videos.indexOf(name) >= 0;
+    var joined = wallpaperJoined(name);
     h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">';
     h += '<span style="flex:1;font-size:.8em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(name) + '">' + escHtml(name) + '</span>';
     if (joined) {
@@ -1524,22 +1531,31 @@ function renderWallpaperPanel() {
 function joinWallpaper(idx) {
   var name = _wallpaperAvail[idx];
   if (!name) return;
-  if (videos.indexOf(name) < 0) {
+  if (!wallpaperJoined(name)) {
     videos.push(name); saveWallpapers(); loadVideo(videos.length - 1);
     showToast('已加入壁纸：' + name);
+  } else {
+    showToast('该壁纸已在列表中');
   }
   renderWallpaperPanel();
 }
 function removeWallpaper(idx) {
   var name = _wallpaperAvail[idx];
   if (!name) return;
-  var pos = videos.indexOf(name);
-  if (pos < 0) return;
-  videos.splice(pos, 1);
-  if (!videos.length) videos = DEFAULT_VIDEOS.slice();
+  // 按文件名归一：同名文件（无论放在根目录还是 wallpapers/）一起移除，确保总数真的减少
+  var base = wallpaperBase(name);
+  var before = videos.length;
+  videos = videos.filter(function(v) { return wallpaperBase(v) !== base; });
+  if (!videos.length) {
+    videos = [name];   // 保底：至少保留一个壁纸
+    showToast('至少保留一个壁纸');
+  } else if (videos.length < before) {
+    showToast('已移除：' + name + '（共 ' + videos.length + ' 个）');
+  } else {
+    showToast('列表中未找到该壁纸');
+  }
   if (videoIndex >= videos.length) videoIndex = 0;
   saveWallpapers(); loadVideo(videoIndex);
-  showToast('已移除：' + name);
   renderWallpaperPanel();
 }
 function closeWallpaperModal() { var m = document.getElementById('wallpaper-modal'); if (m) m.style.display = 'none'; }
