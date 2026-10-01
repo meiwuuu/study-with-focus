@@ -443,7 +443,7 @@ class FocusHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", self._get_allowed_origin())
         self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
         self.end_headers()
 
     def do_GET(self):
@@ -674,8 +674,46 @@ class FocusHandler(BaseHTTPRequestHandler):
         else:
             self._send_json({"error": "not found"}, 404)
 
+    def _handle_wallpaper_upload(self):
+        """接收原始视频字节（文件名在 X-Filename 头），保存到 wallpapers/ 目录。"""
+        import re as _re
+        try:
+            raw_name = unquote(self.headers.get("X-Filename", "") or "")
+            base = Path(raw_name).name
+            ext = Path(base).suffix.lower()
+            if not base or ext not in WALLPAPER_EXTS:
+                self._send_json({"ok": False, "error": "unsupported_type"}, 400)
+                return
+            safe = _re.sub(r'[\\/:*?"<>|]', "_", base).strip() or ("wallpaper" + ext)
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if length <= 0 or length > 500 * 1024 * 1024:
+                self._send_json({"ok": False, "error": "bad_size"}, 400)
+                return
+            WALLPAPER_DIR.mkdir(parents=True, exist_ok=True)
+            target = WALLPAPER_DIR / safe
+            stem, suffix = target.stem, target.suffix
+            n = 1
+            while target.exists():
+                target = WALLPAPER_DIR / f"{stem}_{n}{suffix}"
+                n += 1
+            remaining = length
+            with open(target, "wb") as f:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    remaining -= len(chunk)
+            self._send_json({"ok": True, "name": "wallpapers/" + target.name})
+        except Exception as e:
+            self._send_json({"ok": False, "error": str(e)}, 500)
+
     def do_POST(self):
         path = urlparse(self.path).path
+        # 壁纸上传：body 是原始文件字节，需在 JSON 解析前处理
+        if path == "/api/wallpapers/upload":
+            self._handle_wallpaper_upload()
+            return
         body = self._read_body()
 
         if path == "/api/block/start":

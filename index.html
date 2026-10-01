@@ -1141,10 +1141,9 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-sm" onclick="cycleVideo()" id="theme-cycle-btn">切换壁纸</button>
               <span style="font-size:.72em;color:rgba(255,255,255,.35);" id="theme-video-label">壁纸 1/3</span>
               <span style="flex:1"></span>
-              <button class="btn btn-sm" onclick="refreshWallpapers()" title="重新扫描壁纸目录">刷新</button>
-              <button class="btn btn-sm btn-accent" onclick="addWallpaper()" title="打开壁纸文件夹，拖入视频文件">+ 增加壁纸</button>
+              <button class="btn btn-sm btn-accent" onclick="addWallpaper()" title="选择要加入轮播的视频">+ 增加壁纸</button>
             </div>
-            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">支持 mp4 / webm / mov；放入 wallpapers/ 目录后点「刷新」即可切换</div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">支持 mp4 / webm / mov，添加后自动保存</div>
           </div>
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">待办列表</div>
@@ -1459,34 +1458,107 @@ var videoIndex = 0;
 var videoEl = document.getElementById('bg-video');
 var canvasEl = document.getElementById('bg-canvas');
 
-// 从后端拉取壁纸列表（扫描根目录 + wallpapers/ 子目录）
-async function loadWallpapers() {
+// ── 壁纸列表持久化（只有用户确认添加的才会加入轮播）──
+function getSavedWallpapers() {
+  try { var v = JSON.parse(localStorage.getItem('focus_wallpapers') || 'null'); if (Array.isArray(v) && v.length) return v; } catch(e) {}
+  return null;
+}
+function saveWallpapers() { try { localStorage.setItem('focus_wallpapers', JSON.stringify(videos)); } catch(e) {} }
+
+// 扫描目录可用视频（供添加面板选择）
+async function fetchAvailableWallpapers() {
   try {
     var r = await fetch(API + '/api/wallpapers');
     var d = await r.json();
-    if (d && d.wallpapers && d.wallpapers.length) {
-      videos = d.wallpapers;
-      return true;
-    }
+    if (d && d.wallpapers) return d.wallpapers;
   } catch(e) {}
-  return false;
+  return [];
 }
-// 添加壁纸：打开壁纸文件夹，拖入视频后点刷新
+
+// ── 增加壁纸：打开确认面板 ──
+var _wallpaperAvail = [];
 async function addWallpaper() {
-  var d = await apiCall('/api/wallpapers/open-folder', {method:'POST'});
-  if (d && d.ok) {
-    showToast('已打开壁纸文件夹，把视频放进去后点「刷新」');
-  } else {
-    showToast('打开文件夹失败，请确认后端已启动');
-  }
+  var modal = document.getElementById('wallpaper-modal');
+  var listEl = document.getElementById('wallpaper-list');
+  if (!modal || !listEl) return;
+  modal.style.display = 'flex';
+  listEl.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.8em;padding:8px 0;">正在扫描壁纸目录…</div>';
+  _wallpaperAvail = await fetchAvailableWallpapers();
+  renderWallpaperPanel();
 }
-// 刷新壁纸列表
-async function refreshWallpapers() {
-  var ok = await loadWallpapers();
-  if (!ok) { showToast('刷新失败：后端未启动或无壁纸文件'); return; }
+function renderWallpaperPanel() {
+  var listEl = document.getElementById('wallpaper-list');
+  if (!listEl) return;
+  if (!_wallpaperAvail.length) {
+    listEl.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.8em;padding:8px 0;">目录里暂无可用的视频文件，点下方「从电脑选择」添加</div>';
+    return;
+  }
+  var h = '';
+  for (var i = 0; i < _wallpaperAvail.length; i++) {
+    var name = _wallpaperAvail[i];
+    var joined = videos.indexOf(name) >= 0;
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">';
+    h += '<span style="flex:1;font-size:.8em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(name) + '">' + escHtml(name) + '</span>';
+    if (joined) {
+      h += '<span style="font-size:.72em;color:rgba(255,255,255,.35);">已加入</span>';
+      h += '<button class="btn btn-sm" style="font-size:.7em;" onclick="removeWallpaper(' + i + ')">移除</button>';
+    } else {
+      h += '<button class="btn btn-sm btn-accent" onclick="joinWallpaper(' + i + ')">加入</button>';
+    }
+    h += '</div>';
+  }
+  listEl.innerHTML = h;
+}
+function joinWallpaper(idx) {
+  var name = _wallpaperAvail[idx];
+  if (!name) return;
+  if (videos.indexOf(name) < 0) {
+    videos.push(name); saveWallpapers(); loadVideo(videos.length - 1);
+    showToast('已加入壁纸：' + name);
+  }
+  renderWallpaperPanel();
+}
+function removeWallpaper(idx) {
+  var name = _wallpaperAvail[idx];
+  if (!name) return;
+  var pos = videos.indexOf(name);
+  if (pos < 0) return;
+  videos.splice(pos, 1);
+  if (!videos.length) videos = DEFAULT_VIDEOS.slice();
   if (videoIndex >= videos.length) videoIndex = 0;
-  loadVideo(videoIndex);
-  showToast('壁纸已刷新：共 ' + videos.length + ' 个');
+  saveWallpapers(); loadVideo(videoIndex);
+  showToast('已移除：' + name);
+  renderWallpaperPanel();
+}
+function closeWallpaperModal() { var m = document.getElementById('wallpaper-modal'); if (m) m.style.display = 'none'; }
+
+// 从电脑选择视频上传
+function pickWallpaperFile() { var inp = document.getElementById('wallpaper-file-input'); if (inp) inp.click(); }
+async function onWallpaperFiles(input) {
+  var files = input.files || [];
+  if (!files.length) return;
+  var added = 0;
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    try {
+      var r = await fetch(API + '/api/wallpapers/upload', {
+        method: 'POST',
+        headers: { 'X-Filename': encodeURIComponent(f.name), 'Content-Type': 'application/octet-stream' },
+        body: f
+      });
+      var d = await r.json();
+      if (d && d.ok && d.name) { if (videos.indexOf(d.name) < 0) { videos.push(d.name); added++; } }
+    } catch(e) {}
+  }
+  input.value = '';
+  if (added) {
+    saveWallpapers(); loadVideo(videos.length - 1);
+    showToast('已加入 ' + added + ' 个壁纸，共 ' + videos.length + ' 个');
+  } else {
+    showToast('添加失败：请确认后端已重启');
+  }
+  _wallpaperAvail = await fetchAvailableWallpapers();
+  renderWallpaperPanel();
 }
 
 function loadVideo(idx) {
@@ -1620,11 +1692,13 @@ function startCanvasBG() {
   draw();
 }
 
-// Init video（先从后端拉壁纸列表，再恢复上次的壁纸）
-(async function() {
+// Init video（壁纸列表以用户确认添加的为准，首次用内置 3 个）
+(function() {
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('focus_video_idx')) || 0; } catch(e) {}
-  try { await loadWallpapers(); } catch(e) {}
+  var savedList = getSavedWallpapers();
+  videos = savedList ? savedList : DEFAULT_VIDEOS.slice();
+  if (!savedList) saveWallpapers();
   if (saved >= videos.length) saved = 0;
   loadVideo(saved);
 })();
@@ -4817,6 +4891,21 @@ document.addEventListener("visibilitychange", function() {
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeBackendModal()">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 增加壁纸面板 -->
+<div class="modal-mask" id="wallpaper-modal" style="display:none" onclick="if(event.target===this)closeWallpaperModal()">
+  <div class="modal-card" style="width:min(480px,92vw);max-height:72vh;display:flex;flex-direction:column;">
+    <div class="modal-title">增加壁纸</div>
+    <div class="modal-sub">选择要加入轮播的视频（目录里已有的无需上传）</div>
+    <div id="wallpaper-list" style="flex:1;overflow-y:auto;margin-bottom:12px;min-height:80px;"></div>
+    <input type="file" id="wallpaper-file-input" accept="video/*" multiple style="display:none" onchange="onWallpaperFiles(this)">
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-accent" onclick="pickWallpaperFile()">从电脑选择文件</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-sm btn-secondary" onclick="closeWallpaperModal()">关闭</button>
     </div>
   </div>
 </div>
