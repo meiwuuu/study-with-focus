@@ -65,6 +65,44 @@ CONFIG_FILE = DATA_DIR / "config.json"
 ARCHIVE_FILE = DATA_DIR / "stats_archive.json"
 PORT = 8765
 
+# --- Wallpapers (动态壁纸：扫描视频文件，无需改代码即可新增) ---
+WALLPAPER_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
+WALLPAPER_DIR = DATA_DIR / "wallpapers"
+
+def _wallpaper_sort_key(name):
+    """排序：数字命名的壁纸（1.mp4/2.mp4）按数字升序排前，其他按名称。
+    下划线或其他开头（如 x_01.mp4）视为普通名。"""
+    import re as _re
+    base = name.split("/")[-1]
+    m = _re.match(r"^(\d+)\s*[\.\-_ ]", base) or _re.match(r"^(\d+)$", base.rsplit(".", 1)[0])
+    if m:
+        return (0, int(m.group(1)), base.lower())
+    return (1, 0, base.lower())
+
+def list_wallpapers():
+    """扫描 wallpapers/ 子目录 + 根目录的视频文件，返回排序后的文件名列表。"""
+    found = []
+    seen = set()
+    # wallpapers/ 子目录优先（用户新增壁纸的推荐位置）
+    if WALLPAPER_DIR.is_dir():
+        try:
+            for f in sorted(WALLPAPER_DIR.iterdir(), key=lambda x: _wallpaper_sort_key(x.name)):
+                if f.is_file() and f.suffix.lower() in WALLPAPER_EXTS:
+                    name = "wallpapers/" + f.name
+                    if name not in seen:
+                        seen.add(name); found.append(name)
+        except Exception:
+            pass
+    # 根目录（内置壁纸 1.mp4/2.mp4/3.mp4 等）
+    try:
+        for f in sorted(DATA_DIR.iterdir(), key=lambda x: _wallpaper_sort_key(x.name)):
+            if f.is_file() and f.suffix.lower() in WALLPAPER_EXTS:
+                if f.name not in seen:
+                    seen.add(f.name); found.append(f.name)
+    except Exception:
+        pass
+    return found
+
 # --- Thread safety ---
 stats_lock = threading.Lock()
 config_lock = threading.Lock()
@@ -427,6 +465,9 @@ class FocusHandler(BaseHTTPRequestHandler):
         elif path == "/api/block/sites":
             sites = get_blocked_sites()
             self._send_json({"sites": sites})
+
+        elif path == "/api/wallpapers":
+            self._send_json({"wallpapers": list_wallpapers()})
 
         elif path == "/api/config":
             with config_lock:
@@ -889,6 +930,18 @@ class FocusHandler(BaseHTTPRequestHandler):
                 config["browser"] = browser
                 save_json(CONFIG_FILE, config)
             self._send_json({"ok": True, "browser": browser})
+
+        elif path == "/api/wallpapers/open-folder":
+            # 打开壁纸存放目录（方便用户拖入新壁纸）
+            try:
+                WALLPAPER_DIR.mkdir(parents=True, exist_ok=True)
+                subprocess.Popen(["explorer", str(WALLPAPER_DIR)])
+                target = str(WALLPAPER_DIR)
+                ok = True
+            except Exception as e:
+                ok = False
+                target = str(e)
+            self._send_json({"ok": ok, "path": target})
 
         elif path == "/api/stats/routine":
             with stats_lock:
