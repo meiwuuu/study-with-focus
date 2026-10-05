@@ -1152,11 +1152,12 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 <option value="none">原始大小</option>
               </select>
               <span style="font-size:.72em;color:rgba(255,255,255,.4);">缩放</span>
-              <input type="range" id="wallpaper-zoom" min="100" max="200" step="5" value="100" oninput="setWallpaperZoom(this.value)" style="width:110px;">
+              <input type="range" id="wallpaper-zoom" min="100" max="300" step="5" value="100" oninput="setWallpaperZoom(this.value)" style="width:110px;">
               <span style="font-size:.72em;color:rgba(255,255,255,.5);" id="wallpaper-zoom-val">100%</span>
-              <button class="btn btn-sm" onclick="resetWallpaperStyle()" title="恢复默认（铺满、100%）">重置</button>
+              <button class="btn btn-sm btn-accent" onclick="openCropPanel()" title="像设置头像那样拖动画面调整构图">取景调整</button>
+              <button class="btn btn-sm" onclick="resetWallpaperStyle()" title="恢复默认（铺满、居中、100%）">重置</button>
             </div>
-            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">支持 mp4 / webm / mov，添加后自动保存；画面有黑边时用「铺满」并调高缩放</div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">画面有黑边时用「铺满」+ 缩放；想精细调整构图点「取景调整」（框固定，拖动后面的画面）</div>
           </div>
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">待办列表</div>
@@ -1490,7 +1491,7 @@ function dedupeWallpapers(list) {
   return out;
 }
 
-// ── 壁纸填充方式 / 缩放（每个壁纸独立记忆，解决不同视频的黑边/比例问题）──
+// ── 壁纸填充 / 构图（每个壁纸独立记忆，解决不同视频的黑边/比例问题）──
 function wallpaperStyleKey(kind) {
   // 键名带当前壁纸文件名，实现"单独设置"；无文件名时退回全局默认
   var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
@@ -1506,26 +1507,39 @@ function getWallpaperFit() {
   } catch(e) {}
   return 'cover';
 }
-function getWallpaperZoom() {
+// 构图数据：dx/dy 百分比平移 + z 缩放（缩放滑块与取景框共用这一份数据）
+function getWallpaperCrop() {
   try {
-    var per = parseInt(localStorage.getItem(wallpaperStyleKey('zoom')), 10);
-    if (per >= 100 && per <= 200) return per;
-    var g = parseInt(localStorage.getItem('focus_wallpaper_zoom'), 10);
-    if (g >= 100 && g <= 200) return g;
+    var raw = localStorage.getItem(wallpaperStyleKey('crop'));
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && typeof o.z === 'number') {
+        return { dx: +o.dx || 0, dy: +o.dy || 0, z: Math.max(1, Math.min(3, o.z)) };
+      }
+    }
+    // 兼容早期只存缩放比例的键，避免旧设置丢失
+    var oldZoom = parseInt(localStorage.getItem(wallpaperStyleKey('zoom')), 10);
+    if (oldZoom >= 100 && oldZoom <= 300) return { dx: 0, dy: 0, z: oldZoom / 100 };
   } catch(e) {}
-  return 100;
+  return { dx: 0, dy: 0, z: 1 };
 }
+function saveWallpaperCrop(o) {
+  try { localStorage.setItem(wallpaperStyleKey('crop'), JSON.stringify(o)); } catch(e) {}
+  applyWallpaperStyle();
+}
+function getWallpaperZoom() { return Math.round(getWallpaperCrop().z * 100); }
 function applyWallpaperStyle() {
-  var fit = getWallpaperFit(), zoom = getWallpaperZoom();
+  var fit = getWallpaperFit(), crop = getWallpaperCrop();
   videoEl.style.objectFit = fit;
   videoEl.style.transformOrigin = 'center center';
-  videoEl.style.transform = (zoom === 100) ? '' : 'scale(' + (zoom / 100) + ')';
+  var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
+  videoEl.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
   var sel = document.getElementById('wallpaper-fit');
   if (sel) sel.value = fit;
   var rng = document.getElementById('wallpaper-zoom');
-  if (rng) rng.value = zoom;
+  if (rng) rng.value = getWallpaperZoom();
   var lbl = document.getElementById('wallpaper-zoom-val');
-  if (lbl) lbl.textContent = zoom + '%';
+  if (lbl) lbl.textContent = getWallpaperZoom() + '%';
 }
 function setWallpaperFit(v) {
   try { localStorage.setItem(wallpaperStyleKey('fit'), v); } catch(e) {}
@@ -1534,17 +1548,139 @@ function setWallpaperFit(v) {
   showToast('本壁纸填充：' + (names[v] || v));
 }
 function setWallpaperZoom(v) {
-  v = Math.max(100, Math.min(200, parseInt(v, 10) || 100));
-  try { localStorage.setItem(wallpaperStyleKey('zoom'), v); } catch(e) {}
-  applyWallpaperStyle();
+  v = Math.max(100, Math.min(300, parseInt(v, 10) || 100));
+  var o = getWallpaperCrop(); o.z = v / 100;
+  saveWallpaperCrop(o);
 }
 function resetWallpaperStyle() {
   try {
     localStorage.removeItem(wallpaperStyleKey('fit'));
+    localStorage.removeItem(wallpaperStyleKey('crop'));
     localStorage.removeItem(wallpaperStyleKey('zoom'));
   } catch(e) {}
   applyWallpaperStyle();
-  showToast('本壁纸填充已恢复默认（铺满 · 100%）');
+  showToast('本壁纸已恢复默认（铺满 · 居中 · 100%）');
+}
+
+// ── 取景调整：全屏实时调整（屏幕上看到的就是最终效果）──
+var _crop = { dx: 0, dy: 0, z: 1 };
+var _cropDrag = null;
+var _cropBackup = null;
+var _cropPanelWasOpen = false;
+
+function clampCrop() {
+  // 限制平移范围，保证画面始终盖满屏幕（放大后才有平移余量）
+  var lim = Math.max(0, (_crop.z - 1) / 2 * 100);
+  if (_crop.dx > lim) _crop.dx = lim;
+  if (_crop.dx < -lim) _crop.dx = -lim;
+  if (_crop.dy > lim) _crop.dy = lim;
+  if (_crop.dy < -lim) _crop.dy = -lim;
+}
+function openCropPanel() {
+  var modal = document.getElementById('crop-modal');
+  if (!modal) return;
+  _crop = getWallpaperCrop();
+  _cropBackup = { dx: _crop.dx, dy: _crop.dy, z: _crop.z };   // 供"取消"回滚
+  // 收起设置面板，避免挡住取景画面
+  try {
+    var ov = document.getElementById('settings-overlay');
+    if (ov && ov.classList.contains('open')) {
+      _cropPanelWasOpen = true;
+      ov.classList.remove('open');
+      var clock = document.getElementById('pomo-clock');
+      if (clock) clock.classList.remove('panel-open');
+    }
+  } catch(e) {}
+  bindCropInteractions();
+  modal.style.display = 'block';
+  applyCropPreview();
+}
+function closeCropPanel() {
+  var modal = document.getElementById('crop-modal');
+  if (modal) modal.style.display = 'none';
+  _cropDrag = null;
+  // 恢复之前打开的设置面板
+  if (_cropPanelWasOpen) {
+    try {
+      var ov = document.getElementById('settings-overlay');
+      if (ov) ov.classList.add('open');
+      var clock = document.getElementById('pomo-clock');
+      if (clock) clock.classList.add('panel-open');
+    } catch(e) {}
+    _cropPanelWasOpen = false;
+  }
+}
+// 直接把构图应用到全屏壁纸 —— 所见即所得，无需第二个视频/canvas 抓帧
+function applyCropPreview() {
+  clampCrop();
+  var noChange = (_crop.dx === 0 && _crop.dy === 0 && _crop.z === 1);
+  videoEl.style.transformOrigin = 'center center';
+  videoEl.style.transform = noChange ? '' : ('translate(' + _crop.dx + '%, ' + _crop.dy + '%) scale(' + _crop.z + ')');
+  var rng = document.getElementById('crop-zoom');
+  if (rng) rng.value = Math.round(_crop.z * 100);
+  var lbl = document.getElementById('crop-zoom-val');
+  if (lbl) lbl.textContent = Math.round(_crop.z * 100) + '%';
+}
+function setCropZoom(v) {
+  v = Math.max(100, Math.min(300, parseInt(v, 10) || 100));
+  _crop.z = v / 100;
+  applyCropPreview();
+}
+function resetCrop() { _crop = { dx: 0, dy: 0, z: 1 }; applyCropPreview(); }
+function saveCrop() {
+  saveWallpaperCrop({ dx: _crop.dx, dy: _crop.dy, z: _crop.z });
+  closeCropPanel();
+  showToast('已应用壁纸构图');
+}
+function cancelCrop() {
+  // 放弃本次调整，恢复打开面板前的构图
+  if (_cropBackup) _crop = _cropBackup;
+  applyCropPreview();
+  closeCropPanel();
+  showToast('已取消调整');
+}
+
+var _cropBound = false;
+function bindCropInteractions() {
+  if (_cropBound) return;
+  var stage = document.getElementById('crop-stage');
+  if (!stage) return;
+  _cropBound = true;
+  stage.addEventListener('mousedown', function(e) {
+    _cropDrag = { sx: e.clientX, sy: e.clientY, dx: _crop.dx, dy: _crop.dy };
+    stage.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!_cropDrag) return;
+    var rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    _crop.dx = _cropDrag.dx + (e.clientX - _cropDrag.sx) / rect.width * 100;
+    _crop.dy = _cropDrag.dy + (e.clientY - _cropDrag.sy) / rect.height * 100;
+    applyCropPreview();
+  });
+  document.addEventListener('mouseup', function() {
+    if (_cropDrag) { _cropDrag = null; stage.style.cursor = 'grab'; }
+  });
+  stage.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    _crop.z = Math.max(1, Math.min(3, _crop.z + (e.deltaY > 0 ? -0.05 : 0.05)));
+    applyCropPreview();
+  }, { passive: false });
+  stage.addEventListener('touchstart', function(e) {
+    var t = e.touches[0];
+    _cropDrag = { sx: t.clientX, sy: t.clientY, dx: _crop.dx, dy: _crop.dy };
+  }, { passive: true });
+  stage.addEventListener('touchmove', function(e) {
+    if (!_cropDrag) return;
+    var t = e.touches[0], rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    _crop.dx = _cropDrag.dx + (t.clientX - _cropDrag.sx) / rect.width * 100;
+    _crop.dy = _cropDrag.dy + (t.clientY - _cropDrag.sy) / rect.height * 100;
+    applyCropPreview();
+    e.preventDefault();
+  }, { passive: false });
+  stage.addEventListener('touchend', function() { _cropDrag = null; });
 }
 
 // 扫描目录可用视频（供添加面板选择）
@@ -5069,6 +5205,30 @@ document.addEventListener("visibilitychange", function() {
       <span style="flex:1"></span>
       <button class="btn btn-sm btn-secondary" onclick="closeWallpaperModal()">关闭</button>
     </div>
+  </div>
+</div>
+
+<!-- 取景调整：全屏实时调整，屏幕上看到的就是最终效果 -->
+<div id="crop-modal" style="display:none;position:fixed;inset:0;z-index:9999;">
+  <!-- 全屏拖动层 + 九宫格参考线 -->
+  <div id="crop-stage" style="position:absolute;inset:0;cursor:grab;user-select:none;touch-action:none;background:
+    linear-gradient(to right, transparent 33.2%, rgba(255,255,255,.30) 33.2%, rgba(255,255,255,.30) 33.42%, transparent 33.42%, transparent 66.58%, rgba(255,255,255,.30) 66.58%, rgba(255,255,255,.30) 66.8%, transparent 66.8%),
+    linear-gradient(to bottom, transparent 33.2%, rgba(255,255,255,.30) 33.2%, rgba(255,255,255,.30) 33.42%, transparent 33.42%, transparent 66.58%, rgba(255,255,255,.30) 66.58%, rgba(255,255,255,.30) 66.8%, transparent 66.8%);"></div>
+  <!-- 顶部提示 -->
+  <div style="position:absolute;top:0;left:0;right:0;padding:14px;text-align:center;pointer-events:none;">
+    <span style="display:inline-block;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.16);border-radius:9px;padding:7px 16px;font-size:.78em;color:rgba(255,255,255,.88);">
+      取景调整中 · 拖动画面移动 · 滚轮缩放 · 看到的就是最终效果
+    </span>
+  </div>
+  <!-- 底部工具条 -->
+  <div style="position:absolute;bottom:28px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:rgba(22,22,24,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:13px;padding:11px 18px;box-shadow:0 10px 34px rgba(0,0,0,.55);">
+    <span style="font-size:.75em;color:rgba(255,255,255,.5);">缩放</span>
+    <input type="range" id="crop-zoom" min="100" max="300" step="5" value="100" oninput="setCropZoom(this.value)" style="width:170px;">
+    <span style="font-size:.75em;color:rgba(255,255,255,.65);min-width:44px;" id="crop-zoom-val">100%</span>
+    <span style="width:1px;height:20px;background:rgba(255,255,255,.14);"></span>
+    <button class="btn btn-sm" onclick="resetCrop()">重置</button>
+    <button class="btn btn-sm btn-secondary" onclick="cancelCrop()">取消</button>
+    <button class="btn btn-sm btn-accent" onclick="saveCrop()">保存并应用</button>
   </div>
 </div>
 </body>
