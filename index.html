@@ -1143,7 +1143,20 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <span style="flex:1"></span>
               <button class="btn btn-sm btn-accent" onclick="addWallpaper()" title="选择要加入轮播的视频">+ 增加壁纸</button>
             </div>
-            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">支持 mp4 / webm / mov，添加后自动保存</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+              <span style="font-size:.72em;color:rgba(255,255,255,.4);">填充</span>
+              <select id="wallpaper-fit" onchange="setWallpaperFit(this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
+                <option value="cover">铺满（裁剪，无黑边）</option>
+                <option value="contain">适应（完整显示，可能留边）</option>
+                <option value="fill">拉伸（填满，可能变形）</option>
+                <option value="none">原始大小</option>
+              </select>
+              <span style="font-size:.72em;color:rgba(255,255,255,.4);">缩放</span>
+              <input type="range" id="wallpaper-zoom" min="100" max="200" step="5" value="100" oninput="setWallpaperZoom(this.value)" style="width:110px;">
+              <span style="font-size:.72em;color:rgba(255,255,255,.5);" id="wallpaper-zoom-val">100%</span>
+              <button class="btn btn-sm" onclick="resetWallpaperStyle()" title="恢复默认（铺满、100%）">重置</button>
+            </div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">支持 mp4 / webm / mov，添加后自动保存；画面有黑边时用「铺满」并调高缩放</div>
           </div>
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">待办列表</div>
@@ -1477,6 +1490,63 @@ function dedupeWallpapers(list) {
   return out;
 }
 
+// ── 壁纸填充方式 / 缩放（每个壁纸独立记忆，解决不同视频的黑边/比例问题）──
+function wallpaperStyleKey(kind) {
+  // 键名带当前壁纸文件名，实现"单独设置"；无文件名时退回全局默认
+  var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
+  var base = name ? wallpaperBase(name) : '';
+  return 'focus_wallpaper_' + kind + (base ? '_' + base : '');
+}
+function getWallpaperFit() {
+  try {
+    var per = localStorage.getItem(wallpaperStyleKey('fit'));
+    if (per) return per;
+    var g = localStorage.getItem('focus_wallpaper_fit');
+    if (g) return g;
+  } catch(e) {}
+  return 'cover';
+}
+function getWallpaperZoom() {
+  try {
+    var per = parseInt(localStorage.getItem(wallpaperStyleKey('zoom')), 10);
+    if (per >= 100 && per <= 200) return per;
+    var g = parseInt(localStorage.getItem('focus_wallpaper_zoom'), 10);
+    if (g >= 100 && g <= 200) return g;
+  } catch(e) {}
+  return 100;
+}
+function applyWallpaperStyle() {
+  var fit = getWallpaperFit(), zoom = getWallpaperZoom();
+  videoEl.style.objectFit = fit;
+  videoEl.style.transformOrigin = 'center center';
+  videoEl.style.transform = (zoom === 100) ? '' : 'scale(' + (zoom / 100) + ')';
+  var sel = document.getElementById('wallpaper-fit');
+  if (sel) sel.value = fit;
+  var rng = document.getElementById('wallpaper-zoom');
+  if (rng) rng.value = zoom;
+  var lbl = document.getElementById('wallpaper-zoom-val');
+  if (lbl) lbl.textContent = zoom + '%';
+}
+function setWallpaperFit(v) {
+  try { localStorage.setItem(wallpaperStyleKey('fit'), v); } catch(e) {}
+  applyWallpaperStyle();
+  var names = { cover: '铺满', contain: '适应', fill: '拉伸', none: '原始大小' };
+  showToast('本壁纸填充：' + (names[v] || v));
+}
+function setWallpaperZoom(v) {
+  v = Math.max(100, Math.min(200, parseInt(v, 10) || 100));
+  try { localStorage.setItem(wallpaperStyleKey('zoom'), v); } catch(e) {}
+  applyWallpaperStyle();
+}
+function resetWallpaperStyle() {
+  try {
+    localStorage.removeItem(wallpaperStyleKey('fit'));
+    localStorage.removeItem(wallpaperStyleKey('zoom'));
+  } catch(e) {}
+  applyWallpaperStyle();
+  showToast('本壁纸填充已恢复默认（铺满 · 100%）');
+}
+
 // 扫描目录可用视频（供添加面板选择）
 async function fetchAvailableWallpapers() {
   try {
@@ -1638,6 +1708,7 @@ function loadVideo(idx) {
     });
   }
   try { localStorage.setItem('focus_video_idx', idx); } catch(e) {}
+  applyWallpaperStyle();   // 切换后应用该壁纸自己的填充/缩放设置
   // Update theme tab label
   var lbl = document.getElementById('theme-video-label');
   if (lbl) lbl.textContent = '壁纸 ' + (idx+1) + '/' + videos.length;
@@ -1774,6 +1845,7 @@ function stopCanvasBG() {
   videos = dedupeWallpapers(savedList ? savedList : DEFAULT_VIDEOS.slice());
   saveWallpapers();
   if (saved >= videos.length) saved = 0;
+  applyWallpaperStyle();   // 应用保存的填充方式 / 缩放
   loadVideo(saved);
   // 与目录同步（后端可用时）：清掉已被删除/改名的壁纸，保证总数与目录可用数一致
   try {
