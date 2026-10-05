@@ -1417,6 +1417,8 @@ function closePanel(e) {
   if (e && e.target !== document.getElementById('settings-overlay')) return;
   document.getElementById('settings-overlay').classList.remove('open');
   document.getElementById('pomo-clock').classList.remove('panel-open');
+  // 销毁壁纸缩略图（释放 video 元素内存）
+  if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker();
   // 强制重置鼠标悬浮状态，防止 pointer-events:none 不触发 mouseleave
   hoveringUI = false;
   resetInactivity();
@@ -1432,6 +1434,9 @@ function switchPanelTab(name) {
   if (btn) btn.classList.add('active');
   if (name === 'log') loadLearningLog();
   if (name === 'manual') { initManDateSelect(); initManTimeSelects(); }
+  // 壁纸选择网格：仅在主题页时挂载缩略图（每个缩略图是一个 video 元素，很吃内存）
+  if (name === 'theme') { if (typeof mountWallpaperPicker === 'function') mountWallpaperPicker(); }
+  else { if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker(); }
 }
 
 // ─── Inactivity hide ───
@@ -1483,7 +1488,7 @@ function getSavedWallpapers() {
 }
 function saveWallpapers() {
   try { localStorage.setItem('focus_wallpapers', JSON.stringify(videos)); } catch(e) {}
-  renderWallpaperPicker();   // 列表变化时同步选择网格
+  if (_pickerMounted) renderWallpaperPicker();   // 仅在网格已挂载时才刷新
 }
 // 按文件名去重（避免同名文件被重复加入）
 function dedupeWallpapers(list) {
@@ -1586,7 +1591,7 @@ function openCropPanel() {
   if (!modal) return;
   _crop = getWallpaperCrop();
   _cropBackup = { dx: _crop.dx, dy: _crop.dy, z: _crop.z };   // 供"取消"回滚
-  // 收起设置面板，避免挡住取景画面
+  // 收起设置面板，避免挡住取景画面；同时释放缩略图内存
   try {
     var ov = document.getElementById('settings-overlay');
     if (ov && ov.classList.contains('open')) {
@@ -1594,6 +1599,7 @@ function openCropPanel() {
       ov.classList.remove('open');
       var clock = document.getElementById('pomo-clock');
       if (clock) clock.classList.remove('panel-open');
+      if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker();
     }
   } catch(e) {}
   bindCropInteractions();
@@ -1611,6 +1617,11 @@ function closeCropPanel() {
       if (ov) ov.classList.add('open');
       var clock = document.getElementById('pomo-clock');
       if (clock) clock.classList.add('panel-open');
+      // 若当前在主题页，重新挂载缩略图
+      var activeTab = document.querySelector('.panel-nav button.active');
+      if (activeTab && activeTab.getAttribute('data-tab') === 'theme' && typeof mountWallpaperPicker === 'function') {
+        mountWallpaperPicker();
+      }
     } catch(e) {}
     _cropPanelWasOpen = false;
   }
@@ -1861,6 +1872,18 @@ function cycleVideo() {
 }
 
 // ── 壁纸选择网格（缩略图 = 视频第一帧，点击直接切换，不再只能靠按钮轮换）──
+var _pickerMounted = false;   // 是否处于"已挂载"状态（仅主题页打开时挂载）
+function mountWallpaperPicker() {
+  var box = document.getElementById('wallpaper-picker');
+  if (!box) return;
+  _pickerMounted = true;
+  renderWallpaperPicker();
+}
+function unmountWallpaperPicker() {
+  var box = document.getElementById('wallpaper-picker');
+  _pickerMounted = false;
+  if (box) box.innerHTML = '';   // 销毁缩略图 video 元素，释放内存
+}
 function shortWallpaperName(name) {
   var base = String(name).split('/').pop().replace(/\.[^.]+$/, '');
   if (base.length > 14) base = base.slice(0, 13) + '…';
@@ -1868,7 +1891,7 @@ function shortWallpaperName(name) {
 }
 function renderWallpaperPicker() {
   var box = document.getElementById('wallpaper-picker');
-  if (!box) return;
+  if (!box || !_pickerMounted) return;   // 未挂载时不创建 video，避免常驻内存
   if (!videos || !videos.length) { box.innerHTML = ''; return; }
   var h = '';
   for (var i = 0; i < videos.length; i++) {
