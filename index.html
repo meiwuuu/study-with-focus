@@ -1159,7 +1159,32 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-sm btn-accent" onclick="openCropPanel()" title="像设置头像那样拖动画面调整构图">取景调整</button>
               <button class="btn btn-sm" onclick="resetWallpaperStyle()" title="恢复默认（铺满、居中、100%）">重置</button>
             </div>
-            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">画面有黑边时用「铺满」+ 缩放；想精细调整构图点「取景调整」（框固定，拖动后面的画面）</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+              <span style="font-size:.72em;color:rgba(255,255,255,.4);">播放速度</span>
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);">平时</span>
+              <select id="wp-rate-idle" onchange="setWallpaperRate('idle', this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1">1x（正常）</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);">专注时</span>
+              <select id="wp-rate-focus" onchange="setWallpaperRate('focus', this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
+                <option value="still">静止（第一帧）</option>
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1">1x（正常）</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+              <span style="font-size:.68em;color:rgba(255,255,255,.3);">（开始专注自动切换）</span>
+            </div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">画面有黑边时用「铺满」+ 缩放；想精细调整构图点「取景调整」（拖动画面）</div>
           </div>
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">待办列表</div>
@@ -1572,6 +1597,52 @@ function resetWallpaperStyle() {
   showToast('本壁纸已恢复默认（铺满 · 居中 · 100%）');
 }
 
+// ── 壁纸播放速度（平时 / 专注时；专注时可静止在第一帧）──
+function getWallpaperRate(kind) {
+  var key = (kind === 'focus') ? 'focus_wallpaper_rate_focus' : 'focus_wallpaper_rate';
+  try {
+    var v = localStorage.getItem(key);
+    if (v === 'still') return 'still';
+    var n = parseFloat(v);
+    if (n >= 0.25 && n <= 4) return n;
+  } catch(e) {}
+  return 1;
+}
+function setWallpaperRate(kind, v) {
+  var key = (kind === 'focus') ? 'focus_wallpaper_rate_focus' : 'focus_wallpaper_rate';
+  try { localStorage.setItem(key, v); } catch(e) {}
+  syncWallpaperPlayback();
+  var label = (v === 'still') ? '静止（第一帧）' : (parseFloat(v) + 'x');
+  showToast((kind === 'focus' ? '专注时' : '平时') + '壁纸：' + label);
+}
+function wallpaperIsFocusMode() {
+  try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
+}
+function syncWallpaperPlayback() {
+  if (!videoEl) return;
+  try {
+    // 同步下拉框显示
+    var selIdle = document.getElementById('wp-rate-idle');
+    if (selIdle) selIdle.value = String(getWallpaperRate('idle'));
+    var selFocus = document.getElementById('wp-rate-focus');
+    if (selFocus) selFocus.value = String(getWallpaperRate('focus'));
+    var rate = getWallpaperRate(wallpaperIsFocusMode() ? 'focus' : 'idle');
+    if (rate === 'still') {
+      if (!videoEl.paused) videoEl.pause();
+      // 停在第一帧
+      if (videoEl.readyState >= 2 && videoEl.currentTime > 0.05) {
+        try { videoEl.currentTime = 0; } catch(e) {}
+      }
+      return;
+    }
+    videoEl.playbackRate = rate;
+    if (videoEl.paused && !document.hidden && videoEl.style.display !== 'none') {
+      var p = videoEl.play();
+      if (p && p.catch) p.catch(function(){});
+    }
+  } catch(e) {}
+}
+
 // ── 取景调整：全屏实时调整（屏幕上看到的就是最终效果）──
 var _crop = { dx: 0, dy: 0, z: 1 };
 var _cropDrag = null;
@@ -1861,6 +1932,7 @@ function loadVideo(idx) {
   }
   try { localStorage.setItem('focus_video_idx', idx); } catch(e) {}
   applyWallpaperStyle();   // 切换后应用该壁纸自己的填充/缩放设置
+  syncWallpaperPlayback();   // 应用当前播放速度（专注时可能是静止）
   updateWallpaperPickerActive();   // 更新选择网格高亮
   // Update theme tab label
   var lbl = document.getElementById('theme-video-label');
@@ -2630,6 +2702,8 @@ function pomoSetStatus(st) {
   document.getElementById('pomo-float-status').textContent = map[st];
   document.getElementById('pomo-float-status').className = 'pomo-status-badge ' + st;
   updateStatusBar();
+  // 壁纸播放模式跟随专注状态（平时速度 / 专注速度或静止）
+  if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();
 }
 function pomoUpdateDisplay() {
   document.getElementById('pomo-time').textContent = pomoFmt(pomo.timeLeft);
@@ -2715,6 +2789,7 @@ function pomoStart() {
   pomo.lastTick = Date.now();
   savePomoState();
   focusModeActive = true; updateFocusBtn();
+  if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();   // 壁纸切到专注速度
   document.getElementById('pomo-play').style.display = 'none';
   document.getElementById('pomo-pause').style.display = 'inline-flex';
   pomo.timer = setTimeout(pomoTick, 250);
@@ -2742,6 +2817,7 @@ async function pomoPause() {
   // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
   pomo.consecutive = 0; // 暂停=实际休息，连续计数归零
+  if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();   // 壁纸切回平时速度
   focusModeActive = false; updateFocusBtn();
   savePomoState();
   document.getElementById('pomo-play').style.display = 'inline-flex';
