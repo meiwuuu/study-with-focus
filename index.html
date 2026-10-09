@@ -517,6 +517,14 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .cal-day.selected { background: rgba(255,255,255,0.10); border: 2px solid rgba(255,255,255,0.35); }
 .cal-day .day-num { font-weight:500; }
 .cal-day .day-time { font-size:.52em; opacity:.65; margin-top:1px; }
+/* 运动完成标记：日期块右上角小绿点 */
+.cal-sport-dot {
+  position: absolute; top: 3px; right: 3px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 4px rgba(46,204,113,.85);
+  pointer-events: none;
+}
 .cal-day.heat-0 { background: rgba(0,0,0,0.25); }
 .cal-day.heat-1 { background: rgba(57,197,187,0.18); }
 .cal-day.heat-2 { background: rgba(57,197,187,0.32); }
@@ -2978,6 +2986,13 @@ function calSave() { localStorage.setItem('focus_calendar', JSON.stringify(cal))
 function calFmt(y,m,d) { return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
 function calFmtTime(s) { var h=Math.floor(s/3600), m=Math.floor((s%3600)/60); return h>0?h+'h'+m+'m':m+'m'; }
 function calHeat(s) { if(s<=0)return 0; if(s<3600)return 1; if(s<10800)return 2; if(s<21600)return 3; return 4; }
+// 运动任务判定：颜色为 sport，或标题里含"运动/跑步"（兼容自定义任务名）
+function isSportTask(t) {
+  if (!t) return false;
+  if (t.color === 'sport') return true;
+  var title = t.title || '';
+  return title.indexOf('运动') >= 0 || title.indexOf('跑步') >= 0;
+}
 
 var calStatsMode = 'month';
 var calStatsSubject = 'normal';
@@ -3066,6 +3081,18 @@ function calRender() {
   }
 
   var h='';
+  // 运动完成标记：一次性算出"已完成运动"的日期集合（避免逐日重复遍历任务表）
+  var sportDone = {};
+  try {
+    var _allTasks = (typeof globalTasks !== 'undefined' && globalTasks) ? globalTasks : [];
+    for (var _ti = 0; _ti < _allTasks.length; _ti++) {
+      var _t = _allTasks[_ti];
+      if (!_t || !_t.done) continue;
+      if (typeof isSportTask === 'function' && !isSportTask(_t)) continue;
+      if (_t.type === 'specific' && _t.date) sportDone[_t.date] = 1;
+      else if (_t.type === 'daily') sportDone[today] = 1;   // 循环任务：记在今天
+    }
+  } catch(e) {}
   for (var i=fd-1;i>=0;i--) h+='<div class="cal-day other"><span class="day-num">'+(pd-i)+'</span></div>';
   for (var d=1;d<=dim;d++) {
     var k=calFmt(calYear,calMonth,d),l=cal.dailyLog[k]||{studyTime:0},ht=calHeat(l.studyTime);
@@ -3073,6 +3100,7 @@ function calRender() {
     if(k===today) cls+=' today';
     if(k===calSelected) cls+=' selected';
     h+='<div class="'+cls+'" data-date="'+k+'" onclick="calSelect(this.dataset.date)">';
+    if (sportDone[k]) h+='<span class="cal-sport-dot" title="这天已完成运动"></span>';
     h+='<span class="day-num">'+d+'</span>';
     if(l.studyTime>=60) h+='<span class="day-time">'+calFmtTime(l.studyTime)+'</span>';
     h+='</div>';
@@ -3125,75 +3153,180 @@ const studyPhases = [
   }
 ];
 
+// ─── 毕设微型死线库（来源：2026-10-09 导师宣讲录音 · 详见 E:\毕业设计\毕设导师宣讲纪要.md）───
+// 与 studyPhases 并行：日历页叠加显示；浮窗取【考研 / 毕设】两者中更紧急的一条
+const thesisPhases = [
+  {
+    name: '毕设① · 定题与开题（10月内，最好两周内）',
+    end: "2026-10-31",
+    tasks: [
+      { end: "2026-10-16", subj: "毕设定题", desc: "确定题目并发导师确认（每题目带3-4个技术点+1个自己的点，贴数字媒体技术）" },
+      { end: "2026-10-22", subj: "毕设材料", desc: "向导师要模板：题目审核表 + 开题报告" },
+      { end: "2026-10-31", subj: "毕设提交", desc: "交题目审核表 + 开题报告（无模板就先催导师）" }
+    ]
+  },
+  {
+    name: '毕设② · 主体实现（11/1-1/10，考研前收工）',
+    end: "2027-01-10",
+    tasks: [
+      { end: "2026-11-10", subj: "毕设", desc: "完成框架/技术选型 + 核心模块1（记录迭代截图与草图）" },
+      { end: "2026-12-10", subj: "毕设", desc: "核心模块2-3跑通（初试前必须做完主体，寒假只留收尾）" },
+      { end: "2027-01-10", subj: "毕设", desc: "主体功能全部完成，可演示（故意留20天空档到考研）" }
+    ]
+  },
+  {
+    name: '毕设③ · 寒假收尾（1/11-2/20）',
+    end: "2027-02-20",
+    tasks: [
+      { end: "2027-02-20", subj: "毕设收尾", desc: "补边角功能、整理素材与图表（寒假在家完成）" }
+    ]
+  },
+  {
+    name: '毕设④ · 论文与送审（2/20-3/31）',
+    end: "2027-03-31",
+    tasks: [
+      { end: "2027-02-25", subj: "毕设论文", desc: "交论文初稿（导师明确：别卡截止时间，会排队延迟）" },
+      { end: "2027-03-10", subj: "毕设论文", desc: "按导师意见改3-5稿，预留查重 + AIGC检测时间" },
+      { end: "2027-03-31", subj: "毕设送审", desc: "送审 + 查重 + AIGC检测提交学院（参考上届约3/20）" }
+    ]
+  },
+  {
+    name: '毕设⑤ · 答辩（4月）',
+    end: "2027-04-30",
+    tasks: [
+      { end: "2027-04-30", subj: "毕设答辩", desc: "答辩；不通过者仅一周后二次答辩（准备演示+数据流问题）" }
+    ]
+  }
+];
+
+// 取当前最紧急的毕设任务（返回 {task,end,days} 或 null）
+function thesisMostUrgent(today) {
+  if (typeof thesisPhases === 'undefined' || !thesisPhases) return null;
+  var best = null;
+  for (var i = 0; i < thesisPhases.length; i++) {
+    var ph = thesisPhases[i];
+    if (!ph.tasks || !ph.tasks.length) continue;
+    for (var j = 0; j < ph.tasks.length; j++) {
+      var t = ph.tasks[j];
+      if (t.total && t.progress !== undefined && t.progress >= t.total) continue;
+      var end = new Date(t.end + "T00:00:00");
+      var days = Math.ceil((end - today) / 86400000);
+      if (!best || days < best.days) best = { task: t, end: t.end, days: days };
+    }
+  }
+  return best;
+}
+
+// 当前所在的毕设阶段
+function thesisPhaseForDate(d) {
+  if (typeof thesisPhases === 'undefined' || !thesisPhases) return null;
+  for (var i = 0; i < thesisPhases.length; i++) {
+    if (d <= new Date(thesisPhases[i].end + "T23:59:59")) return thesisPhases[i];
+  }
+  return null;
+}
+
 function renderPhasePrompt(dateStr) {
     var container = document.getElementById('cal-phase-prompt');
     if (!container) return;
-    var selDate = new Date(dateStr + "T00:00:00");
-    var currentPhase = studyPhases.find(function(p) { return selDate <= new Date(p.end + "T23:59:59"); });
-    
-    if (!currentPhase) { container.style.display = 'none'; return; }
+    var dStr = (dateStr || '').slice(0, 10);
+    var selDate = new Date(dStr + "T00:00:00");
 
-    var phaseEnd = new Date(currentPhase.end + "T00:00:00");
-    var daysToPhase = Math.ceil((phaseEnd - selDate) / 86400000);
-    
-    var isEmergency = daysToPhase <= 5;
-    var color = isEmergency ? 'var(--red)' : 'var(--accent)';
-    var bg = isEmergency ? 'rgba(244,67,54,0.1)' : 'rgba(96,165,250,0.1)';
-    var border = isEmergency ? 'rgba(244,67,54,0.3)' : 'rgba(96,165,250,0.3)';
+    // ── 上半年：考研阶段（原逻辑不变）──
+    var examHtml = '';
+    var examCtx = null;
+    if (typeof studyPhases !== 'undefined') {
+      examCtx = studyPhases.find(function(p) { return selDate <= new Date(p.end + "T23:59:59"); });
+    }
+    if (examCtx) {
+      var phaseEnd = new Date(examCtx.end + "T00:00:00");
+      var daysToPhase = Math.ceil((phaseEnd - selDate) / 86400000);
+      var isEmergency = daysToPhase <= 5;
+      var color = isEmergency ? 'var(--red)' : 'var(--accent)';
 
-    var html = '<div style="font-weight:600; color:' + color + '; margin-bottom:8px; display:flex; justify-content:space-between;">' +
-               '<span>🎯 ' + currentPhase.name + '</span>' +
-               '<span>大限剩 <b style="font-size:1.1em;">' + daysToPhase + '</b> 天</span></div>';
-    
-    var activeTasks = currentPhase.tasks.filter(function(t) { return selDate <= new Date(t.end + "T23:59:59"); });
-    
-    if (activeTasks.length > 0) {
-        html += '<div style="display:flex; flex-direction:column; gap:6px;">';
+      examHtml = '<div style="font-weight:600; color:' + color + '; margin-bottom:8px; display:flex; justify-content:space-between;">' +
+                 '<span>🎯 ' + examCtx.name + '</span>' +
+                 '<span>大限剩 <b style="font-size:1.1em;">' + daysToPhase + '</b> 天</span></div>';
+
+      var activeTasks = examCtx.tasks.filter(function(t) { return selDate <= new Date(t.end + "T23:59:59"); });
+      if (activeTasks.length > 0) {
+        examHtml += '<div style="display:flex; flex-direction:column; gap:6px;">';
         activeTasks.forEach(function(t) {
-            var taskEnd = new Date(t.end + "T00:00:00");
-            var daysToTask = Math.ceil((taskEnd - selDate) / 86400000);
-            
-            var taskColor = daysToTask <= 3 ? '#f87171' : 'rgba(255,255,255,0.75)';
-            var icon = daysToTask <= 3 ? '⚠️' : '📌';
-            var countdown = daysToTask === 0 ? '今天截止！' : '剩 ' + daysToTask + ' 天';
-            
-            html += '<div style="font-size:0.9em; display:flex; gap:6px;">' +
-                    '<span style="flex-shrink:0;">' + icon + '</span>' +
-                    '<span style="color:' + taskColor + ';"><b>【' + t.subj + '】</b>' + t.desc + 
-                    ' <span style="font-size:0.85em; opacity:0.9; margin-left:4px;">[' + countdown + ']</span></span>' +
-                    '</div>';
+          var taskEnd = new Date(t.end + "T00:00:00");
+          var daysToTask = Math.ceil((taskEnd - selDate) / 86400000);
+          var taskColor = daysToTask <= 3 ? '#f87171' : 'rgba(255,255,255,0.75)';
+          var icon = daysToTask <= 3 ? '⚠️' : '📌';
+          var countdown = daysToTask <= 0 ? '今天截止！' : '剩 ' + daysToTask + ' 天';
+          examHtml += '<div style="font-size:0.9em; display:flex; gap:6px;">' +
+                  '<span style="flex-shrink:0;">' + icon + '</span>' +
+                  '<span style="color:' + taskColor + ';"><b>【' + t.subj + '】</b>' + t.desc +
+                  ' <span style="font-size:0.85em; opacity:0.9; margin-left:4px;">[' + countdown + ']</span></span>' +
+                  '</div>';
         });
-        html += '</div>';
-    } else {
-         html += '<div style="font-size:0.85em; color:rgba(255,255,255,0.4);">本阶段子任务已清空。</div>';
+        examHtml += '</div>';
+      } else {
+        examHtml += '<div style="font-size:0.85em; color:rgba(255,255,255,0.4);">本阶段子任务已清空。</div>';
+      }
     }
 
-    container.style.background = bg;
-    container.style.borderColor = border;
+    // ── 下半年：毕设阶段（与考研叠加显示）──
+    var thesisHtml = '';
+    var thCtx = (typeof thesisPhaseForDate === 'function') ? thesisPhaseForDate(selDate) : null;
+    if (thCtx) {
+      var thEnd = new Date(thCtx.end + "T00:00:00");
+      var daysToTh = Math.ceil((thEnd - selDate) / 86400000);
+      var thColor = daysToTh <= 5 ? 'var(--red)' : '#c084fc';
+      thesisHtml += '<div style="display:flex; justify-content:space-between; font-weight:600; color:' + thColor + '; margin-bottom:6px;">' +
+                    '<span>🎓 ' + thCtx.name + '</span>' +
+                    '<span>剩 <b style="font-size:1.05em;">' + daysToTh + '</b> 天</span></div>';
+      var thTasks = (thCtx.tasks || []).filter(function(t) { return selDate <= new Date(t.end + "T23:59:59"); });
+      thTasks.forEach(function(t) {
+        var tEnd = new Date(t.end + "T00:00:00");
+        var daysToTask = Math.ceil((tEnd - selDate) / 86400000);
+        var tColor = daysToTask <= 3 ? '#f87171' : 'rgba(255,255,255,0.75)';
+        var tIcon = daysToTask <= 3 ? '⚠️' : '📌';
+        var tCount = daysToTask <= 0 ? '今天截止！' : '剩 ' + daysToTask + ' 天';
+        thesisHtml += '<div style="font-size:0.9em; display:flex; gap:6px;">' +
+                '<span style="flex-shrink:0;">' + tIcon + '</span>' +
+                '<span style="color:' + tColor + ';"><b>【' + t.subj + '】</b>' + t.desc +
+                ' <span style="font-size:0.85em; opacity:0.9; margin-left:4px;">[' + tCount + ']</span></span>' +
+                '</div>';
+      });
+    }
+
+    var html = '';
+    if (examHtml) {
+      html += '<div style="padding:10px 14px; background:' + (examCtx && Math.ceil((new Date(examCtx.end + "T00:00:00") - selDate) / 86400000) <= 5 ? 'rgba(244,67,54,0.1)' : 'rgba(96,165,250,0.1)') + '; border:1px solid ' + (examCtx && Math.ceil((new Date(examCtx.end + "T00:00:00") - selDate) / 86400000) <= 5 ? 'rgba(244,67,54,0.3)' : 'rgba(96,165,250,0.3)') + '; border-radius:8px;">' + examHtml + '</div>';
+    }
+    if (thesisHtml) {
+      html += '<div style="margin-top:8px; padding:10px 14px; background:rgba(192,132,252,0.08); border:1px solid rgba(192,132,252,0.25); border-radius:8px;">' + thesisHtml + '</div>';
+    }
+
+    if (!html) { container.style.display = 'none'; return; }
+    container.style.background = 'transparent';
+    container.style.borderColor = 'transparent';
     container.innerHTML = html;
     container.style.display = 'block';
 }
 
-// ─── 浮窗最紧急任务 ───
-function updateFloatDeadline() {
-  var el = document.getElementById('pomo-float-deadline');
-  if (!el) return;
-  if (typeof studyPhases === 'undefined') { el.style.display = 'none'; return; }
-  
+// ─── 浮窗最紧急任务（考研 / 毕设 双轨取更紧急的一条）───
+function examFloatInfo() {
+  if (typeof studyPhases === 'undefined' || !studyPhases) return null;
   var today = getFocusDateObj(); today.setHours(0,0,0,0);
-  
+
   // 阶段选择：找第一个【存在未完成任务】的阶段（按真实进度，而非日历）
   var currentPhase = null;
   for (var i = 0; i < studyPhases.length; i++) {
     var ph = studyPhases[i];
+    if (!ph.tasks || !ph.tasks.length) continue;
     var hasPending = ph.tasks.some(function(t){
       if (t.total && t.progress !== undefined && t.progress >= t.total) return false; // 已学完
       return true;
     });
     if (hasPending) { currentPhase = ph; break; }
   }
-  if (!currentPhase) { el.style.display = 'none'; return; }
-  
+  if (!currentPhase) return null;
+
   // 阶段内选最紧急：超期任务优先（拖得越久越紧急），其次剩余天数最少
   var mostUrgent = null;
   var minDays = Infinity;
@@ -3203,17 +3336,16 @@ function updateFloatDeadline() {
     var taskEnd = new Date(t.end + 'T00:00:00');
     var days = Math.ceil((taskEnd - today) / 86400000);
     // 超期(days<0)优先，超期越久越靠前；未超期按天数少优先
-    var score = days < 0 ? (-days + 10000) : (0 - days);
     if (days < 0 && minDays >= 0) { minDays = days; mostUrgent = t; continue; }
     if (days < 0) { if (days < minDays) { minDays = days; mostUrgent = t; } continue; }
     if (minDays >= 0 && days < minDays) { minDays = days; mostUrgent = t; }
   }
-  if (!mostUrgent) { el.style.display = 'none'; return; }
-  
+  if (!mostUrgent) return null;
+
   var overdue = minDays < 0;
   var isUrgent = minDays <= 3 || overdue;
   var icon = overdue ? '🚨' : (isUrgent ? '⚠️' : '');
-  var cls = overdue ? ' deadline-urgent' : (isUrgent ? ' deadline-urgent' : '');
+  var cls = (overdue || isUrgent) ? ' deadline-urgent' : '';
   var timeTxt = overdue ? ('已超期 ' + (-minDays) + ' 天') : ('剩 ' + minDays + ' 天');
   var progTxt = '';
   if (mostUrgent.total) {
@@ -3221,9 +3353,37 @@ function updateFloatDeadline() {
     var pct = Math.round(done * 100 / mostUrgent.total);
     progTxt = ' <span style="opacity:.75;">(' + done + '/' + mostUrgent.total + ' 页 · ' + pct + '%)</span>';
   }
-    var txt = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc + progTxt +
+  var txt = icon + ' <b>【' + mostUrgent.subj + '】' + mostUrgent.desc + progTxt +
     ' <span class="' + cls + '">[' + timeTxt + ']</span></b>';
-  renderDeadline(txt);
+  return { txt: txt, days: minDays };
+}
+
+function thesisFloatInfo() {
+  if (typeof thesisMostUrgent !== 'function') return null;
+  var today = getFocusDateObj(); today.setHours(0,0,0,0);
+  var best = thesisMostUrgent(today);
+  if (!best) return null;
+  var days = best.days;
+  var overdue = days < 0;
+  var isUrgent = days <= 3 || overdue;
+  var icon = overdue ? '🚨' : (isUrgent ? '⚠️' : '');
+  var cls = (overdue || isUrgent) ? ' deadline-urgent' : '';
+  var timeTxt = overdue ? ('已超期 ' + (-days) + ' 天') : ('剩 ' + days + ' 天');
+  var txt = icon + ' <b>🎓【' + best.task.subj + '】' + best.task.desc +
+    ' <span class="' + cls + '">[' + timeTxt + ']</span></b>';
+  return { txt: txt, days: days };
+}
+
+function updateFloatDeadline() {
+  var el = document.getElementById('pomo-float-deadline');
+  if (!el) return;
+  var exam = examFloatInfo();
+  var thesis = thesisFloatInfo();
+  // 取更紧急的一条；同分时优先考研（初试日期不可延）
+  var chosen = exam;
+  if (thesis && (!exam || thesis.days < exam.days)) chosen = thesis;
+  if (!chosen) { el.style.display = 'none'; return; }
+  renderDeadline(chosen.txt);
 }
 
 // ─── 死线浮窗显示与位置控制 ───
