@@ -3200,6 +3200,7 @@ const thesisPhases = [
 ];
 
 // 取当前最紧急的毕设任务（返回 {task,end,days} 或 null）
+// 跳过逾期超过 30 天的任务——否则 10 月的老死线会在 11 月后永远霸占浮窗
 function thesisMostUrgent(today) {
   if (typeof thesisPhases === 'undefined' || !thesisPhases) return null;
   var best = null;
@@ -3211,6 +3212,7 @@ function thesisMostUrgent(today) {
       if (t.total && t.progress !== undefined && t.progress >= t.total) continue;
       var end = new Date(t.end + "T00:00:00");
       var days = Math.ceil((end - today) / 86400000);
+      if (days < -30) continue; // 视为已翻篇
       if (!best || days < best.days) best = { task: t, end: t.end, days: days };
     }
   }
@@ -3335,6 +3337,7 @@ function examFloatInfo() {
     if (t.total && t.progress !== undefined && t.progress >= t.total) continue; // 跳过已完成
     var taskEnd = new Date(t.end + 'T00:00:00');
     var days = Math.ceil((taskEnd - today) / 86400000);
+    if (days < -30) continue; // 逾期过久视为已翻篇（与毕设侧规则一致）
     // 超期(days<0)优先，超期越久越靠前；未超期按天数少优先
     if (days < 0 && minDays >= 0) { minDays = days; mostUrgent = t; continue; }
     if (days < 0) { if (days < minDays) { minDays = days; mostUrgent = t; } continue; }
