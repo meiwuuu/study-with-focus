@@ -1400,6 +1400,42 @@ function getFocusDateObj() {
 function getFocusDate() {
   return fmtLocalDate(getFocusDateObj());
 }
+// ── 通用确认框（替代原生 confirm：全屏模式下原生对话框不显示）──
+var _confirmResolve = null;
+function showConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('confirm-modal');
+    if (!modal) { resolve(window.confirm(message)); return; }   // 兜底
+    var titleEl = document.getElementById('confirm-title');
+    var msgEl = document.getElementById('confirm-msg');
+    var okBtn = document.getElementById('confirm-ok');
+    var cancelBtn = document.getElementById('confirm-cancel');
+    if (titleEl) titleEl.textContent = opts.title || '请确认';
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) {
+      okBtn.textContent = opts.okText || '确定';
+      okBtn.className = 'btn btn-sm ' + (opts.danger ? 'btn-red' : 'btn-accent');
+    }
+    if (cancelBtn) cancelBtn.textContent = opts.cancelText || '取消';
+    _confirmResolve = resolve;
+    modal.style.display = 'flex';
+    if (okBtn) setTimeout(function(){ try { okBtn.focus(); } catch(e) {} }, 30);
+  });
+}
+function _resolveConfirm(val) {
+  var modal = document.getElementById('confirm-modal');
+  if (modal) modal.style.display = 'none';
+  if (_confirmResolve) { var r = _confirmResolve; _confirmResolve = null; r(!!val); }
+}
+// 确认框快捷键：Enter 确认 / Esc 取消
+document.addEventListener('keydown', function(e) {
+  var modal = document.getElementById('confirm-modal');
+  if (!modal || !modal.style.display || modal.style.display === 'none') return;
+  if (e.key === 'Enter') { e.preventDefault(); _resolveConfirm(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); _resolveConfirm(false); }
+});
+
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
   else document.exitFullscreen();
@@ -1429,7 +1465,7 @@ function closeBackendModal() {
 
 // ─── 退出：解除屏蔽 + 关闭页面 ───
 async function exitFocus() {
-  if (!confirm('退出 Focus？将解除网络屏蔽并关闭页面。')) return;
+  if (!(await showConfirm('退出 Focus？将解除网络屏蔽并关闭页面。', { okText: '退出', danger: true }))) return;
   try {
     await apiCall('/api/block/stop', { method: 'POST', body: JSON.stringify({ mode: 'auto' }) });
   } catch(e) {}
@@ -4107,14 +4143,14 @@ var DAILY_TEMPLATE = [
   {time:'21:00', color:'default', title:'收手，不安排新任务', alarm:true},
   {time:'23:45', color:'default', title:'收工提醒，直接睡', alarm:true}
 ];
-function applyDailyTemplate() {
+async function applyDailyTemplate() {
   if (!calSelected) return;
   var date = calSelected;
   var existing = getTasksForDate(date).filter(function(t){ return t.type === 'specific'; });
   var msg = existing.length > 0
     ? '将用今日作息模板覆盖当天已有的 ' + existing.length + ' 条计划？'
     : '将填入今日作息模板（' + DAILY_TEMPLATE.length + ' 条计划）？';
-  if (!confirm(msg)) return;
+  if (!(await showConfirm(msg))) return;
   // 删除当天全部 specific 任务（含已勾选），立即持久化
   globalTasks = globalTasks.filter(function(t){ return !(t.type === 'specific' && t.date === date); });
   saveGlobalTasks();
@@ -4441,7 +4477,7 @@ async function deleteCurrentAiReview() {
     alert("未找到有效日期");
     return;
   }
-  if (!confirm('确定要清除 ' + today + ' 的AI评价和评分吗？此操作不可撤销。')) {
+  if (!(await showConfirm('确定要清除 ' + today + ' 的AI评价和评分吗？此操作不可撤销。', { danger: true }))) {
     return;
   }
   var res = await apiCall('/api/stats/review', {
@@ -5063,7 +5099,7 @@ function onSegCheck(cb) {
 async function batchDeleteSegments() {
   var keys = Object.keys(checkedSegments);
   if (keys.length === 0) return alert('请先勾选要删除的记录！');
-  if (!confirm('确定要删除选中的 ' + keys.length + ' 条记录吗？')) return;
+  if (!(await showConfirm('确定要删除选中的 ' + keys.length + ' 条记录吗？', { danger: true }))) return;
 
   var indices = keys.map(Number).sort(function(a,b){ return a - b; });  // 升序，用于查 segment
   var date = currentLogDate || getFocusDate();
@@ -5269,10 +5305,10 @@ function importLocalStorage(event) {
   var file = event.target.files[0];
   if (!file) return;
   var reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       var dataObj = JSON.parse(e.target.result);
-      if (!confirm('这将覆盖当前浏览器中的所有设置、待办和日程，确定继续？')) {
+      if (!(await showConfirm('这将覆盖当前浏览器中的所有设置、待办和日程，确定继续？', { danger: true }))) {
         event.target.value = '';
         return;
       }
@@ -5525,6 +5561,18 @@ document.addEventListener("visibilitychange", function() {
     <button class="btn btn-sm" onclick="resetCrop()">重置</button>
     <button class="btn btn-sm btn-secondary" onclick="cancelCrop()">取消</button>
     <button class="btn btn-sm btn-accent" onclick="saveCrop()">保存并应用</button>
+  </div>
+</div>
+
+<!-- 通用确认框（替代原生 confirm：全屏模式下原生对话框不会显示）-->
+<div class="modal-mask" id="confirm-modal" style="display:none;z-index:10000" onclick="if(event.target===this)_resolveConfirm(false)">
+  <div class="modal-card" style="width:min(420px,90vw);">
+    <div class="modal-title" id="confirm-title">请确认</div>
+    <div class="modal-sub" id="confirm-msg" style="white-space:pre-wrap;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-secondary" id="confirm-cancel" onclick="_resolveConfirm(false)">取消</button>
+      <button class="btn btn-sm btn-accent" id="confirm-ok" onclick="_resolveConfirm(true)">确定</button>
+    </div>
   </div>
 </div>
 </body>
