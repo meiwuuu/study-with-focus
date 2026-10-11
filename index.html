@@ -3154,36 +3154,40 @@ function calSelect(d){calSelected=d;calRender();}
 // ─── 补救指南：阶段与微型死线库 ───
 const studyPhases = [
   {
-    name: '阶段1 · 数学真题冲刺（10/10-10/31）',
+    name: '追赶期 · 四科并行（10/11-10/31）',
     end: "2026-10-31",
     tasks: [
-      { end: "2026-10-20", subj: "数学·分类卷", desc: "只做高频：极限/导数/积分/多元/级数/特征值/二维随机变量；冷门证明题直接放弃" },
-      { end: "2026-10-31", subj: "数学·真题套卷", desc: "近10年真题，每套限时3小时+次日复盘" }
+      { end: "2026-10-21", subj: "政治·马原", desc: "马原强化课过完（唯一需要理解的科目）+ 1000题对应章节" },
+      { end: "2026-10-25", subj: "408·真题选择", desc: "2009-2025 真题选择题，一天一套（不再二刷王道）" },
+      { end: "2026-10-31", subj: "数学·880+讲义", desc: "880高数核心章节 + 线代/概率讲义快速过" },
+      { end: "2026-10-31", subj: "英语·真题阅读", desc: "黄皮书真题阅读精读20篇 + 每天单词" },
+      { end: "2026-10-31", subj: "政治·1000题", desc: "马原后接毛中特，讲义+1000题推进" }
     ]
   },
   {
-    name: '阶段1b · 408 真题冲刺（10/10-11/10）',
-    end: "2026-11-10",
+    name: '真题冲刺 · 数学转套卷（11/1-11/25）',
+    end: "2026-11-25",
     tasks: [
-      { end: "2026-10-25", subj: "408·真题选择", desc: "2009-2025 约16套，一天一套+订正（不再刷王道书二刷）" },
-      { end: "2026-11-10", subj: "408·真题大题", desc: "代码题写暴力解、计组数据通路、OS的PV/调度、计网拥塞控制/IP" }
+      { end: "2026-11-25", subj: "数学·真题套卷", desc: "近15年真题一刷，严格限时3小时+次日复盘" },
+      { end: "2026-11-25", subj: "408·真题大题", desc: "代码题暴力解、计组数据通路、OS的PV/调度、计网拥塞控制/IP" },
+      { end: "2026-11-25", subj: "政治·1000题二刷", desc: "二刷1000题 + 肖八选择题" },
+      { end: "2026-11-25", subj: "英语·阅读二刷", desc: "真题阅读二刷 + 新题型/翻译" }
     ]
   },
   {
-    name: '阶段2 · 二刷与模拟（11/11-12/10）',
+    name: '模拟与背诵（11/26-12/10）',
     end: "2026-12-10",
     tasks: [
-      { end: "2026-11-25", subj: "真题二刷", desc: "数学/408 真题二刷：重做错题、提升速度" },
-      { end: "2026-12-10", subj: "模拟卷", desc: "数学模拟卷约6套 + 408 模拟套卷" },
-      { end: "2026-12-10", subj: "政治", desc: "腿姐背诵手册 + 二刷1000题 + 肖八选择题" },
+      { end: "2026-12-10", subj: "模拟卷", desc: "数学模拟卷约6套 + 408模拟套卷" },
+      { end: "2026-12-10", subj: "政治", desc: "腿姐背诵手册 + 肖八 + 肖四选择题" },
       { end: "2026-12-10", subj: "英语", desc: "作文模板整理 + 真题套卷模考" }
     ]
   },
   {
-    name: '阶段3 · 考前回归（12/11-12/18）',
+    name: '考前回归（12/11-12/18）',
     end: "2026-12-18",
     tasks: [
-      { end: "2026-12-18", subj: "全科", desc: "停新题：清红标错题 + 政治大题背诵 + 作文模板" },
+      { end: "2026-12-18", subj: "全科", desc: "停新题：清红标错题 + 政治大题背诵（肖四）+ 作文模板" },
       { end: "2026-12-19", subj: "🎯 初试", desc: "12/19-20 正式初试：19日上午政治、下午英语；20日上午数学、下午408" }
     ]
   }
@@ -4130,16 +4134,14 @@ function togglePlanAlarm(date, planId) {
 
 // ─── 今日作息模板（按新作息表预置）───
 var DAILY_TEMPLATE = [
-  {time:'09:00', color:'math', title:'数学 · 真题套卷/分类（4 番茄）', alarm:true},
-  {time:'10:20', color:'math', title:'数学 · 真题继续（4 番茄）', alarm:true},
-  {time:'11:40', color:'pol', title:'政治 · 基础 + 1000 题（2 番茄）', alarm:true},
-  {time:'12:15', color:'default', title:'午饭 + 午休（≤30 分钟）', alarm:false},
-  {time:'14:00', color:'cs', title:'408 · 真题选择题（4 番茄）', alarm:true},
-  {time:'15:20', color:'cs', title:'408 · 真题大题/错题（2 番茄）', alarm:true},
-  {time:'16:10', color:'eng', title:'英语 · 第 1 段（2 番茄）', alarm:true},
-  {time:'16:50', color:'sport', title:'运动（30 分钟）', alarm:false},
-  {time:'19:00', color:'eng', title:'英语 · 第 2 段（2 番茄）', alarm:true},
-  {time:'19:40', color:'default', title:'当日错题复盘（2 番茄）', alarm:true},
+  {time:'09:00', color:'math', title:'数学 · 880核心章节/真题套卷（4 番茄）', alarm:true},
+  {time:'10:05', color:'math', title:'数学 · 继续（4 番茄）', alarm:true},
+  {time:'11:15', color:'pol', title:'政治 · 马原强化课 或 讲义+1000题（2 番茄）', alarm:true},
+  {time:'12:00', color:'default', title:'午饭 + 午休（≤30 分钟）', alarm:false},
+  {time:'14:00', color:'cs', title:'408 · 真题选择题一套（3 番茄）', alarm:true},
+  {time:'16:00', color:'eng', title:'英语 · 真题阅读精读 + 单词（2 番茄）', alarm:true},
+  {time:'16:45', color:'sport', title:'运动（30 分钟）', alarm:false},
+  {time:'19:00', color:'default', title:'红标错题复盘（2 番茄）', alarm:true},
   {time:'21:00', color:'default', title:'收手，不安排新任务', alarm:true},
   {time:'23:45', color:'default', title:'收工提醒，直接睡', alarm:true}
 ];
