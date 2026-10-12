@@ -1235,6 +1235,17 @@ input::placeholder { color: rgba(255,255,255,0.28); }
             </div>
           </div>
           <div class="card" style="margin-top:14px;">
+            <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">暂停理由</div>
+            <div class="todo-show-ctrl">
+              <label class="toggle">
+                <input type="checkbox" id="pause-reason-enabled" checked onchange="savePauseReason(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <span>暂停专注时弹出理由输入框</span>
+            </div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">关闭后暂停直接生效、不再弹窗；开启时也可以留空直接关闭</div>
+          </div>
+          <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">面板不透明度</div>
             <div style="display:flex;gap:10px;align-items:center;">
               <input type="range" id="panel-opacity" min="4" max="100" value="10" oninput="updatePanelOpacity(this.value)" style="flex:1;accent-color:var(--accent);">
@@ -3060,13 +3071,15 @@ async function pomoPause() {
   document.getElementById('pomo-pause').style.display = 'none';
   if (!keepBlockOnBreak) autoDisableBlocking();
   updateStatusBar();
-  // 异步弹理由框：可选补记，不阻塞暂停
-  try {
-    var reason = await askReason('暂停' + phase, '已暂停。为什么要暂停' + phase + '？可留空直接关闭。', {allowEmpty:true});
-    if (reason) {
-      apiCall('/api/stats/pause', {method:'POST',body:JSON.stringify({phase:phase, reason:reason})}).catch(function(){});
-    }
-  } catch(e) {}
+  // 异步弹理由框：可选补记，不阻塞暂停（可在主题页关闭）
+  if (getPauseReasonEnabled()) {
+    try {
+      var reason = await askReason('暂停' + phase, '已暂停。为什么要暂停' + phase + '？可留空直接关闭。', {allowEmpty:true});
+      if (reason) {
+        apiCall('/api/stats/pause', {method:'POST',body:JSON.stringify({phase:phase, reason:reason})}).catch(function(){});
+      }
+    } catch(e) {}
+  }
   return true;
 }
 function pomoEnd() {
@@ -4429,6 +4442,20 @@ async function autoDisableBlocking() {
   await blockRefresh();
 }
 
+// ─── 暂停理由开关（主题页可设置）───
+function getPauseReasonEnabled() {
+  try { if (localStorage.getItem('focus_pause_reason') === '0') return false; } catch(e) {}
+  return true;   // 默认开启
+}
+function savePauseReason(on) {
+  try { localStorage.setItem('focus_pause_reason', on ? '1' : '0'); } catch(e) {}
+  showToast('暂停理由输入框：' + (on ? '已开启' : '已关闭'));
+}
+function loadPauseReasonSetting() {
+  var cb = document.getElementById('pause-reason-enabled');
+  if (cb) cb.checked = getPauseReasonEnabled();
+}
+
 // ─── 理由输入弹窗 ───
 var reasonCallback = null;
 var reasonAllowEmpty = false;
@@ -5597,6 +5624,7 @@ function loadWeightHistory() {
 // ═══════════ INIT ═══════════
 calInit();
 loadPanelOpacity();
+loadPauseReasonSetting();
 applyTodoFontScale(getTodoFontScale());
 initLogDateSelect();
 restorePomoState();
