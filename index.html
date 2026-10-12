@@ -1740,9 +1740,10 @@ function toggleWpStill(kind, checked) {
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
 }
-// ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳 ──
+// ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳（只做一次）──
 var _wpTransitionTarget = null;   // 补播目标时间（null = 不在补播）
 var _wpWasFocusMode = false;      // 上一次是否在专注（用于识别"刚进入专注"）
+var _wpTransitionDone = false;    // 衔接动画只用一次，之后开始专注直接进入区间循环
 function wallpaperTransitionEnabled() {
   try { return localStorage.getItem('focus_wallpaper_transition') !== '0'; } catch(e) { return true; }
 }
@@ -1766,9 +1767,10 @@ function syncWallpaperPlayback() {
     var transCb = document.getElementById('wp-transition-enabled');
     if (transCb) transCb.checked = wallpaperTransitionEnabled();
 
-    // ① 刚进入专注：若当前画面在专注区间起点之前，建立衔接补播（一路播过去）
+    // ① 刚进入专注：只在本次打开页面后的第一次做衔接补播（之后开始专注直接进区间循环）
     var isFocus = (kind === 'focus');
-    if (isFocus && !_wpWasFocusMode && wallpaperTransitionEnabled()) {
+    if (isFocus && !_wpWasFocusMode && wallpaperTransitionEnabled() && !_wpTransitionDone) {
+      _wpTransitionDone = true;   // 衔接动画标记为已用过，第二次专注不再补播
       var target = (loop && isFinite(loop.start) && loop.start > 0.3) ? loop.start : null;
       if (target !== null && videoEl.readyState >= 1 && videoEl.currentTime < target - 0.3) {
         _wpTransitionTarget = target;
