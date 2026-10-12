@@ -1739,7 +1739,21 @@ function syncWallpaperPlayback() {
     setWpRateUI('idle', getWallpaperRate('idle'));
     setWpRateUI('focus', getWallpaperRate('focus'));
     syncWallpaperLoopUI();
-    var rate = getWallpaperRate(wallpaperIsFocusMode() ? 'focus' : 'idle');
+    var kind = wallpaperIsFocusMode() ? 'focus' : 'idle';
+    var rate = getWallpaperRate(kind);
+    var loop = getWallpaperLoop(kind);
+    var stillPoint = wallpaperLoopIsStill(loop);   // 起止相同 = 静止在该时间点
+    // ① 静止点优先：停在该帧（不受播放速度影响）
+    if (stillPoint) {
+      if (!videoEl.paused) videoEl.pause();
+      _wallpaperLoop = null;
+      ensureLoopWatcher();
+      if (videoEl.readyState >= 2 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
+        try { videoEl.currentTime = loop.start; } catch(e) {}
+      }
+      return;
+    }
+    // ② 播放速度选了「静止」：定格第一帧
     if (rate === 'still') {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;   // 静止模式不做片段循环
@@ -1768,10 +1782,14 @@ function getWallpaperLoop(kind) {
     if (!raw) return null;
     var o = JSON.parse(raw);
     var s = parseFloat(o.s), e = parseFloat(o.e);
-    if (!isFinite(s) || !isFinite(e) || e <= s) return null;
+    if (!isFinite(s) || !isFinite(e) || e < s) return null;   // 允许起止相同 = 静止在该时间点
     return { start: Math.max(0, s), end: e };
   } catch(err) {}
   return null;
+}
+// 起止相同（差 < 0.005s）视为「静止点」：停在这一帧不动
+function wallpaperLoopIsStill(loop) {
+  return !!(loop && (loop.end - loop.start) < 0.005);
 }
 function saveWallpaperLoop(kind, quiet) {
   var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
@@ -1783,9 +1801,10 @@ function saveWallpaperLoop(kind, quiet) {
   var e = eRaw !== '' ? parseFloat(eRaw) : NaN;
   var bothFilled = (sRaw !== '' && eRaw !== '');
   var bothEmpty = (sRaw === '' && eRaw === '');
-  var ok = isFinite(s) && isFinite(e) && e > s;
+  var ok = isFinite(s) && isFinite(e) && e >= s;   // 允许相等（= 静止在该时间点）
   var rs = Math.round(Math.max(0, s) * 100) / 100;   // 精确到 0.01 秒
   var re = Math.round(e * 100) / 100;
+  var stillPoint = ok && (re - rs) < 0.005;
   try {
     var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
     if (ok) localStorage.setItem(key, JSON.stringify({ s: rs, e: re }));
@@ -1794,9 +1813,10 @@ function saveWallpaperLoop(kind, quiet) {
   } catch(err) {}
   // 注意：这里不回写输入框。回写会把"另一个还没填完/没失焦的框"清空，导致永远填不完整
   applyWallpaperLoop();
+  syncWallpaperPlayback();   // 让静止点立刻生效
   if (quiet) return;
-  if (ok) showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + rs + 's ~ ' + re + 's');
-  else if (bothFilled) showToast('区间无效：结束秒数要大于开始秒数');
+  if (ok) showToast((kind === 'focus' ? '专注时' : '平时') + (stillPoint ? '静止于 ' + rs + 's' : '循环：' + rs + 's ~ ' + re + 's'));
+  else if (bothFilled) showToast('区间无效：结束秒数不能小于开始秒数（填相同=静止在该点）');
   else showToast((kind === 'focus' ? '专注时' : '平时') + '循环：已关闭');
 }
 // 输入框实时保存（防抖 450ms）——不必失焦，填完就生效
@@ -1840,7 +1860,14 @@ function syncWallpaperLoopUI(force) {
 }
 function applyWallpaperLoop() {
   if (!videoEl) return;
-  _wallpaperLoop = getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+  var loop = getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+  // 静止点（起止相同）由 syncWallpaperPlayback 处理定格，不进入循环看护
+  if (wallpaperLoopIsStill(loop)) {
+    _wallpaperLoop = null;
+    ensureLoopWatcher();
+    return;
+  }
+  _wallpaperLoop = loop;
   if (_wallpaperLoop && videoEl.readyState >= 1) {
     var t = videoEl.currentTime;
     if (t < _wallpaperLoop.start || t >= _wallpaperLoop.end) {
@@ -5851,7 +5878,7 @@ document.addEventListener("visibilitychange", function() {
     </div>
 
     <div class="wp-group">
-      <div class="wp-label">循环区间 <span class="wp-hint">留空 = 播放完整视频 · 精确到 0.01 秒</span></div>
+      <div class="wp-label">循环区间 <span class="wp-hint">留空 = 完整播放 · 起止填相同秒数 = 静止在该帧 · 精确到 0.01 秒</span></div>
       <div class="wp-row">
         <span class="wp-tag">平时</span>
         <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
