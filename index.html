@@ -1797,7 +1797,7 @@ function syncWallpaperPlayback() {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;
       ensureLoopWatcher();
-      if (videoEl.readyState >= 2 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
+      if (videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
         try { videoEl.currentTime = loop.start; } catch(e) {}
       }
       return;
@@ -1808,7 +1808,7 @@ function syncWallpaperPlayback() {
       _wallpaperLoop = null;   // 静止模式不做片段循环
       ensureLoopWatcher();     // 停掉循环看护
       // 停在第一帧
-      if (videoEl.readyState >= 2 && videoEl.currentTime > 0.05) {
+      if (videoEl.readyState >= 1 && videoEl.currentTime > 0.05) {
         try { videoEl.currentTime = 0; } catch(e) {}
       }
       return;
@@ -1985,18 +1985,29 @@ function ensureLoopWatcher() {
     _loopWatcher = null;
   }
 }
-// 兜底：本该在播（不是「静止」设置、页面可见）却停住了 → 自动恢复播放，避免壁纸卡死
+// 兜底：① 静止点位置不对就纠正（刷新后视频数据未就绪时尤其需要）
+//      ② 本该在播却停住了 → 自动恢复播放，避免壁纸卡死
 setInterval(function() {
   try {
     if (!videoEl || document.hidden) return;
     if (videoEl.style.display === 'none') return;
-    if (!videoEl.paused) return;
-    if (videoEl.readyState < 2) return;
     var kind = wallpaperIsFocusMode() ? 'focus' : 'idle';
-    if (getWallpaperRate(kind) === 'still') return;                       // 设置就是静止
-    if (wallpaperLoopIsStill(resolveWallpaperLoop(getWallpaperLoop(kind)))) return;
-    var p = videoEl.play();
-    if (p && p.catch) p.catch(function(){});
+    var loop = resolveWallpaperLoop(getWallpaperLoop(kind));
+    // ① 静止点：停在指定帧
+    if (wallpaperLoopIsStill(loop)) {
+      if (videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - loop.start) > 0.3) {
+        try { videoEl.currentTime = loop.start; } catch(e) {}
+      }
+      if (!videoEl.paused) videoEl.pause();
+      return;
+    }
+    // ② 播放速度设为「静止」= 定格第一帧，不干预
+    if (getWallpaperRate(kind) === 'still') return;
+    // ③ 本该播放却停住 → 恢复播放
+    if (videoEl.paused && videoEl.readyState >= 2) {
+      var p = videoEl.play();
+      if (p && p.catch) p.catch(function(){});
+    }
   } catch(e) {}
 }, 1200);
 // ── 壁纸设置面板 ──
@@ -2062,6 +2073,10 @@ try {
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
   videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
+  // 数据就绪后再应用一次：刷新页面时静止点要等视频真正有数据才能 seek 到位，否则会停在第 1 帧
+  ['loadeddata', 'canplay'].forEach(function(ev) {
+    videoEl.addEventListener(ev, function() { try { syncWallpaperPlayback(); } catch(e) {} });
+  });
   // 播到结尾：回到区间起点（end=null 的"循环到结尾"也走这里）；
   // 没有区间设置就回到 0，等价于整片循环。故意不用原生 loop（它会在同一帧跳回 0、绕过起点）
   videoEl.addEventListener('ended', function() {
