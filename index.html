@@ -826,7 +826,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <body>
 
 <!-- ═══════════ Video background ═══════════ -->
-<video id="bg-video" autoplay muted loop playsinline preload="auto"></video>
+<!-- 不用原生 loop：循环完全由 JS 控制（原生 loop 会在同一帧跳回 0，与区间循环打架） -->
+<video id="bg-video" autoplay muted playsinline preload="auto"></video>
 <canvas class="bg-canvas" id="bg-canvas" style="display:none;"></canvas>
 <div class="bg-overlay"></div>
 
@@ -2032,6 +2033,17 @@ try {
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
   videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
+  // 播到结尾：按当前设置回到区间起点；没有区间设置就回到 0（等价于整片循环）
+  // 故意不用原生 loop —— 原生 loop 在同一帧跳回 0，会绕过区间起点
+  videoEl.addEventListener('ended', function() {
+    var target = (_wallpaperLoop && isFinite(_wallpaperLoop.start)) ? _wallpaperLoop.start : 0;
+    _loopLastT = target;
+    try { videoEl.currentTime = target; } catch(e) {}
+    if (!document.hidden && videoEl.style.display !== 'none') {
+      var pe = videoEl.play();
+      if (pe && pe.catch) pe.catch(function(){});
+    }
+  });
 } catch(e) {}
 
 // ── 取景调整：全屏实时调整（屏幕上看到的就是最终效果）──
