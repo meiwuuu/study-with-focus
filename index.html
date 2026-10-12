@@ -1192,6 +1192,21 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               </select>
               <span style="font-size:.68em;color:rgba(255,255,255,.3);">（开始专注自动切换）</span>
             </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+              <span style="font-size:.72em;color:rgba(255,255,255,.4);">循环区间</span>
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);">平时</span>
+              <input type="number" id="wp-loop-idle-start" min="0" step="0.1" placeholder="起" onchange="saveWallpaperLoop('idle')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);">~</span>
+              <input type="number" id="wp-loop-idle-end" min="0" step="0.1" placeholder="止" onchange="saveWallpaperLoop('idle')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
+              <span style="font-size:.66em;color:rgba(255,255,255,.3);">秒</span>
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);margin-left:4px;">专注时</span>
+              <input type="number" id="wp-loop-focus-start" min="0" step="0.1" placeholder="起" onchange="saveWallpaperLoop('focus')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
+              <span style="font-size:.68em;color:rgba(255,255,255,.35);">~</span>
+              <input type="number" id="wp-loop-focus-end" min="0" step="0.1" placeholder="止" onchange="saveWallpaperLoop('focus')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
+              <span style="font-size:.66em;color:rgba(255,255,255,.3);">秒</span>
+              <button class="btn btn-sm" onclick="clearWallpaperLoop()" title="清空本壁纸的循环区间">清空</button>
+            </div>
+            <div style="font-size:.66em;color:rgba(255,255,255,.3);margin-top:6px;">循环区间留空 = 播放完整视频；填起止秒数（精确到 0.1 秒）就只在这段里循环，每个壁纸、平时/专注各自独立</div>
             <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">画面有黑边时用「铺满」+ 缩放；想精细调整构图点「取景调整」（拖动画面）</div>
           </div>
           <div class="card" style="margin-top:14px;">
@@ -1665,14 +1680,16 @@ function wallpaperIsFocusMode() {
 function syncWallpaperPlayback() {
   if (!videoEl) return;
   try {
-    // 同步下拉框显示
+    // 同步下拉框/输入框显示
     var selIdle = document.getElementById('wp-rate-idle');
     if (selIdle) selIdle.value = String(getWallpaperRate('idle'));
     var selFocus = document.getElementById('wp-rate-focus');
     if (selFocus) selFocus.value = String(getWallpaperRate('focus'));
+    syncWallpaperLoopUI();
     var rate = getWallpaperRate(wallpaperIsFocusMode() ? 'focus' : 'idle');
     if (rate === 'still') {
       if (!videoEl.paused) videoEl.pause();
+      _wallpaperLoop = null;   // 静止模式不做片段循环
       // 停在第一帧
       if (videoEl.readyState >= 2 && videoEl.currentTime > 0.05) {
         try { videoEl.currentTime = 0; } catch(e) {}
@@ -1680,12 +1697,89 @@ function syncWallpaperPlayback() {
       return;
     }
     videoEl.playbackRate = rate;
+    applyWallpaperLoop();
     if (videoEl.paused && !document.hidden && videoEl.style.display !== 'none') {
       var p = videoEl.play();
       if (p && p.catch) p.catch(function(){});
     }
   } catch(e) {}
 }
+
+// ── 壁纸片段循环（第 X 秒 ~ 第 Y 秒循环；平时/专注各一套，每个壁纸独立）──
+var _wallpaperLoop = null;   // 当前生效的区间 {start, end} 或 null
+function getWallpaperLoop(kind) {
+  var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return null;
+    var o = JSON.parse(raw);
+    var s = parseFloat(o.s), e = parseFloat(o.e);
+    if (!isFinite(s) || !isFinite(e) || e <= s) return null;
+    return { start: Math.max(0, s), end: e };
+  } catch(err) {}
+  return null;
+}
+function saveWallpaperLoop(kind) {
+  var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
+  var sEl = document.getElementById(idp + 'start');
+  var eEl = document.getElementById(idp + 'end');
+  var s = (sEl && sEl.value !== '') ? parseFloat(sEl.value) : NaN;
+  var e = (eEl && eEl.value !== '') ? parseFloat(eEl.value) : NaN;
+  var ok = isFinite(s) && isFinite(e) && e > s;
+  try {
+    var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
+    if (ok) {
+      // 精确到 0.1 秒
+      localStorage.setItem(key, JSON.stringify({ s: Math.round(Math.max(0, s) * 10) / 10, e: Math.round(e * 10) / 10 }));
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch(err) {}
+  syncWallpaperLoopUI();
+  applyWallpaperLoop();
+  showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + (ok ? (Math.round(s * 10) / 10) + 's ~ ' + (Math.round(e * 10) / 10) + 's' : '已关闭'));
+}
+function clearWallpaperLoop() {
+  try {
+    localStorage.removeItem(wallpaperStyleKey('loop_idle'));
+    localStorage.removeItem(wallpaperStyleKey('loop_focus'));
+  } catch(err) {}
+  syncWallpaperLoopUI();
+  applyWallpaperLoop();
+  showToast('已清空本壁纸的循环区间');
+}
+function syncWallpaperLoopUI() {
+  ['idle', 'focus'].forEach(function(kind) {
+    var loop = getWallpaperLoop(kind);
+    var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
+    var sEl = document.getElementById(idp + 'start');
+    var eEl = document.getElementById(idp + 'end');
+    if (sEl) sEl.value = loop ? loop.start : '';
+    if (eEl) eEl.value = loop ? loop.end : '';
+  });
+}
+function applyWallpaperLoop() {
+  if (!videoEl) return;
+  _wallpaperLoop = getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+  if (_wallpaperLoop && videoEl.readyState >= 1) {
+    var t = videoEl.currentTime;
+    if (t < _wallpaperLoop.start || t >= _wallpaperLoop.end) {
+      try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+    }
+  }
+}
+// 播放到区间末尾就跳回区段起点（只用一次监听）
+try {
+  videoEl.addEventListener('timeupdate', function() {
+    if (!_wallpaperLoop) return;
+    var t = videoEl.currentTime;
+    if (t >= _wallpaperLoop.end || t < _wallpaperLoop.start - 0.4) {
+      try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+    }
+  });
+  // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
+  videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
+} catch(e) {}
 
 // ── 取景调整：全屏实时调整（屏幕上看到的就是最终效果）──
 var _crop = { dx: 0, dy: 0, z: 1 };
