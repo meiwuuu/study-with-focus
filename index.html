@@ -363,6 +363,54 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 #reason-input::placeholder { color: rgba(255,255,255,0.35); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+/* ═══════════ 壁纸设置面板 ═══════════ */
+.wp-group {
+  margin-bottom: 12px; padding: 13px 15px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 13px;
+}
+.wp-group:last-of-type { margin-bottom: 4px; }
+.wp-label {
+  font-size: .78em; color: rgba(255,255,255,.62); font-weight: 500;
+  margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
+}
+.wp-hint { font-size: .82em; color: rgba(255,255,255,.28); font-weight: 400; }
+.wp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wp-row + .wp-row { margin-top: 9px; }
+.wp-tag { font-size: .7em; color: rgba(255,255,255,.42); min-width: 42px; }
+.wp-tag-wide { min-width: 56px; }
+.wp-sep { font-size: .72em; color: rgba(255,255,255,.3); }
+.wp-unit { font-size: .68em; color: rgba(255,255,255,.3); }
+.wp-input {
+  font-size: .74em; width: 82px; background: rgba(255,255,255,.06); color: #fff;
+  border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 5px 9px;
+  font-family: inherit; transition: border-color .15s, background .15s;
+}
+.wp-input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,.09); }
+.wp-input::placeholder { color: rgba(255,255,255,.25); }
+.wp-select {
+  font-size: .74em; background: rgba(255,255,255,.06); color: #fff;
+  border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 5px 9px;
+  font-family: inherit; cursor: pointer; transition: border-color .15s;
+}
+.wp-select:focus { outline: none; border-color: var(--accent); }
+.wp-select option { background: #23252b; color: #fff; }
+.wp-range { width: 130px; accent-color: var(--accent); }
+.wp-name {
+  font-size: .72em; color: rgba(255,255,255,.45);
+  padding: 2px 8px; background: rgba(255,255,255,.06);
+  border-radius: 6px; max-width: 220px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.wp-preview {
+  position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden;
+  border-radius: 10px; background: #101013; border: 1px solid rgba(255,255,255,.08);
+}
+.wp-preview video, .wp-preview canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+
 /* ═══════════ Pomodoro settings tab ═══════════ */
 .pomo-circle-sm {
   position: relative; width: 140px; height: 140px; margin: 0 auto 16px;
@@ -1149,65 +1197,12 @@ input::placeholder { color: rgba(255,255,255,0.28); }
               <button class="btn btn-sm" onclick="cycleVideo()" id="theme-cycle-btn">切换壁纸</button>
               <span style="font-size:.72em;color:rgba(255,255,255,.35);" id="theme-video-label">壁纸 1/3</span>
               <span style="flex:1"></span>
+              <button class="btn btn-sm" onclick="openWpSettings()" title="播放速度、循环区间、填充与构图">⚙ 壁纸设置</button>
               <button class="btn btn-sm btn-accent" onclick="addWallpaper()" title="选择要加入轮播的视频">+ 增加壁纸</button>
             </div>
             <!-- 壁纸选择网格（缩略图 = 视频第一帧，点击直接切换）-->
             <div id="wallpaper-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:10px;"></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-              <span style="font-size:.72em;color:rgba(255,255,255,.4);">填充</span>
-              <select id="wallpaper-fit" onchange="setWallpaperFit(this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
-                <option value="cover">铺满（裁剪，无黑边）</option>
-                <option value="contain">适应（完整显示，可能留边）</option>
-                <option value="fill">拉伸（填满，可能变形）</option>
-                <option value="none">原始大小</option>
-              </select>
-              <span style="font-size:.72em;color:rgba(255,255,255,.4);">缩放</span>
-              <input type="range" id="wallpaper-zoom" min="100" max="300" step="5" value="100" oninput="setWallpaperZoom(this.value)" style="width:110px;">
-              <span style="font-size:.72em;color:rgba(255,255,255,.5);" id="wallpaper-zoom-val">100%</span>
-              <button class="btn btn-sm btn-accent" onclick="openCropPanel()" title="像设置头像那样拖动画面调整构图">取景调整</button>
-              <button class="btn btn-sm" onclick="resetWallpaperStyle()" title="恢复默认（铺满、居中、100%）">重置</button>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-              <span style="font-size:.72em;color:rgba(255,255,255,.4);">播放速度</span>
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);">平时</span>
-              <select id="wp-rate-idle" onchange="setWallpaperRate('idle', this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
-                <option value="0.25">0.25x</option>
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1">1x（正常）</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);">专注时</span>
-              <select id="wp-rate-focus" onchange="setWallpaperRate('focus', this.value)" style="font-size:.72em;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;cursor:pointer;">
-                <option value="still">静止（第一帧）</option>
-                <option value="0.25">0.25x</option>
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1">1x（正常）</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
-              <span style="font-size:.68em;color:rgba(255,255,255,.3);">（开始专注自动切换）</span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-              <span style="font-size:.72em;color:rgba(255,255,255,.4);">循环区间</span>
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);">平时</span>
-              <input type="number" id="wp-loop-idle-start" min="0" step="0.1" placeholder="起" onchange="saveWallpaperLoop('idle')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);">~</span>
-              <input type="number" id="wp-loop-idle-end" min="0" step="0.1" placeholder="止" onchange="saveWallpaperLoop('idle')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
-              <span style="font-size:.66em;color:rgba(255,255,255,.3);">秒</span>
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);margin-left:4px;">专注时</span>
-              <input type="number" id="wp-loop-focus-start" min="0" step="0.1" placeholder="起" onchange="saveWallpaperLoop('focus')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
-              <span style="font-size:.68em;color:rgba(255,255,255,.35);">~</span>
-              <input type="number" id="wp-loop-focus-end" min="0" step="0.1" placeholder="止" onchange="saveWallpaperLoop('focus')" style="font-size:.72em;width:64px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 6px;font-family:inherit;">
-              <span style="font-size:.66em;color:rgba(255,255,255,.3);">秒</span>
-              <button class="btn btn-sm" onclick="clearWallpaperLoop()" title="清空本壁纸的循环区间">清空</button>
-            </div>
-            <div style="font-size:.66em;color:rgba(255,255,255,.3);margin-top:6px;">循环区间留空 = 播放完整视频；填起止秒数（精确到 0.1 秒）就只在这段里循环，每个壁纸、平时/专注各自独立</div>
-            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">画面有黑边时用「铺满」+ 缩放；想精细调整构图点「取景调整」（拖动画面）</div>
+            <div style="font-size:.68em;color:rgba(255,255,255,.3);margin-top:8px;">点缩略图直接切换；播放速度、循环区间、填充与构图在『壁纸设置』里</div>
           </div>
           <div class="card" style="margin-top:14px;">
             <div style="font-size:.82em;color:rgba(255,255,255,0.5);margin-bottom:10px;">待办列表</div>
@@ -1690,6 +1685,7 @@ function syncWallpaperPlayback() {
     if (rate === 'still') {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;   // 静止模式不做片段循环
+      ensureLoopWatcher();     // 停掉循环看护
       // 停在第一帧
       if (videoEl.readyState >= 2 && videoEl.currentTime > 0.05) {
         try { videoEl.currentTime = 0; } catch(e) {}
@@ -1726,18 +1722,16 @@ function saveWallpaperLoop(kind) {
   var s = (sEl && sEl.value !== '') ? parseFloat(sEl.value) : NaN;
   var e = (eEl && eEl.value !== '') ? parseFloat(eEl.value) : NaN;
   var ok = isFinite(s) && isFinite(e) && e > s;
+  var rs = Math.round(Math.max(0, s) * 100) / 100;   // 精确到 0.01 秒
+  var re = Math.round(e * 100) / 100;
   try {
     var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
-    if (ok) {
-      // 精确到 0.1 秒
-      localStorage.setItem(key, JSON.stringify({ s: Math.round(Math.max(0, s) * 10) / 10, e: Math.round(e * 10) / 10 }));
-    } else {
-      localStorage.removeItem(key);
-    }
+    if (ok) localStorage.setItem(key, JSON.stringify({ s: rs, e: re }));
+    else localStorage.removeItem(key);
   } catch(err) {}
   syncWallpaperLoopUI();
   applyWallpaperLoop();
-  showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + (ok ? (Math.round(s * 10) / 10) + 's ~ ' + (Math.round(e * 10) / 10) + 's' : '已关闭'));
+  showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + (ok ? rs + 's ~ ' + re + 's' : '已关闭'));
 }
 function clearWallpaperLoop() {
   try {
@@ -1767,6 +1761,39 @@ function applyWallpaperLoop() {
       try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
     }
   }
+  ensureLoopWatcher();
+}
+// 高精度循环看护：仅在设置了循环区间时运行（20ms 间隔 ≈ 0.02 秒定位精度）
+var _loopWatcher = null;
+function ensureLoopWatcher() {
+  if (_wallpaperLoop) {
+    if (!_loopWatcher) {
+      _loopWatcher = setInterval(function() {
+        if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
+        var t = videoEl.currentTime;
+        if (t >= _wallpaperLoop.end || t < _wallpaperLoop.start - 0.4) {
+          try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+        }
+      }, 20);
+    }
+  } else if (_loopWatcher) {
+    clearInterval(_loopWatcher);
+    _loopWatcher = null;
+  }
+}
+// ── 壁纸设置面板 ──
+function openWpSettings() {
+  var m = document.getElementById('wp-settings-modal');
+  if (!m) return;
+  var nameEl = document.getElementById('wp-set-name');
+  if (nameEl) nameEl.textContent = (videos && videos[videoIndex]) ? videos[videoIndex] : '—';
+  try { syncWallpaperPlayback(); } catch(e) {}   // 同步速度/循环控件
+  try { applyWallpaperStyle(); } catch(e) {}     // 同步填充/缩放控件
+  m.style.display = 'flex';
+}
+function closeWpSettings() {
+  var m = document.getElementById('wp-settings-modal');
+  if (m) m.style.display = 'none';
 }
 // 播放到区间末尾就跳回区段起点（只用一次监听）
 try {
@@ -1786,6 +1813,7 @@ var _crop = { dx: 0, dy: 0, z: 1 };
 var _cropDrag = null;
 var _cropBackup = null;
 var _cropPanelWasOpen = false;
+var _cropWpSettingsWasOpen = false;
 
 function clampCrop() {
   // 限制平移范围，保证画面始终盖满屏幕（放大后才有平移余量）
@@ -1800,7 +1828,7 @@ function openCropPanel() {
   if (!modal) return;
   _crop = getWallpaperCrop();
   _cropBackup = { dx: _crop.dx, dy: _crop.dy, z: _crop.z };   // 供"取消"回滚
-  // 收起设置面板，避免挡住取景画面；同时释放缩略图内存
+  // 收起设置面板（主题页），避免挡住取景画面；同时释放缩略图内存
   try {
     var ov = document.getElementById('settings-overlay');
     if (ov && ov.classList.contains('open')) {
@@ -1809,6 +1837,12 @@ function openCropPanel() {
       var clock = document.getElementById('pomo-clock');
       if (clock) clock.classList.remove('panel-open');
       if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker();
+    }
+    // 壁纸设置面板也一并收起（取景是全屏的）
+    var wsm = document.getElementById('wp-settings-modal');
+    if (wsm && wsm.style.display !== 'none') {
+      _cropWpSettingsWasOpen = true;
+      wsm.style.display = 'none';
     }
   } catch(e) {}
   bindCropInteractions();
@@ -1833,6 +1867,16 @@ function closeCropPanel() {
       }
     } catch(e) {}
     _cropPanelWasOpen = false;
+  }
+  // 恢复壁纸设置面板
+  if (_cropWpSettingsWasOpen) {
+    try {
+      var wsm = document.getElementById('wp-settings-modal');
+      if (wsm) wsm.style.display = 'flex';
+      if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();
+      if (typeof applyWallpaperStyle === 'function') applyWallpaperStyle();
+    } catch(e) {}
+    _cropWpSettingsWasOpen = false;
   }
 }
 // 直接把构图应用到全屏壁纸 —— 所见即所得，无需第二个视频/canvas 抓帧
@@ -5659,6 +5703,87 @@ document.addEventListener("visibilitychange", function() {
     <button class="btn btn-sm" onclick="resetCrop()">重置</button>
     <button class="btn btn-sm btn-secondary" onclick="cancelCrop()">取消</button>
     <button class="btn btn-sm btn-accent" onclick="saveCrop()">保存并应用</button>
+  </div>
+</div>
+
+<!-- 壁纸设置面板（播放速度 / 循环区间 / 画面）-->
+<div class="modal-mask" id="wp-settings-modal" style="display:none;z-index:9000" onclick="if(event.target===this)closeWpSettings()">
+  <div class="modal-card" style="width:min(560px,94vw);max-height:82vh;overflow-y:auto;">
+    <div class="modal-title">壁纸设置</div>
+    <div class="modal-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      当前壁纸 <span class="wp-name" id="wp-set-name">—</span>
+      <span class="wp-hint">每个壁纸独立保存</span>
+    </div>
+
+    <div class="wp-group">
+      <div class="wp-label">播放速度 <span class="wp-hint">专注时选「静止」会定格在第一帧</span></div>
+      <div class="wp-row">
+        <span class="wp-tag">平时</span>
+        <select class="wp-select" id="wp-rate-idle" onchange="setWallpaperRate('idle', this.value)">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1">1x（正常）</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+        <span class="wp-tag wp-tag-wide">专注时</span>
+        <select class="wp-select" id="wp-rate-focus" onchange="setWallpaperRate('focus', this.value)">
+          <option value="still">静止（第一帧）</option>
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1">1x（正常）</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="wp-group">
+      <div class="wp-label">循环区间 <span class="wp-hint">留空 = 播放完整视频 · 精确到 0.01 秒</span></div>
+      <div class="wp-row">
+        <span class="wp-tag">平时</span>
+        <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" onchange="saveWallpaperLoop('idle')">
+        <span class="wp-sep">~</span>
+        <input class="wp-input" type="number" id="wp-loop-idle-end" min="0" step="0.01" placeholder="止" onchange="saveWallpaperLoop('idle')">
+        <span class="wp-unit">秒</span>
+      </div>
+      <div class="wp-row">
+        <span class="wp-tag">专注时</span>
+        <input class="wp-input" type="number" id="wp-loop-focus-start" min="0" step="0.01" placeholder="起" onchange="saveWallpaperLoop('focus')">
+        <span class="wp-sep">~</span>
+        <input class="wp-input" type="number" id="wp-loop-focus-end" min="0" step="0.01" placeholder="止" onchange="saveWallpaperLoop('focus')">
+        <span class="wp-unit">秒</span>
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="clearWallpaperLoop()">清空区间</button>
+      </div>
+    </div>
+
+    <div class="wp-group">
+      <div class="wp-label">画面 <span class="wp-hint">有黑边时用「铺满」并把缩放调高</span></div>
+      <div class="wp-row">
+        <span class="wp-tag">填充</span>
+        <select class="wp-select" id="wallpaper-fit" onchange="setWallpaperFit(this.value)">
+          <option value="cover">铺满（裁剪，无黑边）</option>
+          <option value="contain">适应（完整显示，可能留边）</option>
+          <option value="fill">拉伸（填满，可能变形）</option>
+          <option value="none">原始大小</option>
+        </select>
+        <span class="wp-tag">缩放</span>
+        <input class="wp-range" type="range" id="wallpaper-zoom" min="100" max="300" step="5" value="100" oninput="setWallpaperZoom(this.value)">
+        <span class="wp-unit" id="wallpaper-zoom-val">100%</span>
+      </div>
+      <div class="wp-row">
+        <button class="btn btn-sm btn-accent" onclick="openCropPanel()">取景调整</button>
+        <button class="btn btn-sm" onclick="resetWallpaperStyle()">恢复默认</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-accent" onclick="closeWpSettings()">完成</button>
+    </div>
   </div>
 </div>
 
