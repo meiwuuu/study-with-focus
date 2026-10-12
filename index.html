@@ -1952,26 +1952,27 @@ function applyWallpaperLoop() {
   }
   ensureLoopWatcher();
 }
-// 是否已到区间终点。
-// 注意：end === null（循环到结尾）时不在这里判断 —— 到结尾统一交给 ended 事件处理，
-// 避免"提前跳"和"ended"两条路径互相干扰（这是之前循环失效的根源）
+// 是否已到区间终点（end=null 时以视频结尾为终点，留 0.15s 余量抢在原生结束前跳）
 function wallpaperLoopEnded(t) {
   if (!_wallpaperLoop) return false;
-  if (_wallpaperLoop.end === null) return false;
+  if (_wallpaperLoop.end === null) {
+    var dur = videoEl && videoEl.duration;
+    return !!(isFinite(dur) && dur > 0 && t >= dur - 0.15);
+  }
   return t >= _wallpaperLoop.end;
 }
-// 高精度循环看护：只在设置了带结束点的区间时运行（20ms ≈ 0.02 秒精度）
+// 高精度循环看护：只要设了区间就一直运行（20ms ≈ 0.02 秒精度）
 var _loopWatcher = null;
-var _loopLastT = 0;   // 上一次观察到的播放位置（用于兜底检测异常回绕）
+var _loopLastT = 0;
 function ensureLoopWatcher() {
-  if (_wallpaperLoop && _wallpaperLoop.end !== null) {
+  if (_wallpaperLoop) {
     if (!_loopWatcher) {
-      _loopLastT = videoEl ? videoEl.currentTime : 0;   // 只在看护启动时取基准，避免被频繁重置
+      _loopLastT = videoEl ? videoEl.currentTime : 0;
       _loopWatcher = setInterval(function() {
         if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
         var t = videoEl.currentTime;
-        // 到了区间终点，或位置异常回到起点之前（含被外部 seek 回 0）
-        if (wallpaperLoopEnded(t) || t < _loopLastT - 1 || t < _wallpaperLoop.start - 0.4) {
+        // 到区间终点/临近结尾，或位置跑到起点之前 → 回到起点（和 ended 事件目标一致，重复触发无害）
+        if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
           _loopLastT = _wallpaperLoop.start;
           try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
           return;
@@ -1984,6 +1985,20 @@ function ensureLoopWatcher() {
     _loopWatcher = null;
   }
 }
+// 兜底：本该在播（不是「静止」设置、页面可见）却停住了 → 自动恢复播放，避免壁纸卡死
+setInterval(function() {
+  try {
+    if (!videoEl || document.hidden) return;
+    if (videoEl.style.display === 'none') return;
+    if (!videoEl.paused) return;
+    if (videoEl.readyState < 2) return;
+    var kind = wallpaperIsFocusMode() ? 'focus' : 'idle';
+    if (getWallpaperRate(kind) === 'still') return;                       // 设置就是静止
+    if (wallpaperLoopIsStill(resolveWallpaperLoop(getWallpaperLoop(kind)))) return;
+    var p = videoEl.play();
+    if (p && p.catch) p.catch(function(){});
+  } catch(e) {}
+}, 1200);
 // ── 壁纸设置面板 ──
 var _wpSettingsParentWasOpen = false;
 function openWpSettings() {
@@ -2037,7 +2052,6 @@ try {
       return;
     }
     if (!_wallpaperLoop) return;
-    if (_wallpaperLoop.end === null) return;   // "循环到结尾"交给 ended 事件，不在这里提前跳
     var t = videoEl.currentTime;
     if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
       _loopLastT = _wallpaperLoop.start;
