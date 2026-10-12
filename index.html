@@ -1740,9 +1740,10 @@ function toggleWpStill(kind, checked) {
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
 }
-// ── 切换衔接动画：每次从通常(平时)切到专注时，都从上个画面连续播到专注区间起点 ──
-var _wpTransitionTarget = null;   // 补播目标时间（null = 不在补播）
-var _wpWasFocusMode = false;      // 上一次是否在专注（用于识别"刚进入专注"）
+// ── 切换衔接动画：每次从平时切到专注，都先补播一段（当前画面 → 专注区间起点）──
+// _wpTransitionArmed：true = 需要衔接（平时 / 暂停 / 结束后重置）；false = 本次专注已经衔接过，不再重复
+var _wpTransitionTarget = null;   // 正在补播到的目标时间（null = 不在补播）
+var _wpTransitionArmed = true;
 function wallpaperTransitionEnabled() {
   try { return localStorage.getItem('focus_wallpaper_transition') !== '0'; } catch(e) { return true; }
 }
@@ -1766,15 +1767,18 @@ function syncWallpaperPlayback() {
     var transCb = document.getElementById('wp-transition-enabled');
     if (transCb) transCb.checked = wallpaperTransitionEnabled();
 
-    // ① 刚进入专注：建立衔接补播（每次从平时切到专注都做一次，暂停后再开始也算）
+    // ① 衔接标记：平时状态标记为「需要衔接」；刚进入专注时若标记为需要就补播，并把标记改成「已衔接」
     var isFocus = (kind === 'focus');
-    if (isFocus && !_wpWasFocusMode && wallpaperTransitionEnabled()) {
+    if (!isFocus) {
+      _wpTransitionArmed = true;   // 平时/暂停/结束后 → 0：下次进专注要衔接
+      _wpTransitionTarget = null;
+    } else if (_wpTransitionArmed && wallpaperTransitionEnabled()) {
+      _wpTransitionArmed = false;  // → 1：本次专注的衔接只安排一次，之后就是普通区间循环
       var target = (loop && isFinite(loop.start) && loop.start > 0.3) ? loop.start : null;
       if (target !== null && videoEl.readyState >= 1 && videoEl.currentTime < target - 0.3) {
         _wpTransitionTarget = target;
       }
     }
-    _wpWasFocusMode = isFocus;
 
     // ② 补播中：正常播放到目标点（期间不循环、不静止）
     if (_wpTransitionTarget !== null) {
@@ -3262,6 +3266,7 @@ function pomoStart() {
 }
 async function pomoPause() {
   var phase = (pomo.status === 'focus') ? '专注' : '休息';
+  _wpTransitionArmed = true;   // 暂停 → 标记为「需要衔接」，下次开始专注要补播衔接动画
   // Timeline: record pause
   if (pomo.running && pomo.status === 'focus') {
     tlEvent('pause', {subject: currentSubject || '', accSeconds: segmentAccSeconds, reason: ''});
@@ -3288,6 +3293,7 @@ async function pomoPause() {
   return true;
 }
 function pomoEnd() {
+  _wpTransitionArmed = true;   // 结束 → 标记为「需要衔接」，下次开始专注要补播衔接动画
   // 专注段手动结束：中断连续性，计数归零
   if (pomo.status === 'focus') pomo.consecutive = 0;
   // 休息阶段提前结束：保留蓝点，回到专注模式
