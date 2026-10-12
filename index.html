@@ -2009,6 +2009,9 @@ function prepIdleVideo() {
   // 已经准备好同一起点就别再动它（避免每 20ms 反复打断）
   if (_idleReadyStart === start && idle.readyState >= 2 && Math.abs((idle.currentTime || 0) - start) <= 0.2) return;
   try { idle.pause(); } catch(e) {}   // 先暂停，让起点那一帧渲染出来
+  // 常驻显示层、用 opacity 控制可见性：切换时不重建渲染层，避免切换瞬间空一下
+  idle.style.display = 'block';
+  idle.style.opacity = '0';
   if (Math.abs((idle.currentTime || 0) - start) > 0.05) {
     try { idle.currentTime = start; } catch(e) {}
   }
@@ -2026,8 +2029,9 @@ function switchToIdleVideo() {
     idle.style.transform = videoEl.style.transform;
     idle.style.transformOrigin = videoEl.style.transformOrigin;
     idle.playbackRate = videoEl.playbackRate || 1;
-    idle.style.display = 'block';    // ① 先显示：画面是备用已渲染好的起点帧，不会黑
-    videoEl.style.display = 'none';  // ② 再隐藏旧的
+    idle.style.display = 'block';    // 常驻显示层
+    idle.style.opacity = '1';        // ① 直接叠上来（同一帧完成，不重建渲染层 → 不黑）
+    videoEl.style.opacity = '0';     // ② 旧的隐去（保留渲染层，下一轮还要用它）
     videoEl.pause();
     var p = idle.play();             // ③ 最后让它跑起来
     if (p && p.catch) p.catch(function(){});
@@ -2467,6 +2471,7 @@ function loadVideo(idx) {
   if (idx < 0 || idx >= videos.length) idx = videoIndex = 0;
   // 恢复视频显示（此前失败可能把它隐藏了）并关掉 canvas 兜底
   videoEl.style.display = '';
+  videoEl.style.opacity = '';
   canvasEl.style.display = 'none';
   if (typeof stopCanvasBG === 'function') stopCanvasBG();
   // 备用视频：有区间设置时同步加载同一个壁纸（隐藏待命），这样到循环点能立刻接管
@@ -2479,9 +2484,12 @@ function loadVideo(idx) {
       other.style.display = 'none';
       if (needIdle) {
         other.setAttribute('src', videos[idx]);
+        other.style.display = 'block';   // 常驻显示层（opacity 0 不可见），切换时不重建层
+        other.style.opacity = '0';
         other.load();
       } else {
         other.removeAttribute('src');
+        other.style.display = 'none';    // 没有区间用不到备用 → 完全卸掉省资源
         other.load();
       }
     }
