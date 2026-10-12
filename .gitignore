@@ -5,3 +5,4 @@ config.json
 evaluate_request.json
 evaluate_*.txt
 .DS_Store
+still_frames/

@@ -1774,15 +1774,47 @@ function applyStillStyle() {
   var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
   el.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
 }
+// 磁盘静止帧地址（后端 still_frames/ 目录）。<img> 跨源加载不受限制，file:// 打开也能用
+function stillDiskUrl(kind) {
+  var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
+  var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name || '').split('/').pop();
+  var safe = String(base).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 60) || 'wallpaper';
+  return API + '/still_frames/' + (kind === 'focus' ? 'focus' : 'idle') + '_' + safe + '.jpg';
+}
+// 把截到的帧传回后端存成文件：下次刷新浏览器能直接加载图片，不用等 JS 和视频
+function uploadStillFrame(kind, dataUrl) {
+  try {
+    var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
+    fetch(API + '/api/wallpaper/still', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: kind, name: name, dataUrl: dataUrl })
+    }).catch(function() {});
+  } catch(e) {}
+}
 function showStillImage(kind, time) {
   var el = getStillEl();
   if (!el) return false;
+  // ① 本地缓存（带时间点校验）优先：同步可用且一定对应当前设置
   var url = getStillFrame(kind, time);
-  if (!url) { el.style.display = 'none'; return false; }
-  if (el.getAttribute('src') !== url) el.setAttribute('src', url);
-  applyStillStyle();
-  el.style.display = 'block';
-  return true;
+  if (url) {
+    el.onerror = null;
+    if (el.getAttribute('src') !== url) el.setAttribute('src', url);
+    applyStillStyle();
+    el.style.display = 'block';
+    return true;
+  }
+  // ② 退回后端存的图片文件（首次设置后就有）；加载不到就隐藏，交给"先藏视频"兜底
+  var disk = stillDiskUrl(kind);
+  if (disk) {
+    el.onerror = function() { el.style.display = 'none'; };
+    if (el.getAttribute('src') !== disk) el.setAttribute('src', disk);
+    applyStillStyle();
+    el.style.display = 'block';
+    return true;
+  }
+  el.style.display = 'none';
+  return false;
 }
 function hideStillImage() {
   var el = getStillEl();
@@ -1791,35 +1823,44 @@ function hideStillImage() {
 // 抽帧并缓存（file:// 下 canvas 会被安全策略污染，此时静默失败，由"先隐藏视频"兜底）
 function captureStillFrame(kind, time) {
   var v = videoEl;
-  if (!v || !isFinite(time) || v.readyState < 2) return;
+  if (!v || !isFinite(time)) return;
   if (getStillFrame(kind, time)) return;   // 已有同时间点的缓存
-  var done = false;
+  var tries = 0, done = false;
   function finish(url) {
     if (done) return;
     done = true;
-    v.removeEventListener('seeked', onSeeked);
-    if (url) {
-      saveStillFrame(kind, time, url);
-      // 只在当前仍处于该静止点时替换显示
-      var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
-      if (wallpaperLoopIsStill(cur) && Math.abs(cur.start - time) < 0.02) {
-        showStillImage(kind, time);
-        v.style.opacity = '';
-      }
+    if (!url) return;
+    saveStillFrame(kind, time, url);
+    uploadStillFrame(kind, url);   // 同步存一份到磁盘（刷新时浏览器可直接加载）
+    // 只在当前仍处于该静止点时替换显示
+    var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
+    if (wallpaperLoopIsStill(cur) && Math.abs(cur.start - time) < 0.02) {
+      showStillImage(kind, time);
+      v.style.opacity = '';
     }
   }
-  function onSeeked() {
+  // 轮询：seek 后 readyState 会短暂掉回 1（重新缓冲），必须等数据回来再取帧
+  function attempt() {
+    if (done) return;
+    tries++;
+    if (v.readyState < 2) {                       // 数据没就绪 → 稍后重试
+      if (tries < 25) setTimeout(attempt, 200); else finish(null);
+      return;
+    }
+    if (Math.abs(v.currentTime - time) > 0.15) {  // 位置没对齐 → 再 seek 一次
+      try { v.pause(); v.currentTime = time; } catch(e) {}
+      if (tries < 25) setTimeout(attempt, 250); else finish(null);
+      return;
+    }
     try {
       var w = 480, h = Math.round(w * (v.videoHeight || 9) / (v.videoWidth || 16)) || 270;
       var c = document.createElement('canvas');
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(v, 0, 0, w, h);
       finish(c.toDataURL('image/jpeg', 0.7));
-    } catch (e) { finish(null); }
+    } catch (e) { finish(null); }   // canvas 被安全策略污染（file:// 打开时）→ 放弃
   }
-  v.addEventListener('seeked', onSeeked);
-  try { v.pause(); v.currentTime = time; } catch(e) { finish(null); return; }
-  setTimeout(function() { finish(null); }, 5000);
+  attempt();
 }
 
 // ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳 ──
