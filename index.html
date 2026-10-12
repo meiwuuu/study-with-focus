@@ -410,6 +410,19 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 .wp-preview video, .wp-preview canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
+.wp-back {
+  width: 27px; height: 27px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; color: rgba(255,255,255,.75); cursor: pointer;
+  font-size: .95em; font-family: inherit; line-height: 1; transition: all .15s; flex: none;
+}
+.wp-back:hover { background: rgba(255,255,255,.13); color: #fff; border-color: rgba(255,255,255,.2); }
+.wp-check {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .72em; color: rgba(255,255,255,.55); cursor: pointer; user-select: none;
+}
+.wp-check input { accent-color: var(--accent); cursor: pointer; }
+.wp-rate-val { font-size: .74em; color: rgba(255,255,255,.8); min-width: 44px; }
 
 /* ═══════════ Pomodoro settings tab ═══════════ */
 .pomo-circle-sm {
@@ -1658,16 +1671,54 @@ function getWallpaperRate(kind) {
     var v = localStorage.getItem(key);
     if (v === 'still') return 'still';
     var n = parseFloat(v);
-    if (n >= 0.25 && n <= 4) return n;
+    if (n >= 0.1 && n <= 3) return Math.round(n * 100) / 100;
   } catch(e) {}
   return 1;
 }
 function setWallpaperRate(kind, v) {
   var key = (kind === 'focus') ? 'focus_wallpaper_rate_focus' : 'focus_wallpaper_rate';
-  try { localStorage.setItem(key, v); } catch(e) {}
+  var label;
+  try {
+    if (v === 'still') { localStorage.setItem(key, 'still'); label = '静止（定格第一帧）'; }
+    else {
+      var n = Math.max(0.1, Math.min(3, parseFloat(v) || 1));
+      n = Math.round(n * 100) / 100;   // 精确到 0.01
+      localStorage.setItem(key, String(n));
+      label = n + 'x';
+    }
+  } catch(e) { label = String(v); }
   syncWallpaperPlayback();
-  var label = (v === 'still') ? '静止（第一帧）' : (parseFloat(v) + 'x');
   showToast((kind === 'focus' ? '专注时' : '平时') + '壁纸：' + label);
+}
+// 播放速度控件的双向同步（滑块 / 数字输入 / 静止开关）
+function setWpRateUI(kind, rate) {
+  var isStill = (rate === 'still');
+  var idp = (kind === 'focus') ? 'wp-rate-focus-' : 'wp-rate-idle-';
+  if (kind === 'focus') {
+    var cb = document.getElementById('wp-rate-focus-still');
+    if (cb) cb.checked = isStill;
+    var row = document.getElementById('wp-rate-focus-row');
+    if (row) row.style.display = isStill ? 'none' : 'flex';
+  }
+  if (!isStill) {
+    var sl = document.getElementById(idp + 'slider');
+    if (sl) sl.value = rate;
+    var nm = document.getElementById(idp + 'num');
+    if (nm) nm.value = rate;
+  }
+}
+function onWpRateSlider(kind, val) {
+  var n = parseFloat(val);
+  if (!isFinite(n)) return;
+  setWallpaperRate(kind, Math.round(n * 100) / 100);
+}
+function onWpRateInput(kind, val) {
+  var n = parseFloat(val);
+  if (!isFinite(n)) { setWpRateUI(kind, getWallpaperRate(kind)); return; }
+  setWallpaperRate(kind, n);
+}
+function toggleWpStill(kind, checked) {
+  setWallpaperRate(kind, checked ? 'still' : 1);
 }
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
@@ -1675,11 +1726,9 @@ function wallpaperIsFocusMode() {
 function syncWallpaperPlayback() {
   if (!videoEl) return;
   try {
-    // 同步下拉框/输入框显示
-    var selIdle = document.getElementById('wp-rate-idle');
-    if (selIdle) selIdle.value = String(getWallpaperRate('idle'));
-    var selFocus = document.getElementById('wp-rate-focus');
-    if (selFocus) selFocus.value = String(getWallpaperRate('focus'));
+    // 同步速度控件显示
+    setWpRateUI('idle', getWallpaperRate('idle'));
+    setWpRateUI('focus', getWallpaperRate('focus'));
     syncWallpaperLoopUI();
     var rate = getWallpaperRate(wallpaperIsFocusMode() ? 'focus' : 'idle');
     if (rate === 'still') {
@@ -5709,36 +5758,32 @@ document.addEventListener("visibilitychange", function() {
 <!-- 壁纸设置面板（播放速度 / 循环区间 / 画面）-->
 <div class="modal-mask" id="wp-settings-modal" style="display:none;z-index:9000" onclick="if(event.target===this)closeWpSettings()">
   <div class="modal-card" style="width:min(560px,94vw);max-height:82vh;overflow-y:auto;">
-    <div class="modal-title">壁纸设置</div>
+    <div class="modal-title" style="display:flex;align-items:center;gap:9px;">
+      <button class="wp-back" onclick="closeWpSettings()" title="返回">&#8592;</button>
+      <span>壁纸设置</span>
+    </div>
     <div class="modal-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       当前壁纸 <span class="wp-name" id="wp-set-name">—</span>
       <span class="wp-hint">每个壁纸独立保存</span>
     </div>
 
     <div class="wp-group">
-      <div class="wp-label">播放速度 <span class="wp-hint">专注时选「静止」会定格在第一帧</span></div>
+      <div class="wp-label">播放速度 <span class="wp-hint">0.1x ~ 3x，步进 0.05</span></div>
       <div class="wp-row">
         <span class="wp-tag">平时</span>
-        <select class="wp-select" id="wp-rate-idle" onchange="setWallpaperRate('idle', this.value)">
-          <option value="0.25">0.25x</option>
-          <option value="0.5">0.5x</option>
-          <option value="0.75">0.75x</option>
-          <option value="1">1x（正常）</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-        </select>
-        <span class="wp-tag wp-tag-wide">专注时</span>
-        <select class="wp-select" id="wp-rate-focus" onchange="setWallpaperRate('focus', this.value)">
-          <option value="still">静止（第一帧）</option>
-          <option value="0.25">0.25x</option>
-          <option value="0.5">0.5x</option>
-          <option value="0.75">0.75x</option>
-          <option value="1">1x（正常）</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-        </select>
+        <input class="wp-range" type="range" id="wp-rate-idle-slider" min="0.1" max="3" step="0.05" value="1" oninput="onWpRateSlider('idle', this.value)">
+        <input class="wp-input" type="number" id="wp-rate-idle-num" min="0.1" max="3" step="0.05" value="1" onchange="onWpRateInput('idle', this.value)">
+        <span class="wp-unit">x</span>
+      </div>
+      <div class="wp-row">
+        <span class="wp-tag">专注时</span>
+        <label class="wp-check"><input type="checkbox" id="wp-rate-focus-still" onchange="toggleWpStill('focus', this.checked)"> 静止（定格第一帧）</label>
+      </div>
+      <div class="wp-row" id="wp-rate-focus-row">
+        <span class="wp-tag"></span>
+        <input class="wp-range" type="range" id="wp-rate-focus-slider" min="0.1" max="3" step="0.05" value="1" oninput="onWpRateSlider('focus', this.value)">
+        <input class="wp-input" type="number" id="wp-rate-focus-num" min="0.1" max="3" step="0.05" value="1" onchange="onWpRateInput('focus', this.value)">
+        <span class="wp-unit">x</span>
       </div>
     </div>
 
