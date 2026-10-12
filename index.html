@@ -341,17 +341,22 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 /* ───── Reason modal ───── */
 .modal-mask {
   position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0,0,0,0.38);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  background: rgba(0,0,0,0.65);   /* 与设置界面一致：只压暗，不模糊 */
   display: flex; align-items: center; justify-content: center;
 }
 .modal-card {
-  width: min(420px, 90vw);
+  width: 92%; max-width: 580px; max-height: 85vh;   /* 与 .settings-panel 同宽同高上限 */
+  overflow-y: auto;
   background: rgba(20,20,20, var(--panel-alpha));   /* 跟随「面板不透明度」 */
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 18px; padding: 22px 24px; box-shadow: var(--shadow);
   color: #fff;
+  animation: cardSlideIn 0.25s ease;   /* 与设置面板同样的上滑入场 */
+}
+@keyframes cardSlideIn {
+  from { transform: translateY(16px); opacity: 0.5; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 .modal-title { font-weight: 600; font-size: 1.05em; margin-bottom: 4px; }
 .modal-sub { font-size: .82em; color: rgba(255,255,255,0.55); margin-bottom: 12px; }
@@ -5830,7 +5835,7 @@ document.addEventListener("visibilitychange", function() {
 
 <!-- 增加壁纸面板 -->
 <div class="modal-mask" id="wallpaper-modal" style="display:none" onclick="if(event.target===this)closeWallpaperModal()">
-  <div class="modal-card" style="width:min(480px,92vw);max-height:72vh;display:flex;flex-direction:column;">
+  <div class="modal-card" style="display:flex;flex-direction:column;">
     <div class="modal-title">增加壁纸</div>
     <div class="modal-sub" id="wallpaper-sub">选择要加入轮播的视频（目录里已有的无需上传）</div>
     <div id="wallpaper-list" style="flex:1;overflow-y:auto;margin-bottom:12px;min-height:80px;"></div>
@@ -5869,7 +5874,7 @@ document.addEventListener("visibilitychange", function() {
 
 <!-- 壁纸设置面板（播放速度 / 循环区间 / 画面）-->
 <div class="modal-mask" id="wp-settings-modal" style="display:none;z-index:9000" onclick="if(event.target===this)closeWpSettings()">
-  <div class="modal-card" style="width:min(560px,94vw);max-height:82vh;overflow-y:auto;">
+  <div class="modal-card">
     <div class="modal-title" style="display:flex;align-items:center;gap:9px;">
       <button class="wp-back" onclick="closeWpSettings()" title="返回">&#8592;</button>
       <span>壁纸设置</span>
@@ -5950,7 +5955,7 @@ document.addEventListener("visibilitychange", function() {
 
 <!-- 通用确认框（替代原生 confirm：全屏模式下原生对话框不会显示）-->
 <div class="modal-mask" id="confirm-modal" style="display:none;z-index:10000" onclick="if(event.target===this)_resolveConfirm(false)">
-  <div class="modal-card" style="width:min(420px,90vw);">
+  <div class="modal-card" style="max-width:420px;">
     <div class="modal-title" id="confirm-title">请确认</div>
     <div class="modal-sub" id="confirm-msg" style="white-space:pre-wrap;"></div>
     <div class="modal-actions">
