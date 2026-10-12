@@ -828,6 +828,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <!-- ═══════════ Video background ═══════════ -->
 <!-- 不用原生 loop：循环完全由 JS 控制（原生 loop 会在同一帧跳回 0，与区间循环打架） -->
 <video id="bg-video" autoplay muted playsinline preload="auto"></video>
+<!-- 静止帧缓存图：静止模式直接显示这一帧，刷新时不用等视频 seek，避免闪现第一帧 -->
+<img id="bg-still" alt="" style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;pointer-events:none;">
 <canvas class="bg-canvas" id="bg-canvas" style="display:none;"></canvas>
 <div class="bg-overlay"></div>
 
@@ -1655,6 +1657,7 @@ function applyWallpaperStyle() {
   videoEl.style.transformOrigin = 'center center';
   var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
   videoEl.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
+  applyStillStyle();   // 静止帧缓存图保持同样的填充/缩放
   var sel = document.getElementById('wallpaper-fit');
   if (sel) sel.value = fit;
   var rng = document.getElementById('wallpaper-zoom');
@@ -1740,6 +1743,85 @@ function toggleWpStill(kind, checked) {
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
 }
+// ── 静止帧缓存：静止模式把该帧截成图片存本地，刷新时直接显示图片，
+//    不用等视频 seek（否则会先闪一下第一帧再跳到设定时间）──
+function getStillEl() { return document.getElementById('bg-still'); }
+function stillFrameKey(kind) {
+  var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
+  var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name).split('/').pop();
+  return 'focus_wallpaper_stillframe_' + (kind === 'focus' ? 'focus' : 'idle') + '_' + base;
+}
+function getStillFrame(kind, time) {
+  try {
+    var raw = localStorage.getItem(stillFrameKey(kind));
+    if (!raw) return null;
+    var o = JSON.parse(raw);
+    if (Math.abs((o.t || 0) - time) > 0.02) return null;   // 设定时间变了 → 旧图失效
+    return o.url || null;
+  } catch(e) { return null; }
+}
+function saveStillFrame(kind, time, url) {
+  try {
+    localStorage.setItem(stillFrameKey(kind), JSON.stringify({ t: Math.round(time * 100) / 100, url: url }));
+  } catch(e) { /* 容量不足就算了，不影响功能 */ }
+}
+function applyStillStyle() {
+  var el = getStillEl();
+  if (!el) return;
+  var fit = getWallpaperFit(), crop = getWallpaperCrop();
+  el.style.objectFit = fit;
+  el.style.transformOrigin = 'center center';
+  var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
+  el.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
+}
+function showStillImage(kind, time) {
+  var el = getStillEl();
+  if (!el) return false;
+  var url = getStillFrame(kind, time);
+  if (!url) { el.style.display = 'none'; return false; }
+  if (el.getAttribute('src') !== url) el.setAttribute('src', url);
+  applyStillStyle();
+  el.style.display = 'block';
+  return true;
+}
+function hideStillImage() {
+  var el = getStillEl();
+  if (el) { el.style.display = 'none'; el.removeAttribute('src'); }
+}
+// 抽帧并缓存（file:// 下 canvas 会被安全策略污染，此时静默失败，由"先隐藏视频"兜底）
+function captureStillFrame(kind, time) {
+  var v = videoEl;
+  if (!v || !isFinite(time) || v.readyState < 2) return;
+  if (getStillFrame(kind, time)) return;   // 已有同时间点的缓存
+  var done = false;
+  function finish(url) {
+    if (done) return;
+    done = true;
+    v.removeEventListener('seeked', onSeeked);
+    if (url) {
+      saveStillFrame(kind, time, url);
+      // 只在当前仍处于该静止点时替换显示
+      var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
+      if (wallpaperLoopIsStill(cur) && Math.abs(cur.start - time) < 0.02) {
+        showStillImage(kind, time);
+        v.style.opacity = '';
+      }
+    }
+  }
+  function onSeeked() {
+    try {
+      var w = 480, h = Math.round(w * (v.videoHeight || 9) / (v.videoWidth || 16)) || 270;
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(v, 0, 0, w, h);
+      finish(c.toDataURL('image/jpeg', 0.7));
+    } catch (e) { finish(null); }
+  }
+  v.addEventListener('seeked', onSeeked);
+  try { v.pause(); v.currentTime = time; } catch(e) { finish(null); return; }
+  setTimeout(function() { finish(null); }, 5000);
+}
+
 // ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳 ──
 var _wpTransitionTarget = null;   // 补播目标时间（null = 不在补播）
 var _wpWasFocusMode = false;      // 上一次是否在专注（用于识别"刚进入专注"）
@@ -1797,11 +1879,29 @@ function syncWallpaperPlayback() {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;
       ensureLoopWatcher();
+      // 有缓存图就直接显示图片：刷新时立刻是正确的画面，不会先闪一下第一帧
+      var stillShown = showStillImage(kind, loop.start);
       if (videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
         try { videoEl.currentTime = loop.start; } catch(e) {}
+        // 没图、且位置还没对齐 → 先把视频藏起来，seek 一到位立刻显示（完全看不到第一帧）
+        if (!stillShown) {
+          videoEl.style.opacity = '0';
+          var revealOnSeek = function() {
+            videoEl.removeEventListener('seeked', revealOnSeek);
+            videoEl.style.opacity = '';
+          };
+          videoEl.addEventListener('seeked', revealOnSeek);
+          setTimeout(function() {
+            videoEl.removeEventListener('seeked', revealOnSeek);
+            videoEl.style.opacity = '';
+          }, 1800);
+        }
       }
+      captureStillFrame(kind, loop.start);   // 抽帧缓存，下次刷新就是瞬时的
       return;
     }
+    hideStillImage();   // 不在静止点：收起缓存图
+    videoEl.style.opacity = '';
     // ② 播放速度选了「静止」：定格第一帧
     if (rate === 'still') {
       if (!videoEl.paused) videoEl.pause();
