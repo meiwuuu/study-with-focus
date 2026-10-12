@@ -12,8 +12,6 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-import mimetypes
-import base64
 from urllib.parse import urlparse, parse_qs, unquote
 
 HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
@@ -69,23 +67,7 @@ PORT = 8765
 
 # --- Wallpapers (动态壁纸：扫描视频文件，无需改代码即可新增) ---
 WALLPAPER_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
-# 允许通过 HTTP 提供的静态资源扩展名（仅项目根目录下的单层文件）
-STATIC_EXTS = WALLPAPER_EXTS | {".mp3", ".wav", ".ogg", ".m4a", ".png", ".jpg", ".jpeg",
-                                ".gif", ".webp", ".ico", ".css", ".js", ".json",
-                                ".woff", ".woff2", ".ttf"}
 WALLPAPER_DIR = DATA_DIR / "wallpapers"
-# 壁纸静止帧截图缓存目录（前端截取指定时间点的画面后传回来存成图片，
-# 刷新页面时直接显示图片，不用等视频 seek，避免先闪一下第一帧）
-STILL_DIR = DATA_DIR / "still_frames"
-STILL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,120}$")
-
-
-def still_file_name(kind, name):
-    """静止帧图片文件名：<idle|focus>_<壁纸名去扩展名>.jpg（非法字符替换为 _）"""
-    k = "focus" if kind == "focus" else "idle"
-    base = Path(str(name or "")).stem
-    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", base)[:60] or "wallpaper"
-    return "%s_%s.jpg" % (k, safe)
 
 def _wallpaper_sort_key(name):
     """排序：数字命名的壁纸（1.mp4/2.mp4）按数字升序排前，其他按名称。
@@ -452,68 +434,6 @@ class FocusHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
-    def _serve_file(self, target, ctype=None):
-        """发送静态文件：支持 Range（视频拖动/定位必需）与 CORS。
-        用途：让 UI 通过 http://127.0.0.1:8765/ 打开，从而允许 canvas 截取视频帧
-        （file:// 下浏览器会因安全策略禁止，导致壁纸静止帧图片存不下来）。"""
-        try:
-            p = Path(target)
-            if not p.is_file():
-                self.send_error(404, "Not Found")
-                return
-            size = p.stat().st_size
-            if not ctype:
-                ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
-            start, end, partial = 0, max(0, size - 1), False
-            rng = self.headers.get("Range")
-            if rng and rng.startswith("bytes=") and size > 0:
-                spec = rng[6:].split(",")[0].strip()
-                a, _, b = spec.partition("-")
-                try:
-                    if a == "" and b:
-                        start = max(0, size - int(b))
-                        end = size - 1
-                    else:
-                        start = int(a)
-                        end = int(b) if b else size - 1
-                    end = min(end, size - 1)
-                    if start > end or start >= size:
-                        self.send_response(416)
-                        self.send_header("Content-Range", "bytes */%d" % size)
-                        self.end_headers()
-                        return
-                    partial = True
-                except ValueError:
-                    start, end, partial = 0, size - 1, False
-            length = end - start + 1 if size > 0 else 0
-            self.send_response(206 if partial else 200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(length))
-            self.send_header("Accept-Ranges", "bytes")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-cache")
-            if partial:
-                self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
-            self.end_headers()
-            if size == 0:
-                return
-            with open(p, "rb") as f:
-                f.seek(start)
-                remaining = length
-                while remaining > 0:
-                    chunk = f.read(min(262144, remaining))
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    remaining -= len(chunk)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-        except Exception as e:
-            try:
-                self.send_error(500, str(e))
-            except Exception:
-                pass
-
     def _read_body(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -533,34 +453,6 @@ class FocusHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
-
-        # ── 静态文件：让 UI 可以用 http://127.0.0.1:8765/ 打开 ──
-        # 走 http 时页面与视频同源，canvas 才能截取视频帧（壁纸静止帧图片缓存依赖它）
-        if path in ("/", "/index.html"):
-            return self._serve_file(DATA_DIR / "index.html", "text/html; charset=utf-8")
-        if path.startswith("/wallpapers/"):
-            rel = unquote(path[len("/wallpapers/"):])
-            if rel and "/" not in rel and ".." not in rel:
-                cand = WALLPAPER_DIR / rel
-                if cand.is_file():
-                    return self._serve_file(cand, None)
-            self.send_error(404, "Not Found")
-            return
-        if path.startswith("/still_frames/"):
-            rel = unquote(path[len("/still_frames/"):])
-            if rel and "/" not in rel and ".." not in rel and STILL_NAME_RE.match(rel):
-                cand = STILL_DIR / rel
-                if cand.is_file():
-                    return self._serve_file(cand, None)
-            self.send_error(404, "Not Found")
-            return
-        if path not in ("/favicon.ico",):
-            # 项目根目录下的其它静态资源（内置壁纸、提示音、图片等）：只允许单层文件名 + 白名单扩展名
-            rel = unquote(path.lstrip("/"))
-            if rel and "/" not in rel and ".." not in rel:
-                cand = DATA_DIR / rel
-                if cand.is_file() and cand.suffix.lower() in STATIC_EXTS:
-                    return self._serve_file(cand, None)
 
         if path == "/api/status":
             with stats_lock:
@@ -828,29 +720,6 @@ class FocusHandler(BaseHTTPRequestHandler):
             self._handle_wallpaper_upload()
             return
         body = self._read_body()
-
-        if path == "/api/wallpaper/still":
-            # 保存壁纸静止帧截图（data URL）→ still_frames/<kind>_<壁纸名>.jpg
-            kind = "focus" if body.get("kind") == "focus" else "idle"
-            data_url = str(body.get("dataUrl") or "")
-            m = re.match(r"^data:image/(jpeg|jpg|png|webp);base64,(.+)$", data_url, re.S)
-            if not m:
-                self._send_json({"ok": False, "error": "invalid dataUrl"}, 400)
-                return
-            try:
-                raw = base64.b64decode(m.group(2), validate=False)
-                if not raw or len(raw) > 4 * 1024 * 1024:
-                    self._send_json({"ok": False, "error": "bad size"}, 400)
-                    return
-                fname = still_file_name(kind, body.get("name"))
-                STILL_DIR.mkdir(parents=True, exist_ok=True)
-                (STILL_DIR / fname).write_bytes(raw)
-                self._send_json({"ok": True, "file": fname,
-                                 "url": "/still_frames/" + fname,
-                                 "bytes": len(raw)})
-            except Exception as e:
-                self._send_json({"ok": False, "error": str(e)}, 500)
-            return
 
         if path == "/api/block/start":
             with hosts_lock, config_lock:

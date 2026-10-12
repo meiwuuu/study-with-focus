@@ -828,8 +828,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <!-- ═══════════ Video background ═══════════ -->
 <!-- 不用原生 loop：循环完全由 JS 控制（原生 loop 会在同一帧跳回 0，与区间循环打架） -->
 <video id="bg-video" autoplay muted playsinline preload="auto"></video>
-<!-- 静止帧缓存图：静止模式直接显示这一帧，刷新时不用等视频 seek，避免闪现第一帧 -->
-<img id="bg-still" alt="" style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;pointer-events:none;">
 <canvas class="bg-canvas" id="bg-canvas" style="display:none;"></canvas>
 <div class="bg-overlay"></div>
 
@@ -1657,7 +1655,6 @@ function applyWallpaperStyle() {
   videoEl.style.transformOrigin = 'center center';
   var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
   videoEl.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
-  applyStillStyle();   // 静止帧缓存图保持同样的填充/缩放
   var sel = document.getElementById('wallpaper-fit');
   if (sel) sel.value = fit;
   var rng = document.getElementById('wallpaper-zoom');
@@ -1743,157 +1740,6 @@ function toggleWpStill(kind, checked) {
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
 }
-// ── 静止帧缓存：静止模式把该帧截成图片存本地，刷新时直接显示图片，
-//    不用等视频 seek（否则会先闪一下第一帧再跳到设定时间）──
-var _stillCaptured = {};   // 本次会话已截过的图，避免重复抽帧
-function stillCaptureKey(kind, time) {
-  return (kind === 'focus' ? 'focus' : 'idle') + '@' + (Math.round(time * 100) / 100);
-}
-function getStillEl() { return document.getElementById('bg-still'); }
-function stillFrameKey(kind) {
-  var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
-  var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name).split('/').pop();
-  return 'focus_wallpaper_stillframe_' + (kind === 'focus' ? 'focus' : 'idle') + '_' + base;
-}
-var STILL_CACHE_VER = 2;   // 画质升级：旧版缓存(480px)自动作废并重截
-function getStillFrame(kind, time) {
-  try {
-    var raw = localStorage.getItem(stillFrameKey(kind));
-    if (!raw) return null;
-    var o = JSON.parse(raw);
-    if (o.v !== STILL_CACHE_VER) return null;   // 旧版本缓存不用，触发重新截图
-    if (Math.abs((o.t || 0) - time) > 0.02) return null;   // 设定时间变了 → 旧图失效
-    return o.url || null;
-  } catch(e) { return null; }
-}
-function saveStillFrame(kind, time, url) {
-  try {
-    localStorage.setItem(stillFrameKey(kind), JSON.stringify({ v: STILL_CACHE_VER, t: Math.round(time * 100) / 100, url: url }));
-  } catch(e) { /* 容量不足就算了，不影响功能 */ }
-}
-function applyStillStyle() {
-  var el = getStillEl();
-  if (!el) return;
-  var fit = getWallpaperFit(), crop = getWallpaperCrop();
-  el.style.objectFit = fit;
-  el.style.transformOrigin = 'center center';
-  var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
-  el.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
-}
-// 磁盘静止帧地址（后端 still_frames/ 目录）。<img> 跨源加载不受限制，file:// 打开也能用
-function stillDiskUrl(kind) {
-  var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
-  var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name || '').split('/').pop();
-  var safe = String(base).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 60) || 'wallpaper';
-  return API + '/still_frames/' + (kind === 'focus' ? 'focus' : 'idle') + '_' + safe + '.jpg?v=' + STILL_CACHE_VER;
-}
-// 把截到的帧传回后端存成文件：下次刷新浏览器能直接加载图片，不用等 JS 和视频
-function uploadStillFrame(kind, dataUrl) {
-  try {
-    var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
-    fetch(API + '/api/wallpaper/still', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: kind, name: name, dataUrl: dataUrl })
-    }).catch(function() {});
-  } catch(e) {}
-}
-function showStillImage(kind, time) {
-  var el = getStillEl();
-  if (!el) return false;
-  var local = getStillFrame(kind, time);   // 本地缓存（小图，时间点精确）
-  var disk = stillDiskUrl(kind);           // 磁盘文件（原始分辨率高清）
-  if (local) {
-    // ① 先用本地小图立即出画面（同步、不会空白）
-    el.onerror = null;
-    if (el.getAttribute('src') !== local) el.setAttribute('src', local);
-    applyStillStyle();
-    el.style.display = 'block';
-    // ② 后台把高清图换上，画质和视频一致
-    if (disk) {
-      var probe = new Image();
-      probe.onload = function() {
-        if (getStillEl() !== el || el.style.display === 'none') return;
-        var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
-        if (!wallpaperLoopIsStill(cur) || Math.abs(cur.start - time) >= 0.02) return;
-        el.setAttribute('src', disk);
-      };
-      probe.src = disk;
-    }
-    return true;
-  }
-  // 没有本地缓存：直接用磁盘高清图；加载不到就隐藏，交给"先藏视频"兜底
-  if (disk) {
-    el.onerror = function() { el.style.display = 'none'; };
-    if (el.getAttribute('src') !== disk) el.setAttribute('src', disk);
-    applyStillStyle();
-    el.style.display = 'block';
-    return true;
-  }
-  el.style.display = 'none';
-  return false;
-}
-function hideStillImage() {
-  var el = getStillEl();
-  if (el) { el.style.display = 'none'; el.removeAttribute('src'); }
-}
-// 抽帧并缓存（file:// 下 canvas 会被安全策略污染，此时静默失败，由"先隐藏视频"兜底）
-function captureStillFrame(kind, time) {
-  var v = videoEl;
-  if (!v || !isFinite(time)) return;
-  var memKey = stillCaptureKey(kind, time);
-  if (getStillFrame(kind, time) || _stillCaptured[memKey]) return;   // 已截过
-  var tries = 0, done = false;
-  function finish(fullUrl, smallUrl) {
-    if (done) return;
-    done = true;
-    if (!fullUrl && !smallUrl) return;
-    _stillCaptured[memKey] = 1;
-    if (smallUrl) saveStillFrame(kind, time, smallUrl);       // 本地小图（配额有限）
-    uploadStillFrame(kind, fullUrl || smallUrl);              // 高清图存磁盘
-    // 只在当前仍处于该静止点时替换显示
-    var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
-    if (wallpaperLoopIsStill(cur) && Math.abs(cur.start - time) < 0.02) {
-      showStillImage(kind, time);
-      v.style.opacity = '';
-    }
-  }
-  // 轮询：seek 后 readyState 会短暂掉回 1（重新缓冲），必须等数据回来再取帧
-  function attempt() {
-    if (done) return;
-    tries++;
-    if (v.readyState < 2) {                       // 数据没就绪 → 稍后重试
-      if (tries < 25) setTimeout(attempt, 200); else finish(null, null);
-      return;
-    }
-    if (Math.abs(v.currentTime - time) > 0.15) {  // 位置没对齐 → 再 seek 一次
-      try { v.pause(); v.currentTime = time; } catch(e) {}
-      if (tries < 25) setTimeout(attempt, 250); else finish(null, null);
-      return;
-    }
-    try {
-      var vw = v.videoWidth || 1280, vh = v.videoHeight || 720;
-      // 高清：按视频原始分辨率截取（上限 2560 宽），保证画质和视频一致
-      var fw = Math.min(vw, 2560);
-      var fh = Math.max(1, Math.round(fw * vh / vw));
-      var c = document.createElement('canvas');
-      c.width = fw; c.height = fh;
-      c.getContext('2d').drawImage(v, 0, 0, fw, fh);
-      var full = c.toDataURL('image/jpeg', 0.92);
-      // 小图：仅作 localStorage 兜底（先秒出画面，再由高清图替换）
-      var sw = Math.min(vw, 640);
-      var sh = Math.max(1, Math.round(sw * vh / vw));
-      var c2 = document.createElement('canvas');
-      c2.width = sw; c2.height = sh;
-      c2.getContext('2d').drawImage(v, 0, 0, sw, sh);
-      var small = null;
-      try { small = c2.toDataURL('image/jpeg', 0.72); } catch(e2) {}
-      finish(full, small);
-    } catch (e) { finish(null, null); }   // canvas 被安全策略污染（file:// 打开时）→ 放弃
-  }
-  attempt();
-}
-
 // ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳 ──
 var _wpTransitionTarget = null;   // 补播目标时间（null = 不在补播）
 var _wpWasFocusMode = false;      // 上一次是否在专注（用于识别"刚进入专注"）
@@ -1951,36 +1797,18 @@ function syncWallpaperPlayback() {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;
       ensureLoopWatcher();
-      // 有缓存图就直接显示图片：刷新时立刻是正确的画面，不会先闪一下第一帧
-      var stillShown = showStillImage(kind, loop.start);
-      if (videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
+      if (videoEl.readyState >= 2 && Math.abs(videoEl.currentTime - loop.start) > 0.05) {
         try { videoEl.currentTime = loop.start; } catch(e) {}
-        // 没图、且位置还没对齐 → 先把视频藏起来，seek 一到位立刻显示（完全看不到第一帧）
-        if (!stillShown) {
-          videoEl.style.opacity = '0';
-          var revealOnSeek = function() {
-            videoEl.removeEventListener('seeked', revealOnSeek);
-            videoEl.style.opacity = '';
-          };
-          videoEl.addEventListener('seeked', revealOnSeek);
-          setTimeout(function() {
-            videoEl.removeEventListener('seeked', revealOnSeek);
-            videoEl.style.opacity = '';
-          }, 1800);
-        }
       }
-      captureStillFrame(kind, loop.start);   // 抽帧缓存，下次刷新就是瞬时的
       return;
     }
-    hideStillImage();   // 不在静止点：收起缓存图
-    videoEl.style.opacity = '';
     // ② 播放速度选了「静止」：定格第一帧
     if (rate === 'still') {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;   // 静止模式不做片段循环
       ensureLoopWatcher();     // 停掉循环看护
       // 停在第一帧
-      if (videoEl.readyState >= 1 && videoEl.currentTime > 0.05) {
+      if (videoEl.readyState >= 2 && videoEl.currentTime > 0.05) {
         try { videoEl.currentTime = 0; } catch(e) {}
       }
       return;
@@ -2157,29 +1985,18 @@ function ensureLoopWatcher() {
     _loopWatcher = null;
   }
 }
-// 兜底：① 静止点位置不对就纠正（刷新后视频数据未就绪时尤其需要）
-//      ② 本该在播却停住了 → 自动恢复播放，避免壁纸卡死
+// 兜底：本该在播（不是「静止」设置、页面可见）却停住了 → 自动恢复播放，避免壁纸卡死
 setInterval(function() {
   try {
     if (!videoEl || document.hidden) return;
     if (videoEl.style.display === 'none') return;
+    if (!videoEl.paused) return;
+    if (videoEl.readyState < 2) return;
     var kind = wallpaperIsFocusMode() ? 'focus' : 'idle';
-    var loop = resolveWallpaperLoop(getWallpaperLoop(kind));
-    // ① 静止点：停在指定帧
-    if (wallpaperLoopIsStill(loop)) {
-      if (videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - loop.start) > 0.3) {
-        try { videoEl.currentTime = loop.start; } catch(e) {}
-      }
-      if (!videoEl.paused) videoEl.pause();
-      return;
-    }
-    // ② 播放速度设为「静止」= 定格第一帧，不干预
-    if (getWallpaperRate(kind) === 'still') return;
-    // ③ 本该播放却停住 → 恢复播放
-    if (videoEl.paused && videoEl.readyState >= 2) {
-      var p = videoEl.play();
-      if (p && p.catch) p.catch(function(){});
-    }
+    if (getWallpaperRate(kind) === 'still') return;                       // 设置就是静止
+    if (wallpaperLoopIsStill(resolveWallpaperLoop(getWallpaperLoop(kind)))) return;
+    var p = videoEl.play();
+    if (p && p.catch) p.catch(function(){});
   } catch(e) {}
 }, 1200);
 // ── 壁纸设置面板 ──
@@ -2245,10 +2062,6 @@ try {
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
   videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
-  // 数据就绪后再应用一次：刷新页面时静止点要等视频真正有数据才能 seek 到位，否则会停在第 1 帧
-  ['loadeddata', 'canplay'].forEach(function(ev) {
-    videoEl.addEventListener(ev, function() { try { syncWallpaperPlayback(); } catch(e) {} });
-  });
   // 播到结尾：回到区间起点（end=null 的"循环到结尾"也走这里）；
   // 没有区间设置就回到 0，等价于整片循环。故意不用原生 loop（它会在同一帧跳回 0、绕过起点）
   videoEl.addEventListener('ended', function() {
@@ -2547,10 +2360,6 @@ async function onWallpaperFiles(input) {
   renderWallpaperPanel();
 }
 
-// 视频一律用本地路径（file:// 打开时就是本地文件，不走任何 HTTP 地址）
-function videoSrcFor(name) {
-  return String(name || '');
-}
 function loadVideo(idx) {
   videoIndex = idx;
   if (!videos || !videos.length) return;
@@ -2559,7 +2368,6 @@ function loadVideo(idx) {
   videoEl.style.display = '';
   canvasEl.style.display = 'none';
   if (typeof stopCanvasBG === 'function') stopCanvasBG();
-  videoEl.removeAttribute('crossorigin');
   videoEl.src = videos[idx];
   videoEl.load();
   var playPromise = videoEl.play();
@@ -2612,32 +2420,14 @@ function renderWallpaperPicker() {
   for (var i = 0; i < videos.length; i++) {
     var active = (i === videoIndex);
     var brd = active ? 'var(--accent, #60a5fa)' : 'rgba(255,255,255,.12)';
-    // 缩略图 <video> 不在这里一次性插入：7 个视频同时初始化解码器+读元数据（有大文件）会明显卡顿
     h += '<div onclick="pickWallpaper(' + i + ')" title="' + escHtml(videos[i]) + '" style="position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;cursor:pointer;border:2px solid ' + brd + ';background:rgba(255,255,255,.05);">';
+    h += '<video src="' + escHtml(videos[i]) + '" muted preload="metadata" playsinline onloadedmetadata="try{this.currentTime=0.1;}catch(e){}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;"></video>';
     h += '<span style="position:absolute;left:4px;top:3px;font-size:.62em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);">' + (i + 1) + '</span>';
     h += '<span class="wp-badge" style="display:' + (active ? 'block' : 'none') + ';position:absolute;right:4px;top:3px;font-size:.58em;color:#fff;background:var(--accent, #60a5fa);border-radius:4px;padding:0 4px;line-height:1.6;">当前</span>';
     h += '<span style="position:absolute;left:0;right:0;bottom:0;font-size:.58em;color:rgba(255,255,255,.9);background:linear-gradient(transparent,rgba(0,0,0,.8));padding:10px 4px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(shortWallpaperName(videos[i])) + '</span>';
     h += '</div>';
   }
   box.innerHTML = h;
-  // 面板先显示出来，缩略图再逐个错开注入（每个 90ms），主线程不会被一次性卡住
-  for (var j = 0; j < videos.length; j++) {
-    (function(idx) {
-      setTimeout(function() {
-        if (!_pickerMounted) return;
-        var cell = box.children[idx];
-        if (!cell || cell.querySelector('video')) return;
-        var vid = document.createElement('video');
-        vid.src = videos[idx];
-        vid.muted = true;
-        vid.preload = 'metadata';
-        vid.playsInline = true;
-        vid.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;');
-        vid.addEventListener('loadedmetadata', function() { try { vid.currentTime = 0.1; } catch(e) {} });
-        cell.insertBefore(vid, cell.firstChild);
-      }, 150 + idx * 90);
-    })(j);
-  }
 }
 // 切换后只更新高亮，不重建 video 元素（避免重复加载元数据）
 function updateWallpaperPickerActive() {
