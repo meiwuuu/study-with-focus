@@ -1739,6 +1739,18 @@ function toggleWpStill(kind, checked) {
 function wallpaperIsFocusMode() {
   try { return !!(pomo && pomo.running && pomo.status === 'focus'); } catch(e) { return false; }
 }
+// ── 切换衔接动画：开始专注时从上个画面连续播到专注区间起点，避免画面突跳 ──
+var _wpTransitionTarget = null;   // 补播目标时间（null = 不在补播）
+var _wpWasFocusMode = false;      // 上一次是否在专注（用于识别"刚进入专注"）
+function wallpaperTransitionEnabled() {
+  try { return localStorage.getItem('focus_wallpaper_transition') !== '0'; } catch(e) { return true; }
+}
+function saveWpTransition(on) {
+  try { localStorage.setItem('focus_wallpaper_transition', on ? '1' : '0'); } catch(e) {}
+  if (!on) { _wpTransitionTarget = null; try { syncWallpaperPlayback(); } catch(e) {} }
+  showToast('衔接动画：' + (on ? '已开启' : '已关闭'));
+}
+
 function syncWallpaperPlayback() {
   if (!videoEl) return;
   try {
@@ -1750,7 +1762,36 @@ function syncWallpaperPlayback() {
     var rate = getWallpaperRate(kind);
     var loop = getWallpaperLoop(kind);
     var stillPoint = wallpaperLoopIsStill(loop);   // 起止相同 = 静止在该时间点
-    // ① 静止点优先：停在该帧（不受播放速度影响）
+    var transCb = document.getElementById('wp-transition-enabled');
+    if (transCb) transCb.checked = wallpaperTransitionEnabled();
+
+    // ① 刚进入专注：若当前画面在专注区间起点之前，建立衔接补播（一路播过去）
+    var isFocus = (kind === 'focus');
+    if (isFocus && !_wpWasFocusMode && wallpaperTransitionEnabled()) {
+      var target = (loop && isFinite(loop.start) && loop.start > 0.3) ? loop.start : null;
+      if (target !== null && videoEl.readyState >= 1 && videoEl.currentTime < target - 0.3) {
+        _wpTransitionTarget = target;
+      }
+    }
+    _wpWasFocusMode = isFocus;
+
+    // ② 补播中：正常播放到目标点（期间不循环、不静止）
+    if (_wpTransitionTarget !== null) {
+      videoEl.playbackRate = (rate === 'still') ? 1 : rate;
+      _wallpaperLoop = null;
+      ensureLoopWatcher();
+      if (videoEl.paused && !document.hidden && videoEl.style.display !== 'none') {
+        var pt = videoEl.play();
+        if (pt && pt.catch) pt.catch(function(){});
+      }
+      if (videoEl.currentTime >= _wpTransitionTarget - 0.05) {
+        _wpTransitionTarget = null;   // 到达目标 → 落回正常逻辑
+      } else {
+        return;
+      }
+    }
+
+    // ③ 静止点优先：停在该帧（不受播放速度影响）
     if (stillPoint) {
       if (!videoEl.paused) videoEl.pause();
       _wallpaperLoop = null;
@@ -1962,6 +2003,14 @@ function closeWpSettings() {
 // 播放到区间末尾就跳回区段起点（只用一次监听）
 try {
   videoEl.addEventListener('timeupdate', function() {
+    // 补播衔接中：播到目标点就结束补播，开始按专注区间循环
+    if (_wpTransitionTarget !== null) {
+      if (videoEl.currentTime >= _wpTransitionTarget - 0.05) {
+        _wpTransitionTarget = null;
+        try { syncWallpaperPlayback(); } catch(e) {}
+      }
+      return;
+    }
     if (!_wallpaperLoop) return;
     var t = videoEl.currentTime;
     if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
@@ -5941,6 +5990,10 @@ document.addEventListener("visibilitychange", function() {
         <input class="wp-input" type="number" id="wp-loop-focus-end" min="0" step="0.01" placeholder="止" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
         <span class="wp-unit">秒</span>
         <button class="btn btn-sm" style="margin-left:auto;" onclick="clearWallpaperLoop()">清空区间</button>
+      </div>
+      <div class="wp-row">
+        <span class="wp-tag">衔接</span>
+        <label class="wp-check"><input type="checkbox" id="wp-transition-enabled" checked onchange="saveWpTransition(this.checked)"> 开始专注时补播衔接动画（从上个画面连续播到专注区间起点，画面不突跳）</label>
       </div>
     </div>
 
