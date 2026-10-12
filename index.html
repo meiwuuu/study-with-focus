@@ -1745,24 +1745,30 @@ function wallpaperIsFocusMode() {
 }
 // ── 静止帧缓存：静止模式把该帧截成图片存本地，刷新时直接显示图片，
 //    不用等视频 seek（否则会先闪一下第一帧再跳到设定时间）──
+var _stillCaptured = {};   // 本次会话已截过的图，避免重复抽帧
+function stillCaptureKey(kind, time) {
+  return (kind === 'focus' ? 'focus' : 'idle') + '@' + (Math.round(time * 100) / 100);
+}
 function getStillEl() { return document.getElementById('bg-still'); }
 function stillFrameKey(kind) {
   var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
   var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name).split('/').pop();
   return 'focus_wallpaper_stillframe_' + (kind === 'focus' ? 'focus' : 'idle') + '_' + base;
 }
+var STILL_CACHE_VER = 2;   // 画质升级：旧版缓存(480px)自动作废并重截
 function getStillFrame(kind, time) {
   try {
     var raw = localStorage.getItem(stillFrameKey(kind));
     if (!raw) return null;
     var o = JSON.parse(raw);
+    if (o.v !== STILL_CACHE_VER) return null;   // 旧版本缓存不用，触发重新截图
     if (Math.abs((o.t || 0) - time) > 0.02) return null;   // 设定时间变了 → 旧图失效
     return o.url || null;
   } catch(e) { return null; }
 }
 function saveStillFrame(kind, time, url) {
   try {
-    localStorage.setItem(stillFrameKey(kind), JSON.stringify({ t: Math.round(time * 100) / 100, url: url }));
+    localStorage.setItem(stillFrameKey(kind), JSON.stringify({ v: STILL_CACHE_VER, t: Math.round(time * 100) / 100, url: url }));
   } catch(e) { /* 容量不足就算了，不影响功能 */ }
 }
 function applyStillStyle() {
@@ -1779,7 +1785,7 @@ function stillDiskUrl(kind) {
   var name = (videos && videos[videoIndex]) ? videos[videoIndex] : '';
   var base = (typeof wallpaperBase === 'function') ? wallpaperBase(name) : String(name || '').split('/').pop();
   var safe = String(base).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 60) || 'wallpaper';
-  return API + '/still_frames/' + (kind === 'focus' ? 'focus' : 'idle') + '_' + safe + '.jpg';
+  return API + '/still_frames/' + (kind === 'focus' ? 'focus' : 'idle') + '_' + safe + '.jpg?v=' + STILL_CACHE_VER;
 }
 // 把截到的帧传回后端存成文件：下次刷新浏览器能直接加载图片，不用等 JS 和视频
 function uploadStillFrame(kind, dataUrl) {
@@ -1795,17 +1801,28 @@ function uploadStillFrame(kind, dataUrl) {
 function showStillImage(kind, time) {
   var el = getStillEl();
   if (!el) return false;
-  // ① 本地缓存（带时间点校验）优先：同步可用且一定对应当前设置
-  var url = getStillFrame(kind, time);
-  if (url) {
+  var local = getStillFrame(kind, time);   // 本地缓存（小图，时间点精确）
+  var disk = stillDiskUrl(kind);           // 磁盘文件（原始分辨率高清）
+  if (local) {
+    // ① 先用本地小图立即出画面（同步、不会空白）
     el.onerror = null;
-    if (el.getAttribute('src') !== url) el.setAttribute('src', url);
+    if (el.getAttribute('src') !== local) el.setAttribute('src', local);
     applyStillStyle();
     el.style.display = 'block';
+    // ② 后台把高清图换上，画质和视频一致
+    if (disk) {
+      var probe = new Image();
+      probe.onload = function() {
+        if (getStillEl() !== el || el.style.display === 'none') return;
+        var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
+        if (!wallpaperLoopIsStill(cur) || Math.abs(cur.start - time) >= 0.02) return;
+        el.setAttribute('src', disk);
+      };
+      probe.src = disk;
+    }
     return true;
   }
-  // ② 退回后端存的图片文件（首次设置后就有）；加载不到就隐藏，交给"先藏视频"兜底
-  var disk = stillDiskUrl(kind);
+  // 没有本地缓存：直接用磁盘高清图；加载不到就隐藏，交给"先藏视频"兜底
   if (disk) {
     el.onerror = function() { el.style.display = 'none'; };
     if (el.getAttribute('src') !== disk) el.setAttribute('src', disk);
@@ -1824,14 +1841,16 @@ function hideStillImage() {
 function captureStillFrame(kind, time) {
   var v = videoEl;
   if (!v || !isFinite(time)) return;
-  if (getStillFrame(kind, time)) return;   // 已有同时间点的缓存
+  var memKey = stillCaptureKey(kind, time);
+  if (getStillFrame(kind, time) || _stillCaptured[memKey]) return;   // 已截过
   var tries = 0, done = false;
-  function finish(url) {
+  function finish(fullUrl, smallUrl) {
     if (done) return;
     done = true;
-    if (!url) return;
-    saveStillFrame(kind, time, url);
-    uploadStillFrame(kind, url);   // 同步存一份到磁盘（刷新时浏览器可直接加载）
+    if (!fullUrl && !smallUrl) return;
+    _stillCaptured[memKey] = 1;
+    if (smallUrl) saveStillFrame(kind, time, smallUrl);       // 本地小图（配额有限）
+    uploadStillFrame(kind, fullUrl || smallUrl);              // 高清图存磁盘
     // 只在当前仍处于该静止点时替换显示
     var cur = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
     if (wallpaperLoopIsStill(cur) && Math.abs(cur.start - time) < 0.02) {
@@ -1844,21 +1863,33 @@ function captureStillFrame(kind, time) {
     if (done) return;
     tries++;
     if (v.readyState < 2) {                       // 数据没就绪 → 稍后重试
-      if (tries < 25) setTimeout(attempt, 200); else finish(null);
+      if (tries < 25) setTimeout(attempt, 200); else finish(null, null);
       return;
     }
     if (Math.abs(v.currentTime - time) > 0.15) {  // 位置没对齐 → 再 seek 一次
       try { v.pause(); v.currentTime = time; } catch(e) {}
-      if (tries < 25) setTimeout(attempt, 250); else finish(null);
+      if (tries < 25) setTimeout(attempt, 250); else finish(null, null);
       return;
     }
     try {
-      var w = 480, h = Math.round(w * (v.videoHeight || 9) / (v.videoWidth || 16)) || 270;
+      var vw = v.videoWidth || 1280, vh = v.videoHeight || 720;
+      // 高清：按视频原始分辨率截取（上限 2560 宽），保证画质和视频一致
+      var fw = Math.min(vw, 2560);
+      var fh = Math.max(1, Math.round(fw * vh / vw));
       var c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(v, 0, 0, w, h);
-      finish(c.toDataURL('image/jpeg', 0.7));
-    } catch (e) { finish(null); }   // canvas 被安全策略污染（file:// 打开时）→ 放弃
+      c.width = fw; c.height = fh;
+      c.getContext('2d').drawImage(v, 0, 0, fw, fh);
+      var full = c.toDataURL('image/jpeg', 0.92);
+      // 小图：仅作 localStorage 兜底（先秒出画面，再由高清图替换）
+      var sw = Math.min(vw, 640);
+      var sh = Math.max(1, Math.round(sw * vh / vw));
+      var c2 = document.createElement('canvas');
+      c2.width = sw; c2.height = sh;
+      c2.getContext('2d').drawImage(v, 0, 0, sw, sh);
+      var small = null;
+      try { small = c2.toDataURL('image/jpeg', 0.72); } catch(e2) {}
+      finish(full, small);
+    } catch (e) { finish(null, null); }   // canvas 被安全策略污染（file:// 打开时）→ 放弃
   }
   attempt();
 }
