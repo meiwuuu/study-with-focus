@@ -1286,7 +1286,7 @@ def main():
             with config_lock:
                 config = load_json(CONFIG_FILE, {})
             browser_name = config.get("browser", "system")
-            html_url = "http://127.0.0.1:%d/" % PORT
+            html_url = "file:///" + (DATA_DIR / "index.html").as_posix()
 
             if browser_name != "system":
                 exe = find_browser(browser_name)
