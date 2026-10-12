@@ -1988,8 +1988,10 @@ function wallpaperLoopEnded(t) {
   }
   return t >= _wallpaperLoop.end;
 }
-// ── 双视频交替：区间循环时提前把备用视频定位到起点，到点直接换显示，避免 seek 造成的黑帧 ──
-var _idleVideo = null;   // 当前不可见的备用视频
+// ── 双视频交替：快到区间终点时，让备用视频先定位到起点并【暂停】（画面已渲染好），
+//    到点直接显示+播放，避免 seek 造成的黑帧 ──
+var _idleVideo = null;            // 当前不可见的备用视频
+var _idleReadyStart = null;       // 备用已就绪的起点（null = 未就绪）
 function prepIdleVideo() {
   if (!_wallpaperLoop || !videoEl || !videoEl2) return;
   if (!_idleVideo) _idleVideo = (videoEl === videoEl2) ? videoEl : videoEl2;
@@ -2000,37 +2002,40 @@ function prepIdleVideo() {
   if (wantSrc && idle.getAttribute('src') !== wantSrc) {
     idle.setAttribute('src', wantSrc);
     idle.load();
+    _idleReadyStart = null;   // 换了片源 → 之前就绪状态作废
   }
   idle.muted = true;
   idle.playbackRate = videoEl.playbackRate || 1;
-  if (Math.abs((idle.currentTime || 0) - start) > 0.15) {
+  // 已经准备好同一起点就别再动它（避免每 20ms 反复打断）
+  if (_idleReadyStart === start && idle.readyState >= 2 && Math.abs((idle.currentTime || 0) - start) <= 0.2) return;
+  try { idle.pause(); } catch(e) {}   // 先暂停，让起点那一帧渲染出来
+  if (Math.abs((idle.currentTime || 0) - start) > 0.05) {
     try { idle.currentTime = start; } catch(e) {}
   }
-  if (idle.paused) {
-    var p = idle.play();
-    if (p && p.catch) p.catch(function(){});
-  }
+  if (idle.readyState >= 2) _idleReadyStart = start;
 }
 // 到区间终点时切到备用视频；备用没就绪就返回 false，由调用方退回 seek 方式
 function switchToIdleVideo() {
   var idle = _idleVideo;
   if (!idle || idle === videoEl || !_wallpaperLoop) return false;
   if (idle.readyState < 2) return false;
-  if (Math.abs((idle.currentTime || 0) - _wallpaperLoop.start) > 0.6) return false;
+  // 备用是暂停在起点上的，允许一点误差
+  if (Math.abs((idle.currentTime || 0) - _wallpaperLoop.start) > 0.35) return false;
   try {
     idle.style.objectFit = videoEl.style.objectFit;
     idle.style.transform = videoEl.style.transform;
     idle.style.transformOrigin = videoEl.style.transformOrigin;
     idle.playbackRate = videoEl.playbackRate || 1;
-    idle.style.display = 'block';
-    var p = idle.play();
-    if (p && p.catch) p.catch(function(){});
-    videoEl.style.display = 'none';
+    idle.style.display = 'block';    // ① 先显示：画面是备用已渲染好的起点帧，不会黑
+    videoEl.style.display = 'none';  // ② 再隐藏旧的
     videoEl.pause();
+    var p = idle.play();             // ③ 最后让它跑起来
+    if (p && p.catch) p.catch(function(){});
   } catch(e) { return false; }
   var old = videoEl;
   videoEl = idle;        // 活跃指针换成刚接管的那一个，后续逻辑自动作用在它身上
   _idleVideo = old;
+  _idleReadyStart = null;
   return true;
 }
 // 高精度循环看护：只要设了区间就一直运行（20ms ≈ 0.02 秒精度）
@@ -2047,8 +2052,8 @@ function ensureLoopWatcher() {
         var end = _wallpaperLoop.end;
         var dur = videoEl.duration;
         var nearEnd = (end !== null)
-          ? (t >= end - 1.2)
-          : (isFinite(dur) && dur > 0 && t >= dur - 1.2);
+          ? (t >= end - 3)
+          : (isFinite(dur) && dur > 0 && t >= dur - 3);
         if (nearEnd) prepIdleVideo();
         if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
           _loopLastT = _wallpaperLoop.start;
@@ -2464,16 +2469,24 @@ function loadVideo(idx) {
   videoEl.style.display = '';
   canvasEl.style.display = 'none';
   if (typeof stopCanvasBG === 'function') stopCanvasBG();
-  // 备用视频复位：换壁纸时把它藏起来并丢掉旧内容，避免残留上一个壁纸
+  // 备用视频：有区间设置时同步加载同一个壁纸（隐藏待命），这样到循环点能立刻接管
   try {
     var other = (videoEl === videoEl2) ? document.getElementById('bg-video') : videoEl2;
+    var needIdle = !!resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
     if (other) {
       other.pause();
+      other.muted = true;
       other.style.display = 'none';
-      other.removeAttribute('src');
-      other.load();
+      if (needIdle) {
+        other.setAttribute('src', videos[idx]);
+        other.load();
+      } else {
+        other.removeAttribute('src');
+        other.load();
+      }
     }
     _idleVideo = other;
+    _idleReadyStart = null;
   } catch(e) {}
   videoEl.src = videos[idx];
   videoEl.load();
