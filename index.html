@@ -9,6 +9,7 @@
 <style>
 /* ═══════════ Design tokens ═══════════ */
 :root {
+  --panel-alpha: 0.10;   /* 面板/弹窗不透明度，由「面板不透明度」滑块统一控制（CSS 变量，不受 DOM 解析顺序影响） */
   --accent: #60a5fa;
   --accent-bg: rgba(96,165,250,0.15);
   --accent-glow: rgba(96,165,250,0.35);
@@ -216,7 +217,7 @@ body {
 .settings-overlay.open { opacity: 1; pointer-events: auto; }
 
 .settings-panel {
-  background: rgba(20,20,20,0.88);
+  background: rgba(20,20,20, var(--panel-alpha));   /* 跟随「面板不透明度」 */
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 18px;
@@ -340,12 +341,13 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 /* ───── Reason modal ───── */
 .modal-mask {
   position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0,0,0,0.38);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   display: flex; align-items: center; justify-content: center;
 }
 .modal-card {
   width: min(420px, 90vw);
-  background: rgba(20,20,20,0.88);   /* 与 .settings-panel 一致的深色玻璃 */
+  background: rgba(20,20,20, var(--panel-alpha));   /* 跟随「面板不透明度」 */
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 18px; padding: 22px 24px; box-shadow: var(--shadow);
@@ -2293,14 +2295,9 @@ function pickWallpaper(i) {
 // ─── 面板透明度 ───
 function updatePanelOpacity(val) {
   var alpha = val / 100;
-  // 深色玻璃基底（原来用 rgba(255,255,255,α) 会把面板调成一片白）
-  document.querySelectorAll('.settings-panel').forEach(function(el) {
-    el.style.background = 'rgba(20,20,20,' + alpha + ')';
-  });
-  document.querySelectorAll('.modal-card').forEach(function(el) {
-    el.style.background = 'rgba(20,20,20,' + alpha + ')';
-  });
-  // 面板内部的浅色行保持相对高亮，跟随同一透明度
+  // 用 CSS 变量统一控制所有面板/弹窗：即使某些弹窗的 HTML 在 <script> 之后才解析也能生效
+  try { document.documentElement.style.setProperty('--panel-alpha', String(alpha)); } catch(e) {}
+  // 面板内部的浅色行跟随同一透明度
   document.querySelectorAll('.subject-row').forEach(function(el) {
     el.style.background = 'rgba(255,255,255,' + (alpha * 0.10) + ')';
   });
