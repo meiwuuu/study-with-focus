@@ -1781,6 +1781,7 @@ function syncWallpaperPlayback() {
 }
 
 // ── 壁纸片段循环（第 X 秒 ~ 第 Y 秒循环；平时/专注各一套，每个壁纸独立）──
+// end = null 表示「一直循环到视频结尾再跳回 start」
 var _wallpaperLoop = null;   // 当前生效的区间 {start, end} 或 null
 function getWallpaperLoop(kind) {
   var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
@@ -1788,15 +1789,17 @@ function getWallpaperLoop(kind) {
     var raw = localStorage.getItem(key);
     if (!raw) return null;
     var o = JSON.parse(raw);
-    var s = parseFloat(o.s), e = parseFloat(o.e);
-    if (!isFinite(s) || !isFinite(e) || e < s) return null;   // 允许起止相同 = 静止在该时间点
+    var s = parseFloat(o.s);
+    if (!isFinite(s)) return null;
+    var e = (o.e === null || o.e === undefined || o.e === '') ? null : parseFloat(o.e);
+    if (e !== null && (!isFinite(e) || e < s)) return null;
     return { start: Math.max(0, s), end: e };
   } catch(err) {}
   return null;
 }
-// 起止相同（差 < 0.005s）视为「静止点」：停在这一帧不动
+// 起止相同（差 < 0.005s）视为「静止点」：停在这一帧不动（end=null 表示到结尾，不算静止点）
 function wallpaperLoopIsStill(loop) {
-  return !!(loop && (loop.end - loop.start) < 0.005);
+  return !!(loop && loop.end !== null && loop.end !== undefined && (loop.end - loop.start) < 0.005);
 }
 function saveWallpaperLoop(kind, quiet) {
   var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
@@ -1804,27 +1807,31 @@ function saveWallpaperLoop(kind, quiet) {
   var eEl = document.getElementById(idp + 'end');
   var sRaw = (sEl && sEl.value !== '') ? sEl.value : '';
   var eRaw = (eEl && eEl.value !== '') ? eEl.value : '';
-  var s = sRaw !== '' ? parseFloat(sRaw) : NaN;
-  var e = eRaw !== '' ? parseFloat(eRaw) : NaN;
-  var bothFilled = (sRaw !== '' && eRaw !== '');
-  var bothEmpty = (sRaw === '' && eRaw === '');
-  var ok = isFinite(s) && isFinite(e) && e >= s;   // 允许相等（= 静止在该时间点）
+  var sFilled = (sRaw !== '');
+  var eFilled = (eRaw !== '');
+  var bothEmpty = (!sFilled && !eFilled);
+  // 只填一端时补默认：没填开始 = 从头开始；没填结束 = 一直循环到视频结尾再跳回开始
+  var s = sFilled ? parseFloat(sRaw) : 0;
+  var e = eFilled ? parseFloat(eRaw) : null;
+  var ok = isFinite(s) && (e === null || (isFinite(e) && e >= s));
   var rs = Math.round(Math.max(0, s) * 100) / 100;   // 精确到 0.01 秒
-  var re = Math.round(e * 100) / 100;
-  var stillPoint = ok && (re - rs) < 0.005;
+  var re = (e === null) ? null : Math.round(e * 100) / 100;
+  var stillPoint = ok && re !== null && (re - rs) < 0.005;
   try {
     var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
-    if (ok) localStorage.setItem(key, JSON.stringify({ s: rs, e: re }));
-    else if (bothFilled || bothEmpty) localStorage.removeItem(key);
-    // 只填了一个框：保留原设置，等用户填完（避免打字中途把已设区间清掉）
+    if (bothEmpty) localStorage.removeItem(key);   // 两框都空 = 关闭循环（优先于补默认值）
+    else if (ok) localStorage.setItem(key, JSON.stringify({ s: rs, e: re }));
+    // 值非法（如结束 < 开始）：保留原设置，等用户改对
   } catch(err) {}
   // 注意：这里不回写输入框。回写会把"另一个还没填完/没失焦的框"清空，导致永远填不完整
   applyWallpaperLoop();
-  syncWallpaperPlayback();   // 让静止点立刻生效
+  syncWallpaperPlayback();   // 让静止点/区间立刻生效
   if (quiet) return;
-  if (ok) showToast((kind === 'focus' ? '专注时' : '平时') + (stillPoint ? '静止于 ' + rs + 's' : '循环：' + rs + 's ~ ' + re + 's'));
-  else if (bothFilled) showToast('区间无效：结束秒数不能小于开始秒数（填相同=静止在该点）');
-  else showToast((kind === 'focus' ? '专注时' : '平时') + '循环：已关闭');
+  if (!ok) { showToast('区间无效：结束秒数不能小于开始秒数（填相同=静止在该点）'); return; }
+  var tag = (kind === 'focus' ? '专注时' : '平时');
+  if (stillPoint) showToast(tag + '静止于 ' + rs + 's');
+  else if (re === null) showToast(tag + '循环：' + rs + 's ~ 结尾');
+  else showToast(tag + '循环：' + rs + 's ~ ' + re + 's');
 }
 // 输入框实时保存（防抖 450ms）——不必失焦，填完就生效
 var _wpLoopTimer = null;
@@ -1877,11 +1884,21 @@ function applyWallpaperLoop() {
   _wallpaperLoop = loop;
   if (_wallpaperLoop && videoEl.readyState >= 1) {
     var t = videoEl.currentTime;
-    if (t < _wallpaperLoop.start || t >= _wallpaperLoop.end) {
+    if (t < _wallpaperLoop.start || wallpaperLoopEnded(t)) {
       try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
     }
   }
   ensureLoopWatcher();
+}
+// 是否已到当前区间终点（end=null 时以视频结尾为终点）
+function wallpaperLoopEnded(t) {
+  if (!_wallpaperLoop) return false;
+  if (_wallpaperLoop.end === null) {
+    var dur = videoEl && videoEl.duration;
+    // 抢在视频自身 loop 回 0 之前跳回 start
+    return !!(isFinite(dur) && dur > 0 && t >= dur - 0.08);
+  }
+  return t >= _wallpaperLoop.end;
 }
 // 高精度循环看护：仅在设置了循环区间时运行（20ms 间隔 ≈ 0.02 秒定位精度）
 var _loopWatcher = null;
@@ -1891,7 +1908,7 @@ function ensureLoopWatcher() {
       _loopWatcher = setInterval(function() {
         if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
         var t = videoEl.currentTime;
-        if (t >= _wallpaperLoop.end || t < _wallpaperLoop.start - 0.4) {
+        if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
           try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
         }
       }, 20);
@@ -1947,7 +1964,7 @@ try {
   videoEl.addEventListener('timeupdate', function() {
     if (!_wallpaperLoop) return;
     var t = videoEl.currentTime;
-    if (t >= _wallpaperLoop.end || t < _wallpaperLoop.start - 0.4) {
+    if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
       try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
     }
   });
@@ -5909,7 +5926,7 @@ document.addEventListener("visibilitychange", function() {
     </div>
 
     <div class="wp-group">
-      <div class="wp-label">循环区间 <span class="wp-hint">留空 = 完整播放 · 起止填相同秒数 = 静止在该帧 · 精确到 0.01 秒</span></div>
+      <div class="wp-label">循环区间 <span class="wp-hint">留空=完整播放 · 只填结束=从头到该点 · 只填开始=从该点循环到结尾 · 起止相同=静止在该帧</span></div>
       <div class="wp-row">
         <span class="wp-tag">平时</span>
         <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
