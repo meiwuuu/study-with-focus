@@ -1761,7 +1761,7 @@ function syncWallpaperPlayback() {
     syncWallpaperLoopUI();
     var kind = wallpaperIsFocusMode() ? 'focus' : 'idle';
     var rate = getWallpaperRate(kind);
-    var loop = getWallpaperLoop(kind);
+    var loop = resolveWallpaperLoop(getWallpaperLoop(kind));   // 负的结束时间 → 距结尾倒数
     var stillPoint = wallpaperLoopIsStill(loop);   // 起止相同 = 静止在该时间点
     var transCb = document.getElementById('wp-transition-enabled');
     if (transCb) transCb.checked = wallpaperTransitionEnabled();
@@ -1824,7 +1824,8 @@ function syncWallpaperPlayback() {
 
 // ── 壁纸片段循环（第 X 秒 ~ 第 Y 秒循环；平时/专注各一套，每个壁纸独立）──
 // end = null 表示「一直循环到视频结尾再跳回 start」
-var _wallpaperLoop = null;   // 当前生效的区间 {start, end} 或 null
+// end 为负数表示「从结尾倒数」：如 -5 = 距结尾 5 秒处
+var _wallpaperLoop = null;   // 当前生效的区间 {start, end}（绝对秒数）或 null
 function getWallpaperLoop(kind) {
   var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
   try {
@@ -1834,10 +1835,25 @@ function getWallpaperLoop(kind) {
     var s = parseFloat(o.s);
     if (!isFinite(s)) return null;
     var e = (o.e === null || o.e === undefined || o.e === '') ? null : parseFloat(o.e);
-    if (e !== null && (!isFinite(e) || e < s)) return null;
+    if (e !== null && !isFinite(e)) return null;
+    // 负数 end 是「距结尾倒数」，先不跟 start 比大小（要等解析出时长才能判断）
+    if (e !== null && e >= 0 && e < s) return null;
     return { start: Math.max(0, s), end: e };
   } catch(err) {}
   return null;
+}
+// 把区间解析成绝对秒数（负的 end → 视频时长 + end）；时长未知时按"到结尾"处理
+function resolveWallpaperLoop(loop) {
+  if (!loop) return null;
+  var dur = (videoEl && isFinite(videoEl.duration) && videoEl.duration > 0) ? videoEl.duration : null;
+  var start = loop.start;
+  var end = loop.end;
+  if (end !== null && end < 0) {
+    if (dur === null) return { start: start, end: null };   // 还没拿到时长，先当作到结尾
+    end = Math.max(0, dur + end);
+  }
+  if (end !== null && end < start) return null;   // 解析后仍无效（视频太短等）
+  return { start: start, end: end };
 }
 // 起止相同（差 < 0.005s）视为「静止点」：停在这一帧不动（end=null 表示到结尾，不算静止点）
 function wallpaperLoopIsStill(loop) {
@@ -1855,10 +1871,12 @@ function saveWallpaperLoop(kind, quiet) {
   // 只填一端时补默认：没填开始 = 从头开始；没填结束 = 一直循环到视频结尾再跳回开始
   var s = sFilled ? parseFloat(sRaw) : 0;
   var e = eFilled ? parseFloat(eRaw) : null;
-  var ok = isFinite(s) && (e === null || (isFinite(e) && e >= s));
+  // 结束时间为负数 = 从结尾倒着数（如 -5 = 距结尾 5 秒），此时不与开始时间比大小
+  var eIsFromEnd = (e !== null && e < 0);
+  var ok = isFinite(s) && (e === null || (isFinite(e) && (eIsFromEnd || e >= s)));
   var rs = Math.round(Math.max(0, s) * 100) / 100;   // 精确到 0.01 秒
   var re = (e === null) ? null : Math.round(e * 100) / 100;
-  var stillPoint = ok && re !== null && (re - rs) < 0.005;
+  var stillPoint = ok && re !== null && !eIsFromEnd && (re - rs) < 0.005;
   try {
     var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
     if (bothEmpty) localStorage.removeItem(key);   // 两框都空 = 关闭循环（优先于补默认值）
@@ -1871,7 +1889,9 @@ function saveWallpaperLoop(kind, quiet) {
   if (quiet) return;
   if (!ok) { showToast('区间无效：结束秒数不能小于开始秒数（填相同=静止在该点）'); return; }
   var tag = (kind === 'focus' ? '专注时' : '平时');
+  var dur = (videoEl && isFinite(videoEl.duration) && videoEl.duration > 0) ? videoEl.duration : null;
   if (stillPoint) showToast(tag + '静止于 ' + rs + 's');
+  else if (eIsFromEnd) showToast(tag + '循环：' + rs + 's ~ 距结尾 ' + Math.abs(re) + 's' + (dur !== null ? '（≈' + (Math.round(Math.max(0, dur + re) * 100) / 100) + 's）' : ''));
   else if (re === null) showToast(tag + '循环：' + rs + 's ~ 结尾');
   else showToast(tag + '循环：' + rs + 's ~ ' + re + 's');
 }
@@ -1916,7 +1936,7 @@ function syncWallpaperLoopUI(force) {
 }
 function applyWallpaperLoop() {
   if (!videoEl) return;
-  var loop = getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+  var loop = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
   // 静止点（起止相同）由 syncWallpaperPlayback 处理定格，不进入循环看护
   if (wallpaperLoopIsStill(loop)) {
     _wallpaperLoop = null;
@@ -2031,7 +2051,7 @@ try {
   // 播到结尾：回到区间起点（end=null 的"循环到结尾"也走这里）；
   // 没有区间设置就回到 0，等价于整片循环。故意不用原生 loop（它会在同一帧跳回 0、绕过起点）
   videoEl.addEventListener('ended', function() {
-    var wl = _wallpaperLoop || getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+    var wl = _wallpaperLoop || resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
     var target = (wl && isFinite(wl.start)) ? wl.start : 0;
     _loopLastT = target;
     try { videoEl.currentTime = target; } catch(e) {}
@@ -5996,19 +6016,19 @@ document.addEventListener("visibilitychange", function() {
     </div>
 
     <div class="wp-group">
-      <div class="wp-label">循环区间 <span class="wp-hint">留空=完整播放 · 只填结束=从头到该点 · 只填开始=从该点循环到结尾 · 起止相同=静止在该帧</span></div>
+      <div class="wp-label">循环区间 <span class="wp-hint">留空=完整播放 · 只填结束=从头到该点 · 只填开始=循环到结尾 · 结束填负数=距结尾N秒 · 起止相同=静止在该帧</span></div>
       <div class="wp-row">
         <span class="wp-tag">平时</span>
         <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
         <span class="wp-sep">~</span>
-        <input class="wp-input" type="number" id="wp-loop-idle-end" min="0" step="0.01" placeholder="止" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
+        <input class="wp-input" type="number" id="wp-loop-idle-end" min="-99999" step="0.01" placeholder="止/负=倒数" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
         <span class="wp-unit">秒</span>
       </div>
       <div class="wp-row">
         <span class="wp-tag">专注时</span>
         <input class="wp-input" type="number" id="wp-loop-focus-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
         <span class="wp-sep">~</span>
-        <input class="wp-input" type="number" id="wp-loop-focus-end" min="0" step="0.01" placeholder="止" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
+        <input class="wp-input" type="number" id="wp-loop-focus-end" min="-99999" step="0.01" placeholder="止/负=倒数" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
         <span class="wp-unit">秒</span>
         <button class="btn btn-sm" style="margin-left:auto;" onclick="clearWallpaperLoop()">清空区间</button>
       </div>
