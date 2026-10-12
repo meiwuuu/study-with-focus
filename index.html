@@ -828,6 +828,8 @@ input::placeholder { color: rgba(255,255,255,0.28); }
 <!-- ═══════════ Video background ═══════════ -->
 <!-- 不用原生 loop：循环完全由 JS 控制（原生 loop 会在同一帧跳回 0，与区间循环打架） -->
 <video id="bg-video" autoplay muted playsinline preload="auto"></video>
+<!-- 备用视频：区间循环时提前定位到起点、到点时直接换显示，避免 seek 造成的黑帧 -->
+<video id="bg-video-2" muted playsinline preload="auto" style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;pointer-events:none;"></video>
 <canvas class="bg-canvas" id="bg-canvas" style="display:none;"></canvas>
 <div class="bg-overlay"></div>
 
@@ -1588,6 +1590,7 @@ var DEFAULT_VIDEOS = ['1.mp4', '2.mp4', '3.mp4'];
 var videos = DEFAULT_VIDEOS.slice();
 var videoIndex = 0;
 var videoEl = document.getElementById('bg-video');
+var videoEl2 = document.getElementById('bg-video-2');   // 备用视频（区间循环时无缝接管）
 var canvasEl = document.getElementById('bg-canvas');
 var canvasBGActive = false;   // canvas 兜底动画是否在跑
 var canvasBGRaf = null;       // requestAnimationFrame 句柄，便于停止
@@ -1651,10 +1654,17 @@ function saveWallpaperCrop(o) {
 function getWallpaperZoom() { return Math.round(getWallpaperCrop().z * 100); }
 function applyWallpaperStyle() {
   var fit = getWallpaperFit(), crop = getWallpaperCrop();
+  var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
+  var tf = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
   videoEl.style.objectFit = fit;
   videoEl.style.transformOrigin = 'center center';
-  var noChange = (crop.dx === 0 && crop.dy === 0 && crop.z === 1);
-  videoEl.style.transform = noChange ? '' : ('translate(' + crop.dx + '%, ' + crop.dy + '%) scale(' + crop.z + ')');
+  videoEl.style.transform = tf;
+  // 备用视频保持同样的构图，接管时不会跳画面
+  if (videoEl2) {
+    videoEl2.style.objectFit = fit;
+    videoEl2.style.transformOrigin = 'center center';
+    videoEl2.style.transform = tf;
+  }
   var sel = document.getElementById('wallpaper-fit');
   if (sel) sel.value = fit;
   var rng = document.getElementById('wallpaper-zoom');
@@ -1978,6 +1988,51 @@ function wallpaperLoopEnded(t) {
   }
   return t >= _wallpaperLoop.end;
 }
+// ── 双视频交替：区间循环时提前把备用视频定位到起点，到点直接换显示，避免 seek 造成的黑帧 ──
+var _idleVideo = null;   // 当前不可见的备用视频
+function prepIdleVideo() {
+  if (!_wallpaperLoop || !videoEl || !videoEl2) return;
+  if (!_idleVideo) _idleVideo = (videoEl === videoEl2) ? videoEl : videoEl2;
+  var idle = _idleVideo;
+  if (!idle || idle === videoEl) return;
+  var start = _wallpaperLoop.start;
+  var wantSrc = videoEl.currentSrc || videoEl.getAttribute('src') || '';
+  if (wantSrc && idle.getAttribute('src') !== wantSrc) {
+    idle.setAttribute('src', wantSrc);
+    idle.load();
+  }
+  idle.muted = true;
+  idle.playbackRate = videoEl.playbackRate || 1;
+  if (Math.abs((idle.currentTime || 0) - start) > 0.15) {
+    try { idle.currentTime = start; } catch(e) {}
+  }
+  if (idle.paused) {
+    var p = idle.play();
+    if (p && p.catch) p.catch(function(){});
+  }
+}
+// 到区间终点时切到备用视频；备用没就绪就返回 false，由调用方退回 seek 方式
+function switchToIdleVideo() {
+  var idle = _idleVideo;
+  if (!idle || idle === videoEl || !_wallpaperLoop) return false;
+  if (idle.readyState < 2) return false;
+  if (Math.abs((idle.currentTime || 0) - _wallpaperLoop.start) > 0.6) return false;
+  try {
+    idle.style.objectFit = videoEl.style.objectFit;
+    idle.style.transform = videoEl.style.transform;
+    idle.style.transformOrigin = videoEl.style.transformOrigin;
+    idle.playbackRate = videoEl.playbackRate || 1;
+    idle.style.display = 'block';
+    var p = idle.play();
+    if (p && p.catch) p.catch(function(){});
+    videoEl.style.display = 'none';
+    videoEl.pause();
+  } catch(e) { return false; }
+  var old = videoEl;
+  videoEl = idle;        // 活跃指针换成刚接管的那一个，后续逻辑自动作用在它身上
+  _idleVideo = old;
+  return true;
+}
 // 高精度循环看护：只要设了区间就一直运行（20ms ≈ 0.02 秒精度）
 var _loopWatcher = null;
 var _loopLastT = 0;
@@ -1988,10 +2043,19 @@ function ensureLoopWatcher() {
       _loopWatcher = setInterval(function() {
         if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
         var t = videoEl.currentTime;
-        // 到区间终点/临近结尾，或位置跑到起点之前 → 回到起点（和 ended 事件目标一致，重复触发无害）
+        // 快到区间终点/视频结尾时，提前把备用视频定位到起点并跑起来（无缝接管的准备）
+        var end = _wallpaperLoop.end;
+        var dur = videoEl.duration;
+        var nearEnd = (end !== null)
+          ? (t >= end - 1.2)
+          : (isFinite(dur) && dur > 0 && t >= dur - 1.2);
+        if (nearEnd) prepIdleVideo();
         if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
           _loopLastT = _wallpaperLoop.start;
-          try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+          // 优先无缝切换到已就位的备用视频；切不成就退回直接 seek（会有一瞬黑帧）
+          if (!switchToIdleVideo()) {
+            try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+          }
           return;
         }
         _loopLastT = t;
@@ -2057,9 +2121,11 @@ function closeWpSettings() {
     _wpSettingsParentWasOpen = false;
   }
 }
-// 播放到区间末尾就跳回区段起点（只用一次监听）
-try {
-  videoEl.addEventListener('timeupdate', function() {
+// 播放到区间末尾就跳回区段起点（主/备视频都监听，但只处理当前活跃的那一个）
+function bindBgVideoEvents(el) {
+  if (!el) return;
+  el.addEventListener('timeupdate', function() {
+    if (el !== videoEl) return;   // 备用视频的事件忽略
     // 补播衔接中：播到目标点就结束补播，开始按专注区间循环
     if (_wpTransitionTarget !== null) {
       if (videoEl.currentTime >= _wpTransitionTarget - 0.05) {
@@ -2072,25 +2138,38 @@ try {
     var t = videoEl.currentTime;
     if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
       _loopLastT = _wallpaperLoop.start;
-      try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+      // 优先无缝切换到已就位的备用视频，失败才退回 seek
+      if (!switchToIdleVideo()) {
+        try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+      }
     } else {
       _loopLastT = t;
     }
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
-  videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
+  el.addEventListener('loadedmetadata', function() {
+    if (el !== videoEl) return;
+    applyWallpaperLoop();
+  });
   // 播到结尾：回到区间起点（end=null 的"循环到结尾"也走这里）；
-  // 没有区间设置就回到 0，等价于整片循环。故意不用原生 loop（它会在同一帧跳回 0、绕过起点）
-  videoEl.addEventListener('ended', function() {
+  // 没有区间设置就回到 0，等价于整片循环
+  el.addEventListener('ended', function() {
+    if (el !== videoEl) return;
     var wl = _wallpaperLoop || resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
     var target = (wl && isFinite(wl.start)) ? wl.start : 0;
     _loopLastT = target;
-    try { videoEl.currentTime = target; } catch(e) {}
+    if (!switchToIdleVideo()) {
+      try { videoEl.currentTime = target; } catch(e) {}
+    }
     if (!document.hidden && videoEl.style.display !== 'none') {
       var pe = videoEl.play();
       if (pe && pe.catch) pe.catch(function(){});
     }
   });
+}
+try {
+  bindBgVideoEvents(videoEl);
+  bindBgVideoEvents(videoEl2);
 } catch(e) {}
 
 // ── 取景调整：全屏实时调整（屏幕上看到的就是最终效果）──
@@ -2385,6 +2464,17 @@ function loadVideo(idx) {
   videoEl.style.display = '';
   canvasEl.style.display = 'none';
   if (typeof stopCanvasBG === 'function') stopCanvasBG();
+  // 备用视频复位：换壁纸时把它藏起来并丢掉旧内容，避免残留上一个壁纸
+  try {
+    var other = (videoEl === videoEl2) ? document.getElementById('bg-video') : videoEl2;
+    if (other) {
+      other.pause();
+      other.style.display = 'none';
+      other.removeAttribute('src');
+      other.load();
+    }
+    _idleVideo = other;
+  } catch(e) {}
   videoEl.src = videos[idx];
   videoEl.load();
   var playPromise = videoEl.play();
