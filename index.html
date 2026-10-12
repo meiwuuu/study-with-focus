@@ -2229,13 +2229,18 @@ function pickWallpaper(i) {
 // ─── 面板透明度 ───
 function updatePanelOpacity(val) {
   var alpha = val / 100;
-  var panel = document.querySelector('.settings-panel');
-  if (panel) panel.style.background = 'rgba(255,255,255,' + alpha + ')';
-  var modal = document.querySelector('.modal-card');
-  if (modal) modal.style.background = 'rgba(255,255,255,' + alpha + ')';
-  var subjRow = document.querySelector('.subject-row');
-  if (subjRow) subjRow.style.background = 'rgba(255,255,255,' + (alpha * 0.45) + ')';
-  document.getElementById('panel-opacity-val').textContent = val + '%';
+  // 应用到所有面板/弹窗（原来用 querySelector 只改到第一个，导致新弹窗透明度不一致）
+  document.querySelectorAll('.settings-panel').forEach(function(el) {
+    el.style.background = 'rgba(255,255,255,' + alpha + ')';
+  });
+  document.querySelectorAll('.modal-card').forEach(function(el) {
+    el.style.background = 'rgba(255,255,255,' + alpha + ')';
+  });
+  document.querySelectorAll('.subject-row').forEach(function(el) {
+    el.style.background = 'rgba(255,255,255,' + (alpha * 0.45) + ')';
+  });
+  var valEl = document.getElementById('panel-opacity-val');
+  if (valEl) valEl.textContent = val + '%';
   try { localStorage.setItem('focus_panel_opacity', val); } catch(e) {}
 }
 function loadPanelOpacity() {
