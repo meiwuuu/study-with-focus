@@ -2420,14 +2420,32 @@ function renderWallpaperPicker() {
   for (var i = 0; i < videos.length; i++) {
     var active = (i === videoIndex);
     var brd = active ? 'var(--accent, #60a5fa)' : 'rgba(255,255,255,.12)';
+    // 缩略图 <video> 不在这里一次性插入：7 个视频同时初始化解码器+读元数据（有大文件）会明显卡顿
     h += '<div onclick="pickWallpaper(' + i + ')" title="' + escHtml(videos[i]) + '" style="position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;cursor:pointer;border:2px solid ' + brd + ';background:rgba(255,255,255,.05);">';
-    h += '<video src="' + escHtml(videos[i]) + '" muted preload="metadata" playsinline onloadedmetadata="try{this.currentTime=0.1;}catch(e){}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;"></video>';
     h += '<span style="position:absolute;left:4px;top:3px;font-size:.62em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);">' + (i + 1) + '</span>';
     h += '<span class="wp-badge" style="display:' + (active ? 'block' : 'none') + ';position:absolute;right:4px;top:3px;font-size:.58em;color:#fff;background:var(--accent, #60a5fa);border-radius:4px;padding:0 4px;line-height:1.6;">当前</span>';
     h += '<span style="position:absolute;left:0;right:0;bottom:0;font-size:.58em;color:rgba(255,255,255,.9);background:linear-gradient(transparent,rgba(0,0,0,.8));padding:10px 4px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(shortWallpaperName(videos[i])) + '</span>';
     h += '</div>';
   }
   box.innerHTML = h;
+  // 面板先显示出来，缩略图再逐个错开注入（每个 90ms），主线程不会被一次性卡住
+  for (var j = 0; j < videos.length; j++) {
+    (function(idx) {
+      setTimeout(function() {
+        if (!_pickerMounted) return;
+        var cell = box.children[idx];
+        if (!cell || cell.querySelector('video')) return;
+        var vid = document.createElement('video');
+        vid.src = videos[idx];
+        vid.muted = true;
+        vid.preload = 'metadata';
+        vid.playsInline = true;
+        vid.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;');
+        vid.addEventListener('loadedmetadata', function() { try { vid.currentTime = 0.1; } catch(e) {} });
+        cell.insertBefore(vid, cell.firstChild);
+      }, 150 + idx * 90);
+    })(j);
+  }
 }
 // 切换后只更新高亮，不重建 video 元素（避免重复加载元数据）
 function updateWallpaperPickerActive() {
