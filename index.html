@@ -1936,22 +1936,31 @@ function wallpaperLoopEnded(t) {
   if (!_wallpaperLoop) return false;
   if (_wallpaperLoop.end === null) {
     var dur = videoEl && videoEl.duration;
-    // 抢在视频自身 loop 回 0 之前跳回 start
-    return !!(isFinite(dur) && dur > 0 && t >= dur - 0.08);
+    // 辅助判断：抢在视频自身 loop 回 0 之前跳回 start（窗口放宽到 0.2s，20ms 看护足够命中）
+    return !!(isFinite(dur) && dur > 0 && t >= dur - 0.2);
   }
   return t >= _wallpaperLoop.end;
 }
 // 高精度循环看护：仅在设置了循环区间时运行（20ms 间隔 ≈ 0.02 秒定位精度）
 var _loopWatcher = null;
+var _loopLastT = 0;   // 上一次观察到的时间，用于检测"视频自带 loop 回绕"
 function ensureLoopWatcher() {
   if (_wallpaperLoop) {
+    if (videoEl) _loopLastT = videoEl.currentTime;
     if (!_loopWatcher) {
       _loopWatcher = setInterval(function() {
         if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
         var t = videoEl.currentTime;
-        if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
+        var jumpBack = false;
+        if (wallpaperLoopEnded(t)) jumpBack = true;                                        // 到位（区间终点/临近结尾）
+        else if (_wallpaperLoop.end === null && t < _loopLastT - 1) jumpBack = true;       // 时间回绕：视频自带 loop 已经回到 0
+        else if (t < _wallpaperLoop.start - 0.4) jumpBack = true;                          // 跑到了起点之前
+        if (jumpBack) {
+          _loopLastT = _wallpaperLoop.start;
           try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+          return;
         }
+        _loopLastT = t;
       }, 20);
     }
   } else if (_loopWatcher) {
@@ -2013,8 +2022,12 @@ try {
     }
     if (!_wallpaperLoop) return;
     var t = videoEl.currentTime;
-    if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
+    var wrapped = (_wallpaperLoop.end === null && t < _loopLastT - 1);   // 视频自带 loop 已回到 0
+    if (wallpaperLoopEnded(t) || wrapped || t < _wallpaperLoop.start - 0.4) {
+      _loopLastT = _wallpaperLoop.start;
       try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
+    } else {
+      _loopLastT = t;
     }
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
