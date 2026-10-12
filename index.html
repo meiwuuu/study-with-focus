@@ -1932,31 +1932,26 @@ function applyWallpaperLoop() {
   }
   ensureLoopWatcher();
 }
-// 是否已到当前区间终点（end=null 时以视频结尾为终点）
+// 是否已到区间终点。
+// 注意：end === null（循环到结尾）时不在这里判断 —— 到结尾统一交给 ended 事件处理，
+// 避免"提前跳"和"ended"两条路径互相干扰（这是之前循环失效的根源）
 function wallpaperLoopEnded(t) {
   if (!_wallpaperLoop) return false;
-  if (_wallpaperLoop.end === null) {
-    var dur = videoEl && videoEl.duration;
-    // 辅助判断：抢在视频自身 loop 回 0 之前跳回 start（窗口放宽到 0.2s，20ms 看护足够命中）
-    return !!(isFinite(dur) && dur > 0 && t >= dur - 0.2);
-  }
+  if (_wallpaperLoop.end === null) return false;
   return t >= _wallpaperLoop.end;
 }
-// 高精度循环看护：仅在设置了循环区间时运行（20ms 间隔 ≈ 0.02 秒定位精度）
+// 高精度循环看护：只在设置了带结束点的区间时运行（20ms ≈ 0.02 秒精度）
 var _loopWatcher = null;
-var _loopLastT = 0;   // 上一次观察到的时间，用于检测"视频自带 loop 回绕"
+var _loopLastT = 0;   // 上一次观察到的播放位置（用于兜底检测异常回绕）
 function ensureLoopWatcher() {
-  if (_wallpaperLoop) {
-    if (videoEl) _loopLastT = videoEl.currentTime;
+  if (_wallpaperLoop && _wallpaperLoop.end !== null) {
     if (!_loopWatcher) {
+      _loopLastT = videoEl ? videoEl.currentTime : 0;   // 只在看护启动时取基准，避免被频繁重置
       _loopWatcher = setInterval(function() {
         if (!_wallpaperLoop || !videoEl || videoEl.paused) return;
         var t = videoEl.currentTime;
-        var jumpBack = false;
-        if (wallpaperLoopEnded(t)) jumpBack = true;                                        // 到位（区间终点/临近结尾）
-        else if (_wallpaperLoop.end === null && t < _loopLastT - 1) jumpBack = true;       // 时间回绕：视频自带 loop 已经回到 0
-        else if (t < _wallpaperLoop.start - 0.4) jumpBack = true;                          // 跑到了起点之前
-        if (jumpBack) {
+        // 到了区间终点，或位置异常回到起点之前（含被外部 seek 回 0）
+        if (wallpaperLoopEnded(t) || t < _loopLastT - 1 || t < _wallpaperLoop.start - 0.4) {
           _loopLastT = _wallpaperLoop.start;
           try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
           return;
@@ -2022,9 +2017,9 @@ try {
       return;
     }
     if (!_wallpaperLoop) return;
+    if (_wallpaperLoop.end === null) return;   // "循环到结尾"交给 ended 事件，不在这里提前跳
     var t = videoEl.currentTime;
-    var wrapped = (_wallpaperLoop.end === null && t < _loopLastT - 1);   // 视频自带 loop 已回到 0
-    if (wallpaperLoopEnded(t) || wrapped || t < _wallpaperLoop.start - 0.4) {
+    if (wallpaperLoopEnded(t) || t < _wallpaperLoop.start - 0.4) {
       _loopLastT = _wallpaperLoop.start;
       try { videoEl.currentTime = _wallpaperLoop.start; } catch(e) {}
     } else {
@@ -2033,10 +2028,11 @@ try {
   });
   // 视频元数据就绪后再对齐一次（换壁纸/初次加载时 currentTime 还是 0）
   videoEl.addEventListener('loadedmetadata', function() { applyWallpaperLoop(); });
-  // 播到结尾：按当前设置回到区间起点；没有区间设置就回到 0（等价于整片循环）
-  // 故意不用原生 loop —— 原生 loop 在同一帧跳回 0，会绕过区间起点
+  // 播到结尾：回到区间起点（end=null 的"循环到结尾"也走这里）；
+  // 没有区间设置就回到 0，等价于整片循环。故意不用原生 loop（它会在同一帧跳回 0、绕过起点）
   videoEl.addEventListener('ended', function() {
-    var target = (_wallpaperLoop && isFinite(_wallpaperLoop.start)) ? _wallpaperLoop.start : 0;
+    var wl = _wallpaperLoop || getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle');
+    var target = (wl && isFinite(wl.start)) ? wl.start : 0;
     _loopLastT = target;
     try { videoEl.currentTime = target; } catch(e) {}
     if (!document.hidden && videoEl.style.display !== 'none') {
