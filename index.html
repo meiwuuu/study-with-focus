@@ -1897,11 +1897,24 @@ function ensureLoopWatcher() {
   }
 }
 // ── 壁纸设置面板 ──
+var _wpSettingsParentWasOpen = false;
 function openWpSettings() {
   var m = document.getElementById('wp-settings-modal');
   if (!m) return;
   var nameEl = document.getElementById('wp-set-name');
   if (nameEl) nameEl.textContent = (videos && videos[videoIndex]) ? videos[videoIndex] : '—';
+  // 主题页暂时隐身：否则两层半透明面板叠加，画面会被压暗两次
+  try {
+    var ov = document.getElementById('settings-overlay');
+    if (ov && ov.classList.contains('open')) {
+      _wpSettingsParentWasOpen = true;
+      ov.classList.remove('open');
+      ov.style.display = 'none';   // 立即隐藏（overlay 是用 opacity 控制的，只移除 open 会有 0.25s 重叠）
+      var clock = document.getElementById('pomo-clock');
+      if (clock) clock.classList.remove('panel-open');
+      if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker();
+    }
+  } catch(e) {}
   try { syncWallpaperPlayback(); } catch(e) {}   // 同步速度/循环控件
   try { applyWallpaperStyle(); } catch(e) {}     // 同步填充/缩放控件
   m.style.display = 'flex';
@@ -1909,6 +1922,20 @@ function openWpSettings() {
 function closeWpSettings() {
   var m = document.getElementById('wp-settings-modal');
   if (m) m.style.display = 'none';
+  // 恢复主题页（这样透明度和它单独打开时完全一样）
+  if (_wpSettingsParentWasOpen) {
+    try {
+      var ov = document.getElementById('settings-overlay');
+      if (ov) { ov.style.display = ''; ov.classList.add('open'); }
+      var clock = document.getElementById('pomo-clock');
+      if (clock) clock.classList.add('panel-open');
+      var activeTab = document.querySelector('.panel-nav button.active');
+      if (activeTab && activeTab.getAttribute('data-tab') === 'theme' && typeof mountWallpaperPicker === 'function') {
+        mountWallpaperPicker();
+      }
+    } catch(e) {}
+    _wpSettingsParentWasOpen = false;
+  }
 }
 // 播放到区间末尾就跳回区段起点（只用一次监听）
 try {
@@ -1949,6 +1976,7 @@ function openCropPanel() {
     if (ov && ov.classList.contains('open')) {
       _cropPanelWasOpen = true;
       ov.classList.remove('open');
+      ov.style.display = 'none';   // 立即隐藏，避免与取景层重叠
       var clock = document.getElementById('pomo-clock');
       if (clock) clock.classList.remove('panel-open');
       if (typeof unmountWallpaperPicker === 'function') unmountWallpaperPicker();
@@ -1972,7 +2000,7 @@ function closeCropPanel() {
   if (_cropPanelWasOpen) {
     try {
       var ov = document.getElementById('settings-overlay');
-      if (ov) ov.classList.add('open');
+      if (ov) { ov.style.display = ''; ov.classList.add('open'); }
       var clock = document.getElementById('pomo-clock');
       if (clock) clock.classList.add('panel-open');
       // 若当前在主题页，重新挂载缩略图
