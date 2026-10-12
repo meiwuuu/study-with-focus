@@ -1998,12 +1998,9 @@ function prepIdleVideo() {
   var idle = _idleVideo;
   if (!idle || idle === videoEl) return;
   var start = _wallpaperLoop.start;
-  // 用我们自己记录的原始片源名比较（不能拿 videoEl.currentSrc 比：那是绝对 URL，永远不等于相对路径，
-  // 会导致每 20ms 反复 load()、备用永远加载不完 → 切换永远降级回 seek → 黑屏）
-  var want = String((videos && videos[videoIndex]) || '');
-  if (want && idle.getAttribute('data-want') !== want) {
-    idle.setAttribute('data-want', want);
-    idle.setAttribute('src', want);
+  var wantSrc = videoEl.currentSrc || videoEl.getAttribute('src') || '';
+  if (wantSrc && idle.getAttribute('src') !== wantSrc) {
+    idle.setAttribute('src', wantSrc);
     idle.load();
     _idleReadyStart = null;   // 换了片源 → 之前就绪状态作废
   }
@@ -2486,13 +2483,11 @@ function loadVideo(idx) {
       other.muted = true;
       other.style.display = 'none';
       if (needIdle) {
-        other.setAttribute('data-want', String(videos[idx]));   // 与 prepIdleVideo 用同一基准，避免反复重载
         other.setAttribute('src', videos[idx]);
         other.style.display = 'block';   // 常驻显示层（opacity 0 不可见），切换时不重建层
         other.style.opacity = '0';
         other.load();
       } else {
-        other.removeAttribute('data-want');
         other.removeAttribute('src');
         other.style.display = 'none';    // 没有区间用不到备用 → 完全卸掉省资源
         other.load();
