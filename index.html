@@ -1775,39 +1775,67 @@ function getWallpaperLoop(kind) {
   } catch(err) {}
   return null;
 }
-function saveWallpaperLoop(kind) {
+function saveWallpaperLoop(kind, quiet) {
   var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
   var sEl = document.getElementById(idp + 'start');
   var eEl = document.getElementById(idp + 'end');
-  var s = (sEl && sEl.value !== '') ? parseFloat(sEl.value) : NaN;
-  var e = (eEl && eEl.value !== '') ? parseFloat(eEl.value) : NaN;
+  var sRaw = (sEl && sEl.value !== '') ? sEl.value : '';
+  var eRaw = (eEl && eEl.value !== '') ? eEl.value : '';
+  var s = sRaw !== '' ? parseFloat(sRaw) : NaN;
+  var e = eRaw !== '' ? parseFloat(eRaw) : NaN;
+  var bothFilled = (sRaw !== '' && eRaw !== '');
+  var bothEmpty = (sRaw === '' && eRaw === '');
   var ok = isFinite(s) && isFinite(e) && e > s;
   var rs = Math.round(Math.max(0, s) * 100) / 100;   // 精确到 0.01 秒
   var re = Math.round(e * 100) / 100;
   try {
     var key = wallpaperStyleKey(kind === 'focus' ? 'loop_focus' : 'loop_idle');
     if (ok) localStorage.setItem(key, JSON.stringify({ s: rs, e: re }));
-    else localStorage.removeItem(key);
+    else if (bothFilled || bothEmpty) localStorage.removeItem(key);
+    // 只填了一个框：保留原设置，等用户填完（避免打字中途把已设区间清掉）
   } catch(err) {}
-  syncWallpaperLoopUI();
+  // 注意：这里不回写输入框。回写会把"另一个还没填完/没失焦的框"清空，导致永远填不完整
   applyWallpaperLoop();
-  showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + (ok ? rs + 's ~ ' + re + 's' : '已关闭'));
+  if (quiet) return;
+  if (ok) showToast((kind === 'focus' ? '专注时' : '平时') + '循环：' + rs + 's ~ ' + re + 's');
+  else if (bothFilled) showToast('区间无效：结束秒数要大于开始秒数');
+  else showToast((kind === 'focus' ? '专注时' : '平时') + '循环：已关闭');
+}
+// 输入框实时保存（防抖 450ms）——不必失焦，填完就生效
+var _wpLoopTimer = null;
+function onWpLoopInput(kind) {
+  if (_wpLoopTimer) clearTimeout(_wpLoopTimer);
+  _wpLoopTimer = setTimeout(function() {
+    _wpLoopTimer = null;
+    saveWallpaperLoop(kind, true);
+  }, 450);
+}
+function onWpLoopKey(kind, e) {
+  if (e && e.key === 'Enter') {
+    e.preventDefault();
+    if (_wpLoopTimer) { clearTimeout(_wpLoopTimer); _wpLoopTimer = null; }
+    saveWallpaperLoop(kind);
+  }
 }
 function clearWallpaperLoop() {
   try {
     localStorage.removeItem(wallpaperStyleKey('loop_idle'));
     localStorage.removeItem(wallpaperStyleKey('loop_focus'));
   } catch(err) {}
-  syncWallpaperLoopUI();
+  syncWallpaperLoopUI(true);   // 主动清空显示
   applyWallpaperLoop();
   showToast('已清空本壁纸的循环区间');
 }
-function syncWallpaperLoopUI() {
+// force=true 时无视焦点强制回写（用于清空等主动操作）
+function syncWallpaperLoopUI(force) {
   ['idle', 'focus'].forEach(function(kind) {
-    var loop = getWallpaperLoop(kind);
     var idp = (kind === 'focus') ? 'wp-loop-focus-' : 'wp-loop-idle-';
     var sEl = document.getElementById(idp + 'start');
     var eEl = document.getElementById(idp + 'end');
+    // 正在编辑这一组（任一框有焦点）就不回写，否则会把没填完的框清掉
+    var editing = (document.activeElement === sEl) || (document.activeElement === eEl);
+    if (editing && !force) return;
+    var loop = getWallpaperLoop(kind);
     if (sEl) sEl.value = loop ? loop.start : '';
     if (eEl) eEl.value = loop ? loop.end : '';
   });
@@ -5824,16 +5852,16 @@ document.addEventListener("visibilitychange", function() {
       <div class="wp-label">循环区间 <span class="wp-hint">留空 = 播放完整视频 · 精确到 0.01 秒</span></div>
       <div class="wp-row">
         <span class="wp-tag">平时</span>
-        <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" onchange="saveWallpaperLoop('idle')">
+        <input class="wp-input" type="number" id="wp-loop-idle-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
         <span class="wp-sep">~</span>
-        <input class="wp-input" type="number" id="wp-loop-idle-end" min="0" step="0.01" placeholder="止" onchange="saveWallpaperLoop('idle')">
+        <input class="wp-input" type="number" id="wp-loop-idle-end" min="0" step="0.01" placeholder="止" oninput="onWpLoopInput('idle')" onkeydown="onWpLoopKey('idle', event)" onblur="saveWallpaperLoop('idle', true)">
         <span class="wp-unit">秒</span>
       </div>
       <div class="wp-row">
         <span class="wp-tag">专注时</span>
-        <input class="wp-input" type="number" id="wp-loop-focus-start" min="0" step="0.01" placeholder="起" onchange="saveWallpaperLoop('focus')">
+        <input class="wp-input" type="number" id="wp-loop-focus-start" min="0" step="0.01" placeholder="起" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
         <span class="wp-sep">~</span>
-        <input class="wp-input" type="number" id="wp-loop-focus-end" min="0" step="0.01" placeholder="止" onchange="saveWallpaperLoop('focus')">
+        <input class="wp-input" type="number" id="wp-loop-focus-end" min="0" step="0.01" placeholder="止" oninput="onWpLoopInput('focus')" onkeydown="onWpLoopKey('focus', event)" onblur="saveWallpaperLoop('focus', true)">
         <span class="wp-unit">秒</span>
         <button class="btn btn-sm" style="margin-left:auto;" onclick="clearWallpaperLoop()">清空区间</button>
       </div>
