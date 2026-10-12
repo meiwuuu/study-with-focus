@@ -1938,16 +1938,29 @@ function syncWallpaperLoopUI(force) {
     if (eEl) eEl.value = loop ? loop.end : '';
   });
 }
+// 当前区间是否等于「整片视频」（整片循环可以交给浏览器原生 loop：内部无缝衔接，不会黑屏）
+function wallpaperLoopIsWholeVideo(loop) {
+  if (!loop) return true;
+  if (loop.start > 0.05) return false;
+  if (loop.end === null) return true;
+  var dur = videoEl && videoEl.duration;
+  return !!(isFinite(dur) && dur > 0 && loop.end >= dur - 0.15);
+}
 function applyWallpaperLoop() {
   if (!videoEl) return;
   var loop = resolveWallpaperLoop(getWallpaperLoop(wallpaperIsFocusMode() ? 'focus' : 'idle'));
   // 静止点（起止相同）由 syncWallpaperPlayback 处理定格，不进入循环看护
   if (wallpaperLoopIsStill(loop)) {
     _wallpaperLoop = null;
+    videoEl.loop = false;
     ensureLoopWatcher();
     return;
   }
   _wallpaperLoop = loop;
+  // 没有区间 / 区间就是整片 → 交还原生 loop（浏览器内部无缝，循环时不黑屏），JS 看护不介入
+  var whole = wallpaperLoopIsWholeVideo(loop);
+  videoEl.loop = whole;
+  if (whole) _wallpaperLoop = null;
   if (_wallpaperLoop && videoEl.readyState >= 1) {
     var t = videoEl.currentTime;
     if (t < _wallpaperLoop.start || wallpaperLoopEnded(t)) {
