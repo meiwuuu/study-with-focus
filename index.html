@@ -1125,6 +1125,19 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 </div>
               </div>
               <button class="btn btn-accent" onclick="submitDetailedManualRecord()" style="justify-content:center; padding:10px; font-size:.9em;">💾 提交并入库</button>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding-top:12px; border-top:1px dashed rgba(255,255,255,.12);">
+                <div>
+                  <div style="font-size:.85em;">当天番茄数（直接修正）</div>
+                  <div style="font-size:.7em; color:#888;">番茄数 = 完成了几次倒计时，与时段长短无关</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div class="cs-trigger" style="width:74px;cursor:text;justify-content:center;">
+                    <span class="spin-wrap"><input type="number" id="man-daily-pomos" min="0" placeholder="0"
+                      style="background:none;border:none;color:var(--yellow);font-family:var(--mono);font-size:1em;font-weight:bold;outline:none;width:100%;text-align:center;padding:0;"><button class="spin-btn up" onclick="spinInc('man-daily-pomos')">▲</button><button class="spin-btn down" onclick="spinDec('man-daily-pomos')">▼</button></span>
+                  </div>
+                  <button class="btn btn-sm" onclick="fixDailyPomos()" style="font-size:.78em;">修正</button>
+                </div>
+              </div>
               <div id="man-status" style="text-align:center;font-size:.75em;margin-top:6px;min-height:1.2em;"></div>
             </div>
           </div>
@@ -5598,6 +5611,29 @@ function setManStatus(msg, type) {
     el.textContent = msg;
     el.style.color = type === 'ok' ? '#4ade80' : type === 'warn' ? '#fbbf24' : 'rgba(255,255,255,.5)';
     if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
+}
+
+// 直接修正某天的番茄数（番茄数只等于「完成了几次倒计时」，与时段长短无关）
+async function fixDailyPomos() {
+    var inp = document.getElementById('man-daily-pomos');
+    var val = parseInt(inp && inp.value, 10);
+    if (isNaN(val) || val < 0) { setManStatus('请填写 ≥ 0 的番茄数', 'warn'); return; }
+    var date = (typeof manDate === 'string' && manDate) ? manDate : getFocusDate();
+    setManStatus('⏳ 正在修正 ' + date + ' 的番茄数…', 'info');
+    // 本地先改，界面立即生效
+    if (!cal.dailyLog[date]) cal.dailyLog[date] = {studyTime: 0, pomodoros: 0};
+    cal.dailyLog[date].pomodoros = val;
+    try { calSave(); calRender(); } catch(e) {}
+    try {
+        var r = await apiCall('/api/stats/pomodoros', {
+            method: 'POST',
+            body: JSON.stringify({ date: date, pomodoros: val })
+        });
+        if (r && r.ok) setManStatus('✅ ' + date + ' 番茄数已修正为 ' + val, 'ok');
+        else setManStatus('⚠ 本地已改，后台同步失败（重启后端后重试）', 'warn');
+    } catch(e) {
+        setManStatus('⚠ 本地已改，后台同步失败（重启后端后重试）', 'warn');
+    }
 }
 
 // ─── 学习记录页编辑模式（勾选批量删除 + 修改起床/睡觉时间）───

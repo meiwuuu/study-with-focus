@@ -978,6 +978,24 @@ class FocusHandler(BaseHTTPRequestHandler):
                 invalidate_stats_cache()
                 self._send_json({"ok": True})
 
+        elif path == "/api/stats/pomodoros":
+            # 直接修正某天的番茄数（番茄数 = 完成了几次倒计时，与时段时长无关）
+            with stats_lock:
+                stats = get_stats_cached()
+                date = body.get("date")
+                val = valid_num(body.get("pomodoros", 0), 0, 1000)
+                if date:
+                    daily = stats.setdefault("daily_logs", {}).setdefault(
+                        date, {"date": date, "segments": [], "total_time": 0, "pomodoros": 0})
+                    old = daily.get("pomodoros", 0)
+                    daily["pomodoros"] = val
+                    if date == stats.get("today", effective_date_str()):
+                        stats["today_pomodoros"] = max(0, stats.get("today_pomodoros", 0) - old + val)
+                    stats["total_pomodoros"] = max(0, stats.get("total_pomodoros", 0) - old + val)
+                    save_json(STATS_FILE, stats)
+                invalidate_stats_cache()
+                self._send_json({"ok": True, "pomodoros": val})
+
         elif path == "/api/config/browser":
             with config_lock:
                 config = load_json(CONFIG_FILE, {"sites": [], "active": False})
