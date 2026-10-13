@@ -1125,19 +1125,6 @@ input::placeholder { color: rgba(255,255,255,0.28); }
                 </div>
               </div>
               <button class="btn btn-accent" onclick="submitDetailedManualRecord()" style="justify-content:center; padding:10px; font-size:.9em;">💾 提交并入库</button>
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding-top:12px; border-top:1px dashed rgba(255,255,255,.12);">
-                <div>
-                  <div style="font-size:.85em;">当天番茄数（直接修正）</div>
-                  <div style="font-size:.7em; color:#888;">番茄数 = 完成了几次倒计时，与时段长短无关</div>
-                </div>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <div class="cs-trigger" style="width:74px;cursor:text;justify-content:center;">
-                    <span class="spin-wrap"><input type="number" id="man-daily-pomos" min="0" placeholder="0"
-                      style="background:none;border:none;color:var(--yellow);font-family:var(--mono);font-size:1em;font-weight:bold;outline:none;width:100%;text-align:center;padding:0;"><button class="spin-btn up" onclick="spinInc('man-daily-pomos')">▲</button><button class="spin-btn down" onclick="spinDec('man-daily-pomos')">▼</button></span>
-                  </div>
-                  <button class="btn btn-sm" onclick="fixDailyPomos()" style="font-size:.78em;">修正</button>
-                </div>
-              </div>
               <div id="man-status" style="text-align:center;font-size:.75em;margin-top:6px;min-height:1.2em;"></div>
             </div>
           </div>
@@ -5102,7 +5089,12 @@ function renderLearningLog(daily, date) {
   html += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
   html += '<div class="stat-item"><div class="lbl">总时长</div><div class="val" style="font-size:1.1em;">' + fmtDuration(totalTime) + '</div></div>';
   html += '<div class="stat-item"><div class="lbl">学习段数</div><div class="val accent" style="font-size:1.1em;">' + segs.length + '</div></div>';
-  html += '<div class="stat-item"><div class="lbl">番茄数</div><div class="val cyan" style="font-size:1.1em;">' + totalPomos + '</div></div>';
+  // 番茄数：编辑模式下与「起床/睡觉」同样式，直接改输入框
+  if (editMode) {
+    html += '<div class="stat-item"><div class="lbl">番茄数</div><div class="val cyan"><input type="number" id="edit-pomos" min="0" step="1" value="' + totalPomos + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#67e8f9;font-family:var(--mono);font-size:.82em;padding:4px 8px;border-radius:4px;width:66px;outline:none;"></div></div>';
+  } else {
+    html += '<div class="stat-item"><div class="lbl">番茄数</div><div class="val cyan" style="font-size:1.1em;">' + totalPomos + '</div></div>';
+  }
   var wakeTime = daily.wake_time || '—';
   var sleepTime = daily.sleep_time || '—';
   if (editMode) {
@@ -5613,27 +5605,19 @@ function setManStatus(msg, type) {
     if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
 }
 
-// 直接修正某天的番茄数（番茄数只等于「完成了几次倒计时」，与时段长短无关）
-async function fixDailyPomos() {
-    var inp = document.getElementById('man-daily-pomos');
-    var val = parseInt(inp && inp.value, 10);
-    if (isNaN(val) || val < 0) { setManStatus('请填写 ≥ 0 的番茄数', 'warn'); return; }
-    var date = (typeof manDate === 'string' && manDate) ? manDate : getFocusDate();
-    setManStatus('⏳ 正在修正 ' + date + ' 的番茄数…', 'info');
-    // 本地先改，界面立即生效
+// 番茄数修正已并入「学习记录编辑模式」：编辑时番茄数直接变输入框，与起床/睡觉同风格
+
+// 保存某天的番茄数（番茄数 = 完成了几次倒计时，与时段长短无关）
+function saveDailyPomos(date, val) {
+    var n = parseInt(val, 10);
+    if (isNaN(n) || n < 0) return Promise.resolve();
     if (!cal.dailyLog[date]) cal.dailyLog[date] = {studyTime: 0, pomodoros: 0};
-    cal.dailyLog[date].pomodoros = val;
-    try { calSave(); calRender(); } catch(e) {}
-    try {
-        var r = await apiCall('/api/stats/pomodoros', {
-            method: 'POST',
-            body: JSON.stringify({ date: date, pomodoros: val })
-        });
-        if (r && r.ok) setManStatus('✅ ' + date + ' 番茄数已修正为 ' + val, 'ok');
-        else setManStatus('⚠ 本地已改，后台同步失败（重启后端后重试）', 'warn');
-    } catch(e) {
-        setManStatus('⚠ 本地已改，后台同步失败（重启后端后重试）', 'warn');
-    }
+    cal.dailyLog[date].pomodoros = n;
+    try { calSave(); } catch(e) {}
+    return apiCall('/api/stats/pomodoros', {
+        method: 'POST',
+        body: JSON.stringify({ date: date, pomodoros: n })
+    }).catch(function(){});
 }
 
 // ─── 学习记录页编辑模式（勾选批量删除 + 修改起床/睡觉时间）───
@@ -5643,9 +5627,11 @@ function toggleEditMode() {
     var date = currentLogDate || getFocusDate();
     var wakeEl = document.getElementById('edit-wake-time');
     var sleepEl = document.getElementById('edit-sleep-time');
+    var pomoEl = document.getElementById('edit-pomos');
     var saves = [];
     if (wakeEl) saves.push(saveRoutineTime(date, 'wake', wakeEl.value));
     if (sleepEl) saves.push(saveRoutineTime(date, 'sleep', sleepEl.value));
+    if (pomoEl) saves.push(saveDailyPomos(date, pomoEl.value));   // 番茄数一起保存
     // 等待保存完成后再重渲染，确保数据已落盘
     if (saves.length > 0) {
       Promise.all(saves).then(function() {
