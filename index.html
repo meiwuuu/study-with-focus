@@ -5662,6 +5662,15 @@ function cancelEditMode() {
 async function saveRoutineTime(date, type, time) {
   // 允许保存空值（清空起床/睡觉时间）
   if (time === null || time === undefined) return;
+  // 保护：若本地已存有该时间、而这次要提交的是空值，视为「页面数据未加载完就拿空输入框提交」，
+  // 直接跳过，避免把已保存的起床/睡觉时间覆盖成空。
+  try {
+    var cur = currentDailyData || (cal.dailyLog && cal.dailyLog[date]) || null;
+    if (time === '' && cur) {
+      var existed = (type === 'wake') ? cur.wake_time : cur.sleep_time;
+      if (existed) return;
+    }
+  } catch(e) {}
   try {
     await apiCall('/api/stats/routine', {
       method: 'POST',
