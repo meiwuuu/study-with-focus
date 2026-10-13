@@ -5670,9 +5670,10 @@ async function batchDeleteSegments() {
       if (seg) {
         var dur = seg.duration || 0;
         totalDur += dur;
-        // 优先用该段记录的番茄数（准确）；旧数据没有该字段时按 900 秒(15分钟)估算，与后端同一口径
-        if (typeof seg.pomodoros === 'number' && seg.pomodoros >= 0) totalPomos += seg.pomodoros;
-        else if (dur >= 900) totalPomos++;
+        // 番茄数只看该段记录的「完成了几个番茄」，绝不按时长推算
+        // （学习时段的开始/结束时间不代表全程在学习，只有番茄钟倒计时结束才算学完一段）
+        var sp = seg.pomodoros;
+        if (typeof sp === 'number' && sp > 0) totalPomos += sp;
       }
     }
   }

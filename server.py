@@ -501,7 +501,11 @@ class FocusHandler(BaseHTTPRequestHandler):
             daily["date"] = date
             if daily.get("pomodoros", 0) == 0:
                 segs = daily.get("segments", [])
-                date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
+                # 只统计段里记录的「完成了几个番茄」，不按时长推算（时段长度 ≠ 学习时长）
+                date_pomos = sum(
+                    int(s["pomodoros"]) for s in segs
+                    if isinstance(s.get("pomodoros"), (int, float)) and s.get("pomodoros") > 0
+                )
                 if date_pomos > 0:
                     daily["pomodoros"] = date_pomos
             self._send_json(daily)
@@ -551,11 +555,10 @@ class FocusHandler(BaseHTTPRequestHandler):
             date_pomodoros = date_log.get("pomodoros", 0)
             date_total_seconds = date_log.get("total_time", 0)
             if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-                # 旧数据兜底：优先用段级番茄数；没有则按 900 秒(15分钟)估算（与前后端删段同一口径）
+                # 番茄数只累加段里记录的「完成了几个番茄」，绝不按时长推算
                 date_pomodoros = sum(
-                    (int(s["pomodoros"]) if isinstance(s.get("pomodoros"), (int, float))
-                     else (1 if s.get("duration", 0) >= 900 else 0))
-                    for s in segments
+                    int(s["pomodoros"]) for s in segments
+                    if isinstance(s.get("pomodoros"), (int, float)) and s.get("pomodoros") > 0
                 )
                 date_total_seconds = sum(s.get("duration", 0) for s in segments)
             if not segments and not date_log:
@@ -956,13 +959,10 @@ class FocusHandler(BaseHTTPRequestHandler):
                     daily = stats["daily_logs"][date]
                     seg = daily["segments"].pop(index)
                     dur = seg.get("duration", 0)
-                    # 优先用该段自己记录的番茄数（与「完成一个番茄 +1」的口径一致，删段能精确扣减）；
-                    # 旧数据没这个字段时按 900 秒(15分钟)估算，且与前端保持同一口径
+                    # 番茄数只看该段记录的「完成了几个番茄」，绝不按时长推算
+                    # （时段长度 ≠ 学习时长，只有番茄钟倒计时走完才算学完一段）
                     seg_pomos = seg.get("pomodoros")
-                    if isinstance(seg_pomos, (int, float)) and seg_pomos >= 0:
-                        pomos = int(seg_pomos)
-                    else:
-                        pomos = 1 if dur >= 900 else 0
+                    pomos = int(seg_pomos) if isinstance(seg_pomos, (int, float)) and seg_pomos > 0 else 0
 
                     daily["total_time"] = max(0, daily.get("total_time", 0) - dur)
                     daily["pomodoros"] = max(0, daily.get("pomodoros", 0) - pomos)
