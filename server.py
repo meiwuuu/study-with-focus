@@ -501,11 +501,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             daily["date"] = date
             if daily.get("pomodoros", 0) == 0:
                 segs = daily.get("segments", [])
-                # 只统计段里记录的「完成了几个番茄」，不按时长推算（时段长度 ≠ 学习时长）
-                date_pomos = sum(
-                    int(s["pomodoros"]) for s in segs
-                    if isinstance(s.get("pomodoros"), (int, float)) and s.get("pomodoros") > 0
-                )
+                date_pomos = sum(1 for s in segs if s.get("duration", 0) >= 1500)
                 if date_pomos > 0:
                     daily["pomodoros"] = date_pomos
             self._send_json(daily)
@@ -555,11 +551,7 @@ class FocusHandler(BaseHTTPRequestHandler):
             date_pomodoros = date_log.get("pomodoros", 0)
             date_total_seconds = date_log.get("total_time", 0)
             if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-                # 番茄数只累加段里记录的「完成了几个番茄」，绝不按时长推算
-                date_pomodoros = sum(
-                    int(s["pomodoros"]) for s in segments
-                    if isinstance(s.get("pomodoros"), (int, float)) and s.get("pomodoros") > 0
-                )
+                date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
                 date_total_seconds = sum(s.get("duration", 0) for s in segments)
             if not segments and not date_log:
                 date_ses = [s for s in sessions if s.get("date", "").startswith(date)]
@@ -852,7 +844,6 @@ class FocusHandler(BaseHTTPRequestHandler):
                     "end": end_time,
                     "duration": duration,
                     "subject": subject,
-                    "pomodoros": pomodoros,   # 该段包含的番茄数（删段时按它准确扣减）
                 })
                 daily["total_time"] += duration
                 daily["pomodoros"] += pomodoros
@@ -929,8 +920,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     "start": start_time,
                     "end": end_time,
                     "duration": duration,
-                    "subject": subject,
-                    "pomodoros": pomodoros,   # 该段包含的番茄数（删段时按它准确扣减）
+                    "subject": subject
                 })
                 # 按开始时间重新排序
                 daily["segments"].sort(key=lambda x: x.get("start", ""))
@@ -959,10 +949,8 @@ class FocusHandler(BaseHTTPRequestHandler):
                     daily = stats["daily_logs"][date]
                     seg = daily["segments"].pop(index)
                     dur = seg.get("duration", 0)
-                    # 番茄数只看该段记录的「完成了几个番茄」，绝不按时长推算
-                    # （时段长度 ≠ 学习时长，只有番茄钟倒计时走完才算学完一段）
-                    seg_pomos = seg.get("pomodoros")
-                    pomos = int(seg_pomos) if isinstance(seg_pomos, (int, float)) and seg_pomos > 0 else 0
+                    # 如果该段时长 >= 1500 秒(25分钟)，则扣除 1 个番茄钟
+                    pomos = 1 if dur >= 1500 else 0
 
                     daily["total_time"] = max(0, daily.get("total_time", 0) - dur)
                     daily["pomodoros"] = max(0, daily.get("pomodoros", 0) - pomos)

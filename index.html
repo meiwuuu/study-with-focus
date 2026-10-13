@@ -2925,7 +2925,6 @@ var pomo = {
 var currentSubject = '';
 var segmentStartTime = null;  
 var segmentAccSeconds = 0;    
-var segmentPomoCount = 0;      // 待归属到【下一个记录的学习段】的番茄数（修：删段时能按它准确扣减番茄数）
 var segWallStart = null;      
 var pomoRecordedSeconds = 0;  // 核心修复：追踪当前番茄钟已安全记录的秒数
 // ─── Timeline tracking ───
@@ -3060,10 +3059,9 @@ function recordCurrentSegment(forceRecord) {
       start_time: sh + ':' + sm,
       end_time: eh + ':' + em,
       duration: dur,
-      pomodoros: segmentPomoCount   // 这一段里完成的番茄数（删段时按它准确扣减）
+      pomodoros: 0
     })
   });
-  segmentPomoCount = 0;   // 已归属到本段，清空
   
   // 安全入库后，累加到已记录时长中
   if (pomo.status === 'focus') {
@@ -3310,7 +3308,6 @@ function pomoComplete() {
   clearTimeout(pomo.timer);
   if (pomo.status === 'focus') {
     pomo.completed++;
-    segmentPomoCount++;   // 这个番茄归属到即将记录的学习段（供删段时准确扣减）
     pomo.consecutive++;
     pomoUpdateDots();
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
@@ -5605,21 +5602,6 @@ function setManStatus(msg, type) {
     if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
 }
 
-// 番茄数修正已并入「学习记录编辑模式」：编辑时番茄数直接变输入框，与起床/睡觉同风格
-
-// 保存某天的番茄数（番茄数 = 完成了几次倒计时，与时段长短无关）
-function saveDailyPomos(date, val) {
-    var n = parseInt(val, 10);
-    if (isNaN(n) || n < 0) return Promise.resolve();
-    if (!cal.dailyLog[date]) cal.dailyLog[date] = {studyTime: 0, pomodoros: 0};
-    cal.dailyLog[date].pomodoros = n;
-    try { calSave(); } catch(e) {}
-    return apiCall('/api/stats/pomodoros', {
-        method: 'POST',
-        body: JSON.stringify({ date: date, pomodoros: n })
-    }).catch(function(){});
-}
-
 // ─── 学习记录页编辑模式（勾选批量删除 + 修改起床/睡觉时间）───
 function toggleEditMode() {
   // 如果当前在编辑模式，先保存起床/睡觉时间再退出
@@ -5659,11 +5641,24 @@ function cancelEditMode() {
   loadLearningLog();
 }
 
+// 保存某天的番茄数（番茄数 = 完成了几次倒计时，与时段长短无关）
+function saveDailyPomos(date, val) {
+  var n = parseInt(val, 10);
+  if (isNaN(n) || n < 0) return Promise.resolve();
+  if (!cal.dailyLog[date]) cal.dailyLog[date] = {studyTime: 0, pomodoros: 0};
+  cal.dailyLog[date].pomodoros = n;
+  try { calSave(); } catch(e) {}
+  return apiCall('/api/stats/pomodoros', {
+    method: 'POST',
+    body: JSON.stringify({ date: date, pomodoros: n })
+  }).catch(function(){});
+}
+
 async function saveRoutineTime(date, type, time) {
   // 允许保存空值（清空起床/睡觉时间）
   if (time === null || time === undefined) return;
-  // 保护：若本地已存有该时间、而这次要提交的是空值，视为「页面数据未加载完就拿空输入框提交」，
-  // 直接跳过，避免把已保存的起床/睡觉时间覆盖成空。
+  // 保护：本地已存有该时间、而这次提交的是空值 → 视为「页面数据未加载完就拿空输入框提交」，跳过，
+  // 避免把已保存的起床/睡觉时间覆盖成空。
   try {
     var cur = currentDailyData || (cal.dailyLog && cal.dailyLog[date]) || null;
     if (time === '' && cur) {
@@ -5701,10 +5696,7 @@ async function batchDeleteSegments() {
       if (seg) {
         var dur = seg.duration || 0;
         totalDur += dur;
-        // 番茄数只看该段记录的「完成了几个番茄」，绝不按时长推算
-        // （学习时段的开始/结束时间不代表全程在学习，只有番茄钟倒计时结束才算学完一段）
-        var sp = seg.pomodoros;
-        if (typeof sp === 'number' && sp > 0) totalPomos += sp;
+        if (dur >= 900) totalPomos++;  // ≥15分钟算1个番茄
       }
     }
   }
