@@ -551,7 +551,12 @@ class FocusHandler(BaseHTTPRequestHandler):
             date_pomodoros = date_log.get("pomodoros", 0)
             date_total_seconds = date_log.get("total_time", 0)
             if date_pomodoros == 0 and date_total_seconds == 0 and segments:
-                date_pomodoros = sum(1 for s in segments if s.get("duration", 0) >= 1500)
+                # 旧数据兜底：优先用段级番茄数；没有则按 900 秒(15分钟)估算（与前后端删段同一口径）
+                date_pomodoros = sum(
+                    (int(s["pomodoros"]) if isinstance(s.get("pomodoros"), (int, float))
+                     else (1 if s.get("duration", 0) >= 900 else 0))
+                    for s in segments
+                )
                 date_total_seconds = sum(s.get("duration", 0) for s in segments)
             if not segments and not date_log:
                 date_ses = [s for s in sessions if s.get("date", "").startswith(date)]
@@ -844,6 +849,7 @@ class FocusHandler(BaseHTTPRequestHandler):
                     "end": end_time,
                     "duration": duration,
                     "subject": subject,
+                    "pomodoros": pomodoros,   # 该段包含的番茄数（删段时按它准确扣减）
                 })
                 daily["total_time"] += duration
                 daily["pomodoros"] += pomodoros
@@ -920,7 +926,8 @@ class FocusHandler(BaseHTTPRequestHandler):
                     "start": start_time,
                     "end": end_time,
                     "duration": duration,
-                    "subject": subject
+                    "subject": subject,
+                    "pomodoros": pomodoros,   # 该段包含的番茄数（删段时按它准确扣减）
                 })
                 # 按开始时间重新排序
                 daily["segments"].sort(key=lambda x: x.get("start", ""))
@@ -949,8 +956,13 @@ class FocusHandler(BaseHTTPRequestHandler):
                     daily = stats["daily_logs"][date]
                     seg = daily["segments"].pop(index)
                     dur = seg.get("duration", 0)
-                    # 如果该段时长 >= 1500 秒(25分钟)，则扣除 1 个番茄钟
-                    pomos = 1 if dur >= 1500 else 0
+                    # 优先用该段自己记录的番茄数（与「完成一个番茄 +1」的口径一致，删段能精确扣减）；
+                    # 旧数据没这个字段时按 900 秒(15分钟)估算，且与前端保持同一口径
+                    seg_pomos = seg.get("pomodoros")
+                    if isinstance(seg_pomos, (int, float)) and seg_pomos >= 0:
+                        pomos = int(seg_pomos)
+                    else:
+                        pomos = 1 if dur >= 900 else 0
 
                     daily["total_time"] = max(0, daily.get("total_time", 0) - dur)
                     daily["pomodoros"] = max(0, daily.get("pomodoros", 0) - pomos)

@@ -2624,12 +2624,9 @@ async function toggleFocusMode() {
     if (!pomo.running) pomoStart();
     focusModeActive = true;
   } else {
-    // 暂停专注：先确认理由，再退出全屏 + 暂停
+    // 暂停专注：先确认理由，再暂停。保持全屏不动（只有「开始专注」才进入/退出全屏）
     var paused = pomo.running ? await pomoPause() : true;
     if (!paused) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(function(){});
-    }
     focusModeActive = false;
   }
   updateFocusBtn();
@@ -2928,6 +2925,7 @@ var pomo = {
 var currentSubject = '';
 var segmentStartTime = null;  
 var segmentAccSeconds = 0;    
+var segmentPomoCount = 0;      // 待归属到【下一个记录的学习段】的番茄数（修：删段时能按它准确扣减番茄数）
 var segWallStart = null;      
 var pomoRecordedSeconds = 0;  // 核心修复：追踪当前番茄钟已安全记录的秒数
 // ─── Timeline tracking ───
@@ -3062,9 +3060,10 @@ function recordCurrentSegment(forceRecord) {
       start_time: sh + ':' + sm,
       end_time: eh + ':' + em,
       duration: dur,
-      pomodoros: 0
+      pomodoros: segmentPomoCount   // 这一段里完成的番茄数（删段时按它准确扣减）
     })
   });
+  segmentPomoCount = 0;   // 已归属到本段，清空
   
   // 安全入库后，累加到已记录时长中
   if (pomo.status === 'focus') {
@@ -3311,6 +3310,7 @@ function pomoComplete() {
   clearTimeout(pomo.timer);
   if (pomo.status === 'focus') {
     pomo.completed++;
+    segmentPomoCount++;   // 这个番茄归属到即将记录的学习段（供删段时准确扣减）
     pomo.consecutive++;
     pomoUpdateDots();
     try { localStorage.setItem('focus_pomo_completed', pomo.completed); } catch(e) {}
@@ -5670,7 +5670,9 @@ async function batchDeleteSegments() {
       if (seg) {
         var dur = seg.duration || 0;
         totalDur += dur;
-        if (dur >= 900) totalPomos++;  // ≥15分钟算1个番茄
+        // 优先用该段记录的番茄数（准确）；旧数据没有该字段时按 900 秒(15分钟)估算，与后端同一口径
+        if (typeof seg.pomodoros === 'number' && seg.pomodoros >= 0) totalPomos += seg.pomodoros;
+        else if (dur >= 900) totalPomos++;
       }
     }
   }
