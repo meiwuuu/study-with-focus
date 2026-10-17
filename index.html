@@ -2598,7 +2598,44 @@ function loadPanelOpacity() {
 // ─── Focus mode toggle ───
 var focusModeActive = false;
 
+// 跳过当前休息，立刻开始下一个番茄钟（保持全屏，不打断休息轮替计数）
+function skipBreakAndStartFocus() {
+  clearTimeout(pomo.timer);
+  if (typeof clearBreakTimeoutReminder === 'function') clearBreakTimeoutReminder();
+  pomoSetStatus('focus');
+  pomo.timeLeft = pomoGetDuration();
+  pomo.total = pomo.timeLeft;
+  pomo.running = true;
+  pomo.lastTick = Date.now();
+  focusModeActive = true;
+  segmentStartTime = null;
+  segmentAccSeconds = 0;
+  segWallStart = null;
+  pomoRecordedSeconds = 0;
+  pomoUpdateDisplay();
+  pomoUpdateDots();
+  savePomoState();
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function(){});
+  }
+  autoEnableBlocking();
+  if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();
+  document.getElementById('pomo-play').style.display = 'none';
+  document.getElementById('pomo-pause').style.display = 'inline-flex';
+  if (pomoTL.length === 0 || pomoTL[pomoTL.length - 1].action !== 'start') {
+    tlEvent('start', {subject: currentSubject || '', running: true});
+  }
+  pomo.timer = setTimeout(pomoTick, 250);
+  updateFocusBtn();
+  updateStatusBar();
+}
+
 async function toggleFocusMode() {
+  // ① 休息阶段点右上角 = 跳过休息，立刻开始下一个番茄钟（不会暂停休息）
+  if (pomoIsBreak()) {
+    skipBreakAndStartFocus();
+    return;
+  }
   if (!focusModeActive) {
     // 开始专注前检测后端：未开启则弹窗提示
     if (!(await isBackendUp())) {
@@ -2634,12 +2671,24 @@ async function toggleFocusMode() {
 
 function spinInc(id){var el=document.getElementById(id);el.value=(parseInt(el.value)||0)+1;el.dispatchEvent(new Event('change'));}
 function spinDec(id){var el=document.getElementById(id);var v=parseInt(el.value)||0;if(v>1)el.value=v-1;el.dispatchEvent(new Event('change'));}
+// 当前是否处于休息阶段（小休/中休/大休）
+function pomoIsBreak() {
+  try {
+    if (typeof pomo === 'undefined' || !pomo) return false;
+    return pomo.status === 'break' || pomo.status === 'mid-break' || pomo.status === 'long-break';
+  } catch(e) { return false; }
+}
 function updateFocusBtn() {
   var btn = document.getElementById('btn-focus-mode');
   if (!btn) return;
-  var isFocus = (typeof pomo !== 'undefined' && pomo.status === 'focus' && focusModeActive);
-  btn.textContent = isFocus ? '暂停专注' : '开始专注';
-  if (focusModeActive) {
+  var inBreak = false;
+  try { inBreak = pomoIsBreak() && pomo.running; } catch(e) {}   // 只在「正在休息」时显示跳过休息
+  var isFocus = false;
+  try { isFocus = (pomo.status === 'focus' && focusModeActive); } catch(e) {}
+  // 休息中：按钮显示「跳过休息」——点它直接结束休息、立刻开始下一个番茄钟
+  btn.textContent = inBreak ? '跳过休息' : (isFocus ? '暂停专注' : '开始专注');
+  // 休息中同样保持蓝色（专注流程还在进行中，只是没在计时专注）
+  if (focusModeActive || inBreak) {
     var accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#60a5fa';
     btn.style.background = 'rgba(96,165,250,0.15)';
     btn.style.color = accent;
@@ -3394,7 +3443,8 @@ async function pomoPause() {
   }
   // 暂停不重置累积时间——保持连续性，只在最终结束时结算
   pomo.running = false; clearTimeout(pomo.timer);
-  pomo.consecutive = 0; // 暂停=实际休息，连续计数归零
+  // 只有暂停「专注」才算轮替中断；暂停休息不应影响大休/中休/小休的轮替计数
+  if (pomo.status === 'focus') pomo.consecutive = 0;
   if (typeof syncWallpaperPlayback === 'function') syncWallpaperPlayback();   // 壁纸切回平时速度
   focusModeActive = false; updateFocusBtn();
   savePomoState();
