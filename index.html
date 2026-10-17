@@ -3516,19 +3516,25 @@ function pomoEnd() {
   autoDisableBlocking();
   updateStatusBar();
 }
-async function pomoReset() {
-  var ok = pomo.running ? await pomoPause() : true;
-  if (!ok) return;
+// ↺ 重置：回到「专注 15:00 待开始」，这段时间不记录；四点与「4 个一轮」的休息轮替全部保留
+function pomoReset() {
+  _wpTransitionArmed = true;   // 回到待开始 → 下次开始专注要补播衔接
+  // 直接停表：不走 pomoPause，避免它清零轮替计数、弹暂停理由框
+  pomo.running = false; clearTimeout(pomo.timer);
   pomo.timeLeft = (parseInt(document.getElementById('pomo-focus').value)||15)*60;
   pomo.total = pomo.timeLeft;
-  pomo.completed = 0;
-  try { localStorage.setItem('focus_pomo_completed', 0); } catch(e) {}
+  // 不清 pomo.completed / pomo.consecutive —— 四个点和 4 个一轮的轮替保持
+  focusModeActive = false; updateFocusBtn();
   pomoSetStatus('focus');
   pomoUpdateDots();
   pomoUpdateDisplay();
+  document.getElementById('pomo-play').style.display = 'inline-flex';
+  document.getElementById('pomo-pause').style.display = 'none';
   segmentStartTime = null;
   segmentAccSeconds = 0;
   pomoRecordedSeconds = 0;
+  if (!keepBlockOnBreak) autoDisableBlocking();
+  updateStatusBar();
   savePomoState();
 }
 function pomoUpdateDots() {
